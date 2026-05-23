@@ -188,4 +188,7 @@ extern void (*FunctionEnd)( int f );
 
 void WriteDelim();
 
+void MATLAB_Inline( char *fmt, ... );
+void F90_Inline( char *fmt, ... );
+
 #endif

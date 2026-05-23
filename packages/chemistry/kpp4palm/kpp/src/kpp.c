@@ -34,6 +34,7 @@
 #include <string.h>
 #include "gdata.h"
 #include "scan.h"
+#include "scanner.h"
 
 char *eqFileName;
 char *rootFileName = "ff";
@@ -557,7 +558,8 @@ int i,j;
 
 
   printf("\nKPP is starting the code generation.");
-  Generate( rootFileName );
+  // Generate( rootFileName );
+  Generate( );
   
   printf("\nKPP is starting the code post-processing.");
   Postprocess( rootFileName );

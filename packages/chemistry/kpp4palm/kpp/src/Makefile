@@ -66,15 +66,15 @@ clean:
 maintainer-clean: clean
 	@rm -f lex.yy.c y.tab.c y.tab.h
 
-lex.yy.c: scan.l scan.h
+lex.yy.c lex.yy.h: scan.l scan.h
 	@echo "  "$(FLEX) scan.l
-	@$(FLEX) -olex.yy.c scan.l 
+	@$(FLEX) --header-file=lex.yy.h -olex.yy.c scan.l 
 
 y.tab.c: scan.y scan.h
 	@echo "  "$(BISON) scan.y
 	@$(BISON) -o y.tab.c scan.y
 
-flex: lex.yy.c y.tab.c
+flex: lex.yy.c lex.yy.h y.tab.c
 
 scanner.o: scan.h gdata.h
 scanutil.o: scan.h

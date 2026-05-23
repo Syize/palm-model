@@ -36,6 +36,7 @@
 
 #include <stdio.h>
 #include "gdef.h"
+#include <ctype.h>
 
 /*  mz_rs_20050518+ value increased */
 #define MAX_INLINE 10000
@@ -99,5 +100,7 @@ void WriteOptions();
 
 char * AppendString( char * s1, char * s2, int * len, int addlen );
 void AddInlineCode( char * context, char * code );
+
+int EqNoCase( char *s1, char *s2 );
 
 #endif

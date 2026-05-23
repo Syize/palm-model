@@ -208,5 +208,7 @@ int** AllocIntegerMatrix( int m, int n, char* message );
 void FreeIntegerMatrix ( int** mat, int m, int n );
 int Index( int i );
 
+int EqnString( int eq, char * buf );
+
 #endif
 

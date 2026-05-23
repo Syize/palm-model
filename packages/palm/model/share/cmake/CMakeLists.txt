@@ -1,6 +1,6 @@
 # This is the CMake configuration file for PALM
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.6)
 
 # set program name
 set(PALM_PROGRAM_NAME "PALM")

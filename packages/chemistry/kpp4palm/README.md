@@ -4,3 +4,19 @@ The chemistry kinetic Preprocessor for PALM `kpp4palm` can be used to automatica
 
 - For the documentation of `kpp4palm`, please see [./docs/content/Guide/KPP4PALM_module.md](./docs/content/Guide/KPP4PALM_module.md)
 - For the documentation of Kinetic Preprocessor`KPP`, please see [./kpp/doc/kpp_UserManual.pdf](./kpp/doc/kpp_UserManual.pdf)
+
+## Installation
+
+1. Build kpp.
+
+```
+mkdir kpp/bin
+make -C kpp
+
+```
+
+2. Build kpp4palm.
+
+```
+mkdir bin
+```

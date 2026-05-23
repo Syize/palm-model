@@ -44,20 +44,26 @@ install_function() {
       PROG=${program_name}.exe make -C ${project_src_dir} clean
       make -C ${project_kpp_dir} distclean
    fi
+   
    # build kpp
+   # done
    mkdir -p ${project_kpp_dir}/bin
    make -C ${project_kpp_dir}
    if [ ${?} -ne 0 ]; then
       echo "ERROR: Compilation of kpp failed."
       exit 1
    fi
+
    # build kpp4palm
+   # done
    mkdir -p ${project_bin_dir}
    PROG=${program_name}.exe make -C ${project_src_dir}
    if [ ${?} -ne 0 ]; then
       echo "ERROR: Compilation of ${program_name} failed."
       exit 1
    fi
+
+   # done
    cp -pf ${project_src_dir}/${program_name}.exe ${project_bin_dir}/.
    mkdir -p ${install_prefix}
    cd ${install_prefix}

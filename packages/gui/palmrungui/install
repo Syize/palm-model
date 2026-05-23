@@ -38,6 +38,7 @@ install_function() {
    if [ "${do_clean}" == "true" ]; then
       rm "${install_bin_dir}/palmrungui"
    fi
+
    mkdir -p ${install_bin_dir}
    chmod a+x $(realpath "${project_root_dir}/main.py")
    ln -s -f $(realpath --relative-to="${install_bin_dir}" "${project_root_dir}/main.py") "${install_bin_dir}/palmrungui"

@@ -3121,14 +3121,26 @@ int n;
   outBuffer = outBuf;
 
   switch( useLang ) {
-    case F77_LANG: Use_F( rootFileName ); 
-                 break; 
-    case F90_LANG: Use_F90( rootFileName );
-                 break; 
-    case C_LANG: Use_C( rootFileName ); 
-                 break; 
-    case MATLAB_LANG: Use_MATLAB( rootFileName ); 
-                 break; 
+
+    case F77_LANG:
+      // Use_F( rootFileName ); 
+      Use_F( ); 
+      break; 
+
+    case F90_LANG:
+      // Use_F90( rootFileName );
+      Use_F90( );
+      break;
+
+    case C_LANG:
+      // Use_C( rootFileName );
+      Use_C( ); 
+      break; 
+
+    case MATLAB_LANG:
+      // Use_MATLAB( rootFileName ); 
+      Use_MATLAB( ); 
+      break; 
     default: printf("\n Language no '%s' unknown\n",useLang );		 
   }
   printf("\nKPP is initializing the code generation.");

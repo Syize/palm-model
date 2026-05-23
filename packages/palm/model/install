@@ -50,6 +50,7 @@ install_function() {
    if [ "${do_clean}" == "true" ]; then
       rm -r ${install_prefix}/MAKE_DEPOSITORY_default
    fi
+
    mkdir -p ${install_prefix}
    cd ${install_prefix}
    install_bin_dir=${install_prefix}/bin
@@ -59,6 +60,7 @@ install_function() {
       chmod a+x $(realpath "${project_bin_dir}/${executable}")
       ln -s -f $(realpath --relative-to="${install_bin_dir}" "${project_bin_dir}/${executable}") ${install_bin_dir}
    done
+
    bash ${project_bin_dir}/palmconfigure \
         -p "${install_prefix}" \
         ${fortran_compiler:+-c }${fortran_compiler} \
@@ -66,6 +68,7 @@ install_function() {
         ${netcdf_fortran_prefix:+-t }${netcdf_fortran_prefix}
 
    # build TenStream
+   # Doesn't be shipped in this release.
    tenstream_prefix="${install_prefix}/tenstream"
    if [ "${build_tenstream:-false}" == "true" ]; then
      source ${project_build_dir}/tenstream/.tenstream_build_options
@@ -99,13 +102,15 @@ install_function() {
         -T "${tenstream_prefix}"
 
    bash ${project_bin_dir}/palmbuild -v -c "default"
-   if [ ! -d ${HOME}/.palm ]; then
-      mkdir -p ${HOME}/.palm
+
+   # why home?
+   if [ ! -d ${HOME}/.local/share/palm ]; then
+      mkdir -p ${HOME}/.local/share/palm
    fi
-   if [ ! -f ${HOME}/.palm/palmtest.yml ]; then
-      mv ${install_prefix}/palmtest.yml ${HOME}/.palm/palmtest.yml
+   if [ ! -f ${HOME}/.local/share/palm/palmtest.yml ]; then
+      mv ${install_prefix}/palmtest.yml ${HOME}/.local/share/palm/palmtest.yml
    else
-      mv ${install_prefix}/palmtest.yml ${HOME}/.palm/palmtest__$(date +"%Y-%m-%d__%H:%M:%S,%3N").yml
+      mv ${install_prefix}/palmtest.yml ${HOME}/.local/share/palm/palmtest__$(date +"%Y-%m-%d__%H:%M:%S,%3N").yml
    fi
    printf "### %s\n" "Installing ${program_name} finished."
 }

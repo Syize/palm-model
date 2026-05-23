@@ -34,6 +34,7 @@
 #include "code.h"
 #include <unistd.h>
 #include <string.h>
+#include "scan.h"
 
 /*            NONE, ADD, SUB, MUL, DIV, POW, CONST, ELM, VELM, MELM, EELM  */
 int PRI[] = {   10,   1,   1,   2,   2,   3,    10,  10,   10,   10,   10 };

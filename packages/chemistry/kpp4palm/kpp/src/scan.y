@@ -41,11 +41,15 @@
   #include <string.h>
   #include <unistd.h>
   #include "scan.h"
+  #include "y.tab.h"
+  #include "gdata.h"
+  #include "scanner.h"
+  #include "lex.yy.h"
 
   #define __YYSCLASS
 
   #define YYDEBUG 1
-  extern char yytext[];
+  extern char *yytext;
   extern FILE * yyin;
   
   int nError   = 0;
@@ -492,5 +496,4 @@ FILE *f;
   fclose( f );
 
   return nError;
-}          
-
+}
