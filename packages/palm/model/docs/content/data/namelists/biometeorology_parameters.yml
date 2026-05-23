@@ -1,0 +1,24 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "biometeorology_parameters"
+#
+
+thermal_comfort:
+  category: Mode
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switches on/off the calculation of thermal comfort indices.
+    long: ''
+
+
+switch_off_module:
+  category: Mode
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switches on/off the entire module.
+    long: |
+       If *.T.*, the biometeorology module is not activated even if the namelist is present in the parameter file.
+

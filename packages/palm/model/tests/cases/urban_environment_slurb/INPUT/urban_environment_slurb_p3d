@@ -1,0 +1,218 @@
+!-------------------------------------------------------------------------------
+!-- INITIALIZATION PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&initialization_parameters
+!
+!-- grid parameters
+!-------------------------------------------------------------------------------
+    nx                         = 39, ! Number of gridboxes in x-direction (nx+1)
+    ny                         = 39, ! Number of gridboxes in y-direction (ny+1)
+    nz                         = 80, ! Number of gridboxes in z-direction (nz)
+
+    dx                         = 50.0, ! Size of single gridbox in x-direction
+    dy                         = 50.0, ! Size of single gridbox in y-direction
+    dz                         = 25.0, ! Size of single gridbox in z-direction
+
+    dz_stretch_level           = 1225.0, ! Height (in m) where stretching starts
+    dz_stretch_factor          = 1.08,   ! dz(k+1) = dz(k) * dz_stretch_factor
+!
+!-- initialization
+!------------------------------------------------------------------------------
+    initializing_actions       = 'set_constant_profiles', ! initial conditions
+
+    ug_surface                 = 0.0, ! u-comp of geostrophic wind at surface
+    vg_surface                 = 0.0, ! v-comp of geostrophic wind at surface
+
+    pt_surface                 = 293.0, ! initial surface potential temp
+
+    pt_vertical_gradient       =    0.0,
+                                    1.0, ! piecewise temp gradients
+    pt_vertical_gradient_level =    0.0,
+                                  800.0, ! height level of temp gradients
+
+
+!
+!-- boundary conditions
+!------------------------------------------------------------------------------
+    constant_flux_layer        = .TRUE., ! use a constant flux layer at
+                                         ! the bottom boundary
+    bc_pt_b                    = 'dirichlet', ! required when using LSM and SLUrb
+
+!
+!-- numerics
+!------------------------------------------------------------------------------
+    fft_method                 = 'temperton-algorithm', ! build-in fft method
+
+/
+
+!-------------------------------------------------------------------------------
+!-- RUNTIME PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&runtime_parameters
+!
+!-- run steering
+!-------------------------------------------------------------------------------
+    end_time                   = 1800.0, ! simulation time of the 3D model
+
+    create_disturbances        = .TRUE., ! randomly perturbate horiz. velocity
+    dt_disturb                 = 150.0,  ! interval for random perturbations
+    disturbance_energy_limit   = 0.01,   ! upper limit for perturbation energy
+
+    data_output_2d_on_each_pe  = .FALSE., ! don't do 2D output on each MPI rank
+
+!
+!-- data output
+!-------------------------------------------------------------------------------
+    netcdf_data_format         = 2, ! use NetCDF3
+    restart_data_format        = 'mpi', ! use MPI-I/O
+
+    dt_run_control             = 0.0,    ! output interval for run control
+    dt_data_output             = 900.0,  ! output interval for general data
+    dt_data_output_av          = 1800.0, ! output interval for averaged data
+    dt_dopr                    = 900.0,  ! output interval for profile data
+!
+!-- 2d and/or 3d data output
+!-------------------------------------------------------------------------------
+    data_output                = 'us*_xy',
+                                 'ghf*_xy',
+                                 'shf*_xy',
+                                 'tsurf*_xy',
+                                 'theta_xy',
+                                 't_soil',
+                                 'slurb_albedo_urb*_xy_av',
+                                 'slurb_emiss_urb*_xy_av',
+                                 'slurb_ghf_road*_xy_av',
+                                 'slurb_ghf_roof*_xy_av',
+                                 'slurb_ghf_wall_a*_xy_av',
+                                 'slurb_ghf_wall_b*_xy_av',
+                                 'slurb_ghf_win_a*_xy_av',
+                                 'slurb_ghf_win_b*_xy_av',
+                                 'slurb_ol_canyon*_xy',
+                                 'slurb_ol_road*_xy',
+                                 'slurb_ol_roof*_xy',
+                                 'slurb_rad_lw_net_urb*_xy_av',
+                                 'slurb_rad_sw_net_urb*_xy_av',
+                                 'slurb_rad_lw_net_road*_xy_av',
+                                 'slurb_rad_lw_net_roof*_xy_av',
+                                 'slurb_rad_lw_net_wall_a*_xy_av',
+                                 'slurb_rad_lw_net_wall_b*_xy_av',
+                                 'slurb_rad_lw_net_win_a*_xy_av',
+                                 'slurb_rad_lw_net_win_b*_xy_av',
+                                 'slurb_rad_sw_net_road*_xy_av',
+                                 'slurb_rad_sw_net_roof*_xy_av',
+                                 'slurb_rad_sw_net_wall_a*_xy_av',
+                                 'slurb_rad_sw_net_wall_b*_xy_av',
+                                 'slurb_rad_sw_net_win_a*_xy_av',
+                                 'slurb_rad_sw_net_win_b*_xy_av',
+                                 'slurb_rad_sw_tr_win_a*_xy_av',
+                                 'slurb_rad_sw_tr_win_b*_xy_av',
+                                 'slurb_ram_urb*_xy_av',
+                                 'slurb_rah_canyon*_xy_av',
+                                 'slurb_rah_road*_xy_av',
+                                 'slurb_rah_roof*_xy_av',
+                                 'slurb_ram_urb*_xy_av',
+                                 'slurb_rib_canyon*_xy_av',
+                                 'slurb_rib_road*_xy_av',
+                                 'slurb_rib_roof*_xy_av',
+                                 'slurb_shf_canyon*_xy_av',
+                                 'slurb_shf_road*_xy_av',
+                                 'slurb_shf_roof*_xy_av',
+                                 'slurb_shf_traffic*_xy_av',
+                                 'slurb_shf_urb*_xy_av',
+                                 'slurb_shf_wall_a*_xy_av',
+                                 'slurb_shf_wall_b*_xy_av',
+                                 'slurb_shf_win_a*_xy_av',
+                                 'slurb_shf_win_b*_xy_av',
+                                 'slurb_t_canyon*_xy',
+                                 'slurb_t_rad_urb*_xy_av',
+                                 'slurb_t_surf_road*_xy_av',
+                                 'slurb_t_surf_roof*_xy_av',
+                                 'slurb_t_surf_wall_a*_xy_av',
+                                 'slurb_t_surf_wall_b*_xy_av',
+                                 'slurb_t_surf_win_a*_xy_av',
+                                 'slurb_t_surf_win_b*_xy_av',
+                                 'slurb_t_c_urb*_xy_av',
+                                 'slurb_t_h_urb*_xy_av',
+                                 'slurb_t_2m_urb*_xy_av',
+                                 'slurb_theta_canyon*_xy_av',
+                                 'slurb_theta_road*_xy_av',
+                                 'slurb_theta_roof*_xy_av',
+                                 'slurb_theta_wall_a*_xy_av',
+                                 'slurb_theta_wall_b*_xy_av',
+                                 'slurb_theta_win_a*_xy_av',
+                                 'slurb_theta_win_b*_xy_av',
+                                 'slurb_wspeed_canyon*_xy_av',
+                                 'slurb_wspeed_eff_canyon*_xy_av',
+                                 'slurb_us_urb*_xy_av',
+                                 'slurb_usws_urb*_xy_av',
+                                 'slurb_vsws_urb*_xy_av',
+                                 'slurb_t_road',
+                                 'slurb_t_roof',
+                                 'slurb_t_wall_a',
+                                 'slurb_t_wall_b',
+                                 'slurb_t_win_a',
+                                 'slurb_t_win_b',
+!
+!-- profile output
+!-------------------------------------------------------------------------------
+    data_output_pr             = '#u',
+                                 '#v',
+                                 '#theta',
+                                 '#km',
+                                 '#kh',
+                                 '#l',
+                                 'w',
+                                 'e',
+                                 'e*',
+                                 'p',
+                                 'w"theta"',
+                                 'w*theta*',
+                                 'wtheta',
+                                 'w*e*',
+                                 'theta*2',
+                                 'u*2',
+                                 'v*2',
+                                 'w*2',
+                                 '#t_soil',
+
+    section_xy                 = 2,
+                                 10, ! grid index for 2D XY cross sections
+    section_xz                 = 20, ! grid index for 2D XZ cross sections
+
+    averaging_interval         = 900.0, ! averaging interval general data
+    dt_averaging_input         = 10.0,  ! averaging general data sampling rate
+
+    averaging_interval_pr      = 600.0, ! averaging interval profile data
+    dt_averaging_input_pr      = 10.0,  ! averaging profile data sampling rate
+
+/
+
+!-------------------------------------------------------------------------------
+!-- LAND-SURFACE PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&land_surface_parameters
+!
+!-- define soil type and tempature
+!-------------------------------------------------------------------------------
+    soil_type                  = 3,  ! type to be used in soil model
+    soil_moisture              = 0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+    soil_temperature           = 293.0, 293.0, 293.0, 293.0, 293.0, 293.0, 293.0, 293.0,
+    deep_soil_temperature      = 293.0,  ! temperature of deep soil
+
+    surface_type               = 'vegetation',  ! surface classification
+    vegetation_type            = 2, ! vegetation to be used in surface model, here crops
+
+/
+
+!-------------------------------------------------------------------------------
+!-- RADIATION PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&radiation_parameters
+    radiation_scheme           = 'clear-sky', ! Radiation scheme to be used
+    dt_radiation               = 5.0, ! Time step of the radiation model
+
+/
+
+&slurb_parameters
+    deep_soil_temperature = 293.0,
+/

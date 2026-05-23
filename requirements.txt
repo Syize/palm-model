@@ -1,0 +1,9 @@
+-r docs/requirements.txt
+-r packages/dynamic_driver/inifor/requirements.txt
+-r packages/dynamic_driver/palm_meteo/requirements.txt
+-r packages/dynamic_driver/promet/requirements.txt
+-r packages/gui/palmrungui/requirements.txt
+-r packages/palm/model/requirements.txt
+-r packages/static_driver/palm_csd/requirements.txt
+-r packages/virtual_measurements/merge_virtual_measurements/requirements.txt
+-r packages/virtual_measurements/palm_cvd/requirements.txt

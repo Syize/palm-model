@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#--------------------------------------------------------------------------------#
+# This file is part of the PALM model system.
+#
+# PALM is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# PALM is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# PALM. If not, see <http://www.gnu.org/licenses/>.
+#
+# Copyright 1997-2021  Leibniz Universitaet Hannover
+#--------------------------------------------------------------------------------#
+# local docs server script
+#--------------------------------------------------------------------------------#
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+SCRIPT_LOCATION="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+project_root_dir=$(readlink -f "${SCRIPT_LOCATION}/../")
+project_docs_dir=$(readlink -f "${project_root_dir}/docs/")
+
+
+palmdocs_check_updates() {
+   if palmdocs_check_software python3 > /dev/null; then
+      python3 << 'EOF'
+try:
+    import http.client
+    import json
+    import platform
+    h = dict()
+    h['Content-Type'] = 'application/json'
+    h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
+    h['Authorization'] = f'basic cGFsbWRvY3NfdjI1LjA0OlJoWTFMQW9GR2dJNlIydEhlR1Zu'
+    q = '''query palmdocs($current: String!) { check_version(input: {current: $current}) { show message } }'''
+    v = {'current': 'v25.04'}
+    c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
+    c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
+    r = c.getresponse()
+    dc = r.read().decode('utf-8')
+    dd = json.loads(dc)
+    if 'data' in dd:
+        show_message = dd['data']['check_version']['show']
+        message = dd['data']['check_version']['message']
+        if show_message:
+            print(f'{message}')
+except:
+    pass
+EOF
+   fi
+}
+
+palmdocs_check_software() {
+   local software_found="false"
+   for current_software in ${@}; do
+      if command -v ${current_software} > /dev/null; then
+         local software_found="true"
+         local found_software="${found_software} ${current_software}"
+      fi
+   done
+   if [[ "${software_found}" == "false" ]]; then
+      return 1
+   else
+      echo "${found_software}"
+      return 0
+   fi
+}
+
+palmdocs_check_updates
+
+mkdocs serve -f ${project_docs_dir}/config.yml

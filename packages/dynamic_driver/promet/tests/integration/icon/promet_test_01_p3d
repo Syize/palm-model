@@ -1,0 +1,101 @@
+&initialization_parameters
+
+
+    dx         = 128.0,
+    dy         = 128.0,
+    dz         = 32.0,
+    nx         = 63,
+    ny         = 63,
+    nz         = 16,
+
+    dz_stretch_factor = 1.08,
+    dz_stretch_level  = 1000000.0,
+
+    latitude         = 52.23612440809281,
+    longitude        = 9.467193840872879,
+    origin_date_time = '2020-02-10 14:00:00 +00',
+    rotation_angle   = 0.0,
+
+    topography = 'flat',
+
+    humidity             = .FALSE.,
+    initializing_actions = 'read_from_file',
+    neutral              = .FALSE.,
+    omega                = 0.0,
+    pt_surface           = 300.0,
+    q_surface            = 0.0,
+    surface_pressure     = 1013.25,
+    ug_surface           = 0.0,
+    vg_surface           = 0.0,
+
+    conserve_volume_flow = .FALSE.,
+    cycle_mg             = 'w',
+    fft_method           = 'fftw',
+    mg_cycles            = 2,
+    psolver              = 'multigrid',
+    reference_state      = 'horizontal_average',
+
+    bc_pt_b                 = 'neumann',
+    bc_q_b                  = 'dirichlet',
+    bc_uv_b                 = 'dirichlet',
+    constant_flux_layer     = .TRUE.,
+    rayleigh_damping_factor = 0.01,
+    roughness_length        = 0.1,
+    surface_heatflux        = 0.0,
+
+/
+
+&runtime_parameters
+
+    end_time   = 300.0,
+
+    npex       = 4,
+    npey       = 8,
+
+    create_disturbances      = .TRUE.,
+    disturbance_energy_limit = 0.01,
+    dt_disturb               = 150.0,
+
+    debug_output   = .TRUE.,
+    dt_run_control = 0.0,
+
+    dt_data_output     = 6.0,
+    netcdf_data_format = 5,
+
+    data_output(1) = 'u',
+    data_output(2) = 'v',
+    data_output(3) = 'w',
+
+/
+
+&land_surface_parameters
+
+    switch_off_module = .FALSE.,
+
+/
+
+&nesting_offl_parameters
+
+    switch_off_module = .FALSE.,
+
+/
+
+&plant_canopy_parameters
+
+    switch_off_module = .FALSE.,
+
+    canopy_drag_coeff          = 0.3,
+    canopy_mode                = 'read_from_file',
+    plant_canopy_transpiration = .FALSE.,
+
+/
+
+&stg_par
+
+    switch_off_module = .FALSE.,
+
+    compute_velocity_seeds_local = .FALSE.,
+    dt_stg_adjust                = 300.0,
+    dt_stg_call                  = 0.1,
+
+/

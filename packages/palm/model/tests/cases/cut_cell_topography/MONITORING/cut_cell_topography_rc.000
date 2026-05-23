@@ -1,0 +1,247 @@
+
+ ******************************    --------------------------------------------
+ * PALM (git SHA-1): 173540af *    atmosphere - run without 1D - prerun
+ ******************************    --------------------------------------------
+
+ Date:               2024-08-26    Run:       cut_cell_topography__gfortran_defa
+ Time:                 10:10:16    Run-No.:   00
+ Run on host:        gfortran_d
+ Number of PEs:               4    Processor grid (x,y): (   2,   2) calculated
+ ------------------------------------------------------------------------------
+
+ Numerical Schemes:
+ -----------------
+
+ --> Use the 1.5-order turbulence closure (LES mode).
+ --> Use the boussinesq approximation for the model equations.
+ --> Solve perturbation pressure via FFT using fftw routines
+     perturbation pressure is calculated at every Runge-Kutta step
+ --> Momentum advection via Wicker-Skamarock-Scheme 5th order
+ --> Scalar advection via Wicker-Skamarock-Scheme 5th order
+ --> Loop optimization method: cache
+ --> Time differencing scheme: runge-kutta-3       
+ --> Additional prognostic equation for the specific humidity
+ ------------------------------------------------------------------------------
+
+
+ Run time and time step information:
+ ----------------------------------
+
+ Timestep:             variable     maximum value: 20.000 s    CFL-factor: 0.90
+ Start time:              0.000 s
+ End time:             1201.300 s
+ Spinup time:          1200.000 s
+
+
+ Computational grid and domain size:
+ ----------------------------------
+
+ Grid length:      dx =       1.000 m    dy =       1.000 m
+                dz(1) =       1.000 m
+
+ Domain size:       x =     40.000 m     y =     40.000 m  z(u) =     60.500 m
+
+
+ Number of gridpoints (x,y,z):  (0:  39, 0:  39, 0:  61)
+ Subdomain size (x,y,z):        (    20,     20,     62)
+
+
+    Characteristic levels of the geo. wind component ug:
+
+       Height:           0.0  m
+       ug:              1.00  m/s
+       Gradient:        0.00  1/100s
+       Gridpoint:          0
+
+    Characteristic levels of the geo. wind component vg:
+
+       Height:           0.0  m
+       vg:              1.00  m/s
+       Gradient:        0.00  1/100s
+       Gridpoint:          0
+
+
+ Topography information:
+ ----------------------
+
+ Topography: read_from_file                          
+ Topography grid definition convention:
+ cell center (scalar grid points)
+
+
+
+ Boundary conditions:
+ -------------------
+
+                     p                    uv                                  pt
+
+ B. bound.: p(0)     = p(1)   | uv(0)     = 0                     | pt(0)     = from soil model  
+ T. bound.: p(nzt+1) = p(nzt) | uv(nzt+1) = ug(nzt+1), vg(nzt+1)  | pt(nzt+1) = pt(nzt) + dpt/dz_
+
+                     e
+
+ B. bound.: e(0)     = e(1)                                                                      
+ T. bound.: e(nzt+1) = e(nzt) = e(nzt-1)                                                         
+
+                     q
+
+ B. bound.: q(0)     = from soil model                                                           
+ T. bound.: q(nzt+1) = q(nzt) + dq/dz                                                            
+
+ Bottom surface fluxes are used in diffusion terms above surface grid points
+
+
+    Constant flux layer between bottom surface and first computational u,v-level:
+
+       z_mo =   0.50 m   z0 = 0.1000 m   z0h = 0.10000 m   kappa = 0.40
+       zeta value range:     -20.00 <= zeta <= 20.00
+       automatic limitation of roughness lengths to 0.5 * dx/dy/dz
+       Predefined surface temperature
+       Predefined surface humidity
+
+
+ Lateral boundaries:
+       left/right:  cyclic              
+       north/south: cyclic              
+
+
+ Initial profiles:
+ ----------------
+
+    Characteristic levels of the initial temperature profile:
+
+       Height:             0.0  m
+       Temperature:     277.15  K
+       Gradient:          0.00  K/100m
+       Gridpoint:            0
+
+    Characteristic levels of the initial humidity profile:
+
+       Height:             0.0  m
+       Humidity:       0.1E-02  kg/kg
+       Gradient:       0.0E+00  (kg/kg)/100m
+       Gridpoint:            0
+
+
+ List output:
+ -----------
+
+    1D-Profiles:
+       Output every             9999999.90 s
+       Time averaged over             2.00 s
+       Averaging input every          0.00 s
+
+
+ Data output:
+ -----------
+
+       Time averaged over             2.00 s
+       Averaging input every          0.00 s
+
+    1D-Profiles:
+       Output format: netCDF 64bit offset                     
+
+       Profile: u, u*2, wu, w*u*, w"u", v, v*2, wv, w*v*, w"v", w, w*2,      
+
+              : theta, theta*2, wtheta, w*theta*, w"theta", q, t_soil,       
+
+              : m_soil, rad_lw_in, rad_lw_out,                               
+       Output every                   2.00 s
+       Time averaged over             2.00 s
+       Averaging input every          0.00 s
+
+    Time series:
+       Output format: netCDF 64bit offset                     
+       Output every                   0.00 s
+
+ ------------------------------------------------------------------------------
+
+
+ Physical quantities:
+ -------------------
+
+    Geograph. latitude  :   latitude  =  50.1 degr
+    Geograph. longitude :   longitude =  14.4 degr
+    Rotation angle      :   rotation_angle =   0.0 degr
+    Angular velocity    :   omega  = 0.729E-04 rad/s
+    Coriolis parameter  :   f      =  0.000112 1/s
+                            f*     =  0.000094 1/s
+
+    Date and time at model start : 2019-06-03 10:00:00 +00
+
+    Gravity             :   g      =  9.8 m/s**2
+
+    Reference state used in buoyancy terms: initial_profile
+
+
+ Cloud physics quantities / methods:
+ ----------------------------------
+
+    Humidity is considered, bu no condensation
+
+
+ LES / Turbulence quantities:
+ ---------------------------
+
+    Mixing length is limited close to surfaces
+
+
+ Actions during the simulation:
+ -----------------------------
+
+    Disturbance impulse (u,v) every :   9999999.90 s
+    Disturbance amplitude           :     0.25 m/s
+    Lower disturbance level         :     2.50 m (GP    3)
+    Upper disturbance level         :    19.50 m (GP   20)
+    Disturbances cease as soon as the disturbance energy exceeds 0.010 m**2/s**2
+    Random number generator used    : random-parallel
+
+
+
+ Land surface model information:
+ ------------------------------
+
+    --> Soil bottom is closed (water content is conserved, default)
+    --> Land surface type  : read from file
+    --> Soil porosity type : read from file
+
+    Initial soil temperature and moisture profile:
+
+       Height:              -0.01      -0.02      -0.05      -0.10      -0.20      -0.40      -0.80      -2.  m
+       Temperature:        287.15     285.00     284.00     282.00     278.00     277.00     277.00     277.  K
+       Moisture:             0.30       0.30       0.30       0.30       0.30       0.30       0.30       0.  m**3/m**3
+       Root fraction:        0.49       0.26       0.25       0.00       0.00       0.00       0.00       0.  
+       Grid point:              0          1          2          3          4          5          6
+
+
+ Radiation model information:
+ ----------------------------
+
+    --> RRTMG scheme is used
+
+    Albedo is set individually for each xy-location, according to given surface type.
+    Timestep: dt_radiation =  60.00  s
+    Precalculated    4 solar positions from     2 timesteps
+ ------------------------------------------------------------------------------
+
+
+
+Spinup control output:
+----------------------
+
+ITER.   HHH:MM:SS    DT  PT(z_MO)
+---------------------------------
+    1  -000:19:47  12.84   291.88
+   94   000:00:00  12.84   292.16
+
+
+
+Run-control output:
+------------------
+
+RUN  ITER.  HHH:MM:SS.SS    DT(E)     UMAX     VMAX     WMAX     U*    W*      THETA*     Z_I     ENERG.   DISTENERG    DIVOLD     DIVNEW     UMAX(KJI)    VMAX(KJI)    WMAX(KJI)   ADVECX   ADVECY   MGCYC
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  0      0  000:00:00.00   0.5520A   1.5532D  1.6311D -0.6879  0.111  0.00  -0.913E+00      0.  0.915E+00  0.122E-01  0.431E-01  0.701E-02    7  26  17   12  20  16   11  23  22    0.000    0.000       0
+  0      1  000:00:00.55   0.4400A   1.8637   2.0448   1.0996  0.124  0.00  -0.102E+01      2.  0.908E+00  0.160E-01  0.655E-02  0.246E-02    7  12  28   11  20  16   10  19  16    0.000    0.000       0
+  0      2  000:00:00.99   0.4180A   2.0079   2.1542   1.2657  0.126  0.00  -0.968E+00      1.  0.906E+00  0.174E-01  0.290E-02  0.135E-02    7  12  29    6  25  15   10  19  16    0.000    0.000       0
+  0      3  000:00:01.40   0.4090A   2.0477   2.2002   1.2953  0.127  0.00  -0.938E+00      1.  0.905E+00  0.179E-01  0.236E-02  0.101E-02    6  12  29    6  26  15   10  19  16    0.000    0.000       0

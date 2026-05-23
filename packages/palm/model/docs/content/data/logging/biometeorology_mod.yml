@@ -1,0 +1,28 @@
+BIO0001:
+  loglevel: ERROR
+  message: |
+    output of "..." requires radiation = .TRUE.
+  description: |
+    To output the requested variable, the radiation model must be switched on.
+
+BIO0002:
+  loglevel: ERROR
+  message: |
+    thermal comfort requires humidity = .TRUE.
+  description: |
+    The calculation of thermal comfort requires air humidity information, and therefore [humidity](../Namelists/#initialization_parameters--humidity) = *.TRUE.* has to be set in the namelist file.
+
+BIO0003:
+  loglevel: ERROR
+  message: |
+    combination of mrt_minlevel = ... and mrt_nlevels = ... does not include bio_cell_level (gravimetric center of the sample human body 1,1 m)
+  description: ' '
+
+BIO0004:
+  loglevel: ERROR
+  message: |
+    thermal comfort requires radiation_interaction = .TRUE.
+  description: |
+    The calculation of thermal comfort requires to consider radiation interactions, and therefore [radiation_interactions_on](../Namelists/#radiation_parameters--radiation_interactions_on) = *.TRUE.* has to be set in the namelist file.
+
+

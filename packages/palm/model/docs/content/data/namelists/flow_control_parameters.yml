@@ -1,0 +1,66 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "flow_control_parameters"
+
+
+geostrophic_wind_controller:
+  category: Mode
+  type: L
+  default: .F.
+  description:
+    short: Parameter to enable the geostrophic wind controller.
+    long:  |
+      If set to *.T.* the geostrophic wind components `ug` and `vg` are controlled by the geostrophic wind controller in order to achieve a target wind speed and wind direction at a certain target height.
+
+      This method requires cyclic lateral boundary conditions in x- and y-direction (see [bc_lr](#initialization_parameters--bc_lr) and [bc_ns](#initialization_parameters--bc_ns)) and a flat topography (see [topography](#initialization_parameters--topography)). The [inertial_oscillation_damping_factor](#damping_parameters--inertial_oscillation_damping_factor) must not be zero to avoid an amplification of the inertial oscillation by the controller. The [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor) must be zero, because the Rayleigh damping is not designed to work with time-dependent basic states (geostrophic wind profiles).
+
+      The geostrophic wind components $u_g$ and $v_g$ are constant with height and are controlled by a proportional-integral controller at every timestep like this:
+
+      $u_g = k_p (u_t - \langle u \rangle ) + k_i * ABS(f) \Sigma_{0}^{nt} (u_t - \langle u \rangle ) dt$ <br>
+
+      $v_g = k_p (v_t - \langle v \rangle ) + k_i * ABS(f) \Sigma_{0}^{nt} (v_t - \langle v \rangle ) dt \quad ,$
+
+      where [$k_p$](#flow_control_parameters--kp) is the proportional gain factor, [$k_i$](#flow_control_parameters--ki) is the integral gain factor, $f$ is the Coriolis parameter, $u_t$ and $v_t$ are the target velocities and $\langle u \rangle$ and $\langle v \rangle$ are the horizontally-averaged velocities at [target_height](#flow_control_parameters--target_height).
+
+      With the default controller settings ([$k_p$](#flow_control_parameters--kp) = *10.0*, [$k_i$](#flow_control_parameters--ki) = *20.0*) the target wind speed and wind direction are reached within one inertial oscillation period (approximately 15 h for a latitude of 55°).
+
+      The temporal evolution of `ug` and `vg` can be obtained/output by adding *'ug'* and *'vg'* to [data_output_pr](#runtime_parameters--data_output_pr). If the final profiles of `ug` and `vg` shall be used for driving a main run, it is recommended to set an appropriate [averaging_interval_pr](#runtime_parameters--averaging_interval_pr) and [dt_dopr](#runtime_parameters--dt_dopr), because `ug` and `vg` might still fluctuate even if a steady mean flow is reached. These fluctuations are caused by small fluctuations in $\langle u \rangle$ and $\langle v \rangle$, which are amplified by $k_p$.
+
+kp:
+  category: Numerics
+  type: R
+  default:
+    value: 10.0
+  description:
+    short: Proportional gain factor for the [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller).
+
+ki:
+  category: Numerics
+  type: R
+  default:
+    value: 20.0
+  description:
+    short: Integral gain factor for the [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller).
+
+target_height:
+  category: Numerics
+  type: R
+  default:
+    value: 0.0
+  description:
+    short: Target height for the [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller).
+
+target_u:
+  category: Numerics
+  type: R
+  default:
+    value: 0.0
+  description:
+    short: Target wind velocity in x-direction for the [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller).
+
+target_v:
+  category: Numerics
+  type: R
+  default:
+    value: 0.0
+  description:
+    short: Target wind velocity in y-direction for the [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller).

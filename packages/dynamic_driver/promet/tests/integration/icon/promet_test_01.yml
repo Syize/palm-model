@@ -1,0 +1,31 @@
+
+
+plugin: icon
+
+input_data: './input_data/ilfff*.nc'
+
+input_crs: 'EPSG:4326' # global latlon (like GPS)
+palm_crs: 'EPSG:25832' # UTM 32N
+
+palm_variable_groups:
+  - init_atmosphere_pt
+  - init_atmosphere_qv
+  - init_atmosphere_u
+  - init_atmosphere_v
+  - init_atmosphere_w
+  #- init_atmosphere_o3  # this requires ICON-ART data and is experimental. Please contact the developers.
+  - init_soil_t
+  - init_soil_m
+  - surface_forcing_surface_pressure
+  - ls_forcing_pt
+  - ls_forcing_qv
+  - ls_forcing_u
+  - ls_forcing_v
+  - ls_forcing_w
+  #- ls_forcing_o3  # this requires ICON-ART data and is experimental. Please contact the developers.
+
+start_time: 2023-07-06 00:00:00 +00
+end_time: 2023-07-06 06:00:00 +00
+
+#zsoil: [0.01, 0.25, 0.7, 1.5]
+#top_adjustment_index: -1  # control the vertical index up to which the forcing data is remapped to the PALM terrain (use -1 to match nzt)

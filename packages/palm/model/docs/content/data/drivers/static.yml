@@ -1,0 +1,1612 @@
+#-------------------------------------------------------------------------------
+# Global netCDF Attributes
+#-------------------------------------------------------------------------------
+global_attributes:
+
+  origin_lat:
+    type: NC_FLOAT
+    mandatory: true
+    si-unit: degree
+    description:
+      short: Geographical latitude in degrees north.
+      long: |
+        This attribute defines latitude of the south border of the model domain. [origin_lat](#static--global_attribute--origin_lat) overwrites the value given by namelist parameter [latitude](../../../Namelists/#initialization_parameters--latitude). [origin_lat](#static--global_attribute--origin_lat) affects the Coriolis parameter and the incoming radiation.
+
+  origin_lon:
+    type: NC_FLOAT
+    mandatory: true
+    si-unit: degree
+    description:
+      short: Geographical longitude in degrees west.
+      long: |
+        This attribute defines longitude of the west border of the model domain. [origin_lon](#static--global_attribute--origin_lon) overwrites the value given by namelist parameter [longitude](../../../Namelists/#initialization_parameters--longitude). [origin_lon](#static--global_attribute--origin_lon) affects the incoming radiation.
+
+  origin_x:
+    type: NC_FLOAT
+    mandatory: true
+    si-unit: m
+    description:
+      short: E-UTM coordinate of the respective UTM zone.
+      long: |
+        This attribute defines E-UTM coordinate of the west border of the model domain. Meaningful values of [origin_x](#static--global_attribute--origin_x) are necessary for correct placement of virtual sensors (see namelist [#virtual_measurement_parameters](../../../Namelists/#virtual-measurement-parameters)) or moving emissions (see [emis_nonstationary](../../../Namelists/#chemistry_parameters--emis_nonstationary)) which are also provided in UTM coordinates.
+
+  origin_y:
+    type: NC_FLOAT
+    mandatory: true
+    si-unit: m
+    description:
+      short: N-UTM coordinate of the respective UTM zone.
+      long: |
+        This attribute defines N-UTM coordinate of the south border of the model domain. Meaningful values of [origin_y](#static--global_attribute--origin_y) are necessary for correct placement of virtual sensors (see namelist [virtual_measurement_parameters](../../../Namelists/#virtual-measurement-parameters)) or moving emissions (see [emis_nonstationary](../../../Namelists/#chemistry_parameters--emis_nonstationary)) which are also provided in UTM coordinates.
+
+  origin_z:
+    type: NC_FLOAT
+    mandatory: true
+    si-unit: m
+    description:
+      short: z-coordinate of the bottom model boundary.
+      long: |
+        This attribute defines z-coordinate of the bottom model boundary. At the moment this attribute is only informative and does not affect any action in the model.
+
+  rotation_angle:
+    type: NC_FLOAT
+    mandatory: true
+    si-unit: degrees
+    description:
+      short: rotation angle of the model domain.
+      long: |
+        This attribute defines the clockwise rotation angle of the model domain. [rotation_angle](#static--global_attribute--rotation_angle) is considered in the Coriolis term as well as for the the incoming radiation to consider correct shading. [rotation_angle](#static--global_attribute--rotation_angle) overwrites the value given by namelist parameter [rotation_angle](../../../Namelists/#initialization_parameters--rotation_angle).
+
+
+#-------------------------------------------------------------------------------
+# netCDF Dimensions
+#-------------------------------------------------------------------------------
+dimensions:
+
+  cct_dim_vertex_coords:
+    mandatory: false
+    size:
+      value: 4
+    description:
+      short: dimension for special coordinates used in ray-tracing algorithm
+      long: |
+        Required for cut-cell topography.
+
+  cct_dim_vertex_shifts:
+    mandatory: false
+    size:
+      value: 1
+    description:
+      short: dimension for special coordinates used in ray-tracing algorithm
+      long: |
+        Required for cut-cell topography.
+
+  cct_max_num_vertices_per_face:
+    mandatory: false
+    size:
+      value: 7
+    description:
+      short: maximum number of vertices in cut cell-polygon (fixed to 7)
+      long: |
+        Required for cut-cell topography.
+
+  cct_num_faces:
+    mandatory: false
+    size:
+      value_of: total number of cut-cell faces
+    description:
+      short: number of cut-cell faces
+      long: |
+        Mandatory if cut-cell topography is defined.
+
+  cct_num_vert:
+    mandatory: false
+    size:
+      value_of: total number of cut-cell vertices
+    description:
+      short: number of unique vertices in cut cell polygons
+      long: |
+        Required for cut-cell topography.
+
+  dim_3d:
+    mandatory: false
+    size:
+      value: 3
+    description:
+      short: dimension of z, y ,x coordinates (fixed to 3)
+      long: |
+        Required for cut-cell topography.
+
+  nalbedo_pars:
+    mandatory: false
+    size:
+      value: 7
+    description:
+      short: Number of different surface albedo parameters that can be addressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [albedo_pars](#static--variable--albedo_pars).
+
+        | Index | Description                                                             |
+        | ----- | ----------------------------------------------------------------------- |
+        | 0     | broadband albedo of surface elements                                    |
+        | 1     | for buildings only: direct/diffuse longwave albedo of wall fraction     |
+        | 2     | for buildings only: direct/diffuse shortwave albedo of wall fraction    |
+        | 3     | for buildings only: direct/diffuse longwave albedo of green fraction    |
+        | 4     | for buildings only: direct/diffuse shortwave albedo of green fraction   |
+        | 5     | for buildings only: direct/diffuse longwave albedo of window fraction   |
+        | 6     | for buildings only: direct/diffuse shortwave albedo of window fraction  |
+
+  nbuilding_general:
+    mandatory: false
+    size:
+      value: 2
+    description:
+      short: Number of general building parameters.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_general](#static--variable--building_general).
+
+        | Index  | Description                                    | Unit |
+        | ------ | ---------------------------------------------- | ---- |
+        | 0      | ground-floor level height                      | m    |
+        | 1      | green type of roof (1 intensive, 2 extensive)  |      |
+
+  nbuilding_indoor:
+    mandatory: false
+    size:
+      value: 19
+    description:
+      short: Number of indoor building parameters.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_indoor](#static--variable--building_indoor). For a further description of parameters please also see [Pfafferott et al. (2021)](https://doi.org/10.5194/gmd-14-3511-2021).
+
+        | Index  | Description                                                                            | Unit          |
+        | ------ | -------------------------------------------------------------------------------------- | ------------- |
+        | 0      | indoor target summer temperature                                                       | K             |
+        | 1      | indoor target winter temperature                                                       | K             |
+        | 2      | shading factor                                                                         |               |
+        | 3      | g-value windows                                                                        |               |
+        | 4      | u-value windows                                                                        | W m^-2^ K^-1^ |
+        | 5      | basic airflow without occupancy of the room for - summer 0.5_wp, winter 0.5            | h^-1^         |
+        | 6      | additional airflow dependent on occupancy of the room for - summer 1.5_wp, winter 0.0  | h^-1^         |
+        | 7      | heat recovery efficiency                                                               |               |
+        | 8      | weighting factor to link facade surface area with indoor wall surface area             |               |
+        | 9      | weighting factor to link facade surface area with indoor heat storage capacity         | J m^-2^ K^-1^ |
+        | 10     | ratio internal surface/floor area                                                      |               |
+        | 11     | maximum heating capacity                                                               | W             |
+        | 12     | maximum cooling capacity                                                               | W             |
+        | 13     | additional internal heat gains during occupancy of the room                            | W m^-2^       |
+        | 14     | basic internal heat gains without occupancy of the room                                | W m^-2^       |
+        | 15     | storey height                                                                          | m             |
+        | 16     | ceiling construction height                                                            | m             |
+        | 17     | anthropogenic waste-heat coeefficent from heating (0 for district heating, >0 for boilers, <0 for heat pumps) |               |
+        | 18     | anthropogenic waste-heat coefficient from cooling (>0 if cooling system installed)     |               |
+
+  nbuilding_surface_layer:
+    mandatory: false
+    size:
+      value: 4
+    description:
+      short: Number of wall layers in the building-surface model (see [urban_surface_parameters](../../../Namelists/#urban-surface-parameters)).
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity) and [building_thickness](#static--variable--building_thickness).
+
+        | Index  | Description                   |
+        | ------ | ----------------------------- |
+        | 0      | first (outermost) wall layer  |
+        | 1      | second wall layer             |
+        | 2      | third wall layer              |
+        | 3      | fourth wall layer             |
+
+  nbuilding_surface_level:
+    mandatory: false
+    size:
+      value: 3
+    description:
+      short: Number of different considered building levels.
+      long: |
+        Respective indices are related to specific surfaces as indicated in the list below. Used by variable [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh) and [building_transmissivity](#static--variable--building_transmissivity).
+
+        | Index  | Description                                  |
+        | ------ | -------------------------------------------- |
+        | 0      | vertical surface - ground-floor level        |
+        | 1      | vertical surface - above ground-floor level  |
+        | 2      | roof                                         |
+
+  nbuilding_surface_pars:
+    mandatory: false
+    size:
+      value: 19
+    description:
+      short: Number of different building parameters that can be prescribed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_surface_pars](#static--variable--building_surface_pars).
+
+        | Index | Description                                           | Unit          |
+        | ----- | ----------------------------------------------------- | ------------- |
+        | 0     | wall fraction                                         |               |
+        | 1     | window fraction                                       |               |
+        | 2     | green fraction on wall                                |               |
+        | 3     | green fraction on roof                                |               |
+        | 4     | leaf area index of green fraction                     | m^2^/m^2^     |
+        | 5     | heat capacity of first (outermost) wall layer         | J m^-2^ K^-1^ |
+        | 6     | heat capacity of second wall layer                    | J m^-2^ K^-1^ |
+        | 7     | heat capacity of third wall layer                     | J m^-2^ K^-1^ |
+        | 8     | thermal conductivity of first (outermost) wall layer  | W m^-1^ K^-1^ |
+        | 9     | thermal conductivity of second wall layer             | W m^-1^ K^-1^ |
+        | 10    | thermal conductivity of third wall layer              | W m^-1^ K^-1^ |
+        | 11    | indoor target summer temperature                      | K             |
+        | 12    | indoor target winter temperature                      | K             |
+        | 13    | emissivity of wall fraction                           |               |
+        | 14    | emissivity of green fraction                          |               |
+        | 15    | emissivity of window fraction                         |               |
+        | 16    | transmissivity of window fraction                     |               |
+        | 17    | roughness length for momentum                         | m             |
+        | 18    | roughness length for heat and moisture                | m             |
+
+  nbuilding_surface_type:
+    mandatory: false
+    size:
+      value: 9
+    description:
+      short: Number of different surface types that can be adressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_albedo_type](#static--variable--building_albedo_type), [building_emissivity](#static--variable--building_emissivity), [building_fraction](#static--variable--building_fraction), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), [building_thickness](#static--variable--building_thickness), and [building_transmissivity](#static--variable--building_transmissivity).
+
+        | Index  | Description                                |
+        | ------ | ------------------------------------------ |
+        | 0      | wall surface - ground-floor level          |
+        | 1      | wall surface - above ground-floor level    |
+        | 2      | wall surface - roof                        |
+        | 3      | window surface - ground-floor level        |
+        | 4      | window surface - above ground-floor level  |
+        | 5      | window surface - roof                      |
+        | 6      | green surface - ground-floor level         |
+        | 7      | green surface - above ground-floor level   |
+        | 8      | green surface - roof                       |
+
+  npavement_pars:
+    mandatory: false
+    size:
+      value: 4
+    description:
+      short: Number of different pavement parameters that can be addressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [pavement_pars](#static--variable--pavement_pars).
+
+        | Index  | Description                    | Unit |
+        | ------ | ------------------------------ | ---- |
+        | 0      | roughness length for momentum  | m    |
+        | 1      | roughness length for heat      | m    |
+        | 2      | albedo type                    |      |
+        | 3      | surface emissivity             |      |
+
+  npavement_subsurface_pars:
+    mandatory: false
+    size:
+      value: 2
+    description:
+      short: Number of different subsurface pavement parameters that can be addressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [pavement_subsurface_pars](#static--variable--pavement_subsurface_pars).
+
+        | Index | Description                                                        | Unit          |
+        | ------| ------------------------------------------------------------------ | ------------- |
+        | 0     | thermal conductivity of the respective sub surface pavement layer  | W m^-1^ K^-1^ |
+        | 1     | volumetric heat capacity of the respective soil layer              | J m^-3^ K^-1^ |
+
+  ns:
+    mandatory: false
+    size:
+      value_of: Number of building surface elements.
+    description:
+      short: Number of building surface elements.
+      long: |
+        Serves as a dimension for variables which describes index number, position and orientation of the individual surfaces. Mandatory if [building_surface_pars](#static--variable--building_surface_pars) is used.
+
+  nsoil_pars:
+    mandatory: false
+    size:
+      value: 8
+    description:
+      short: Number of different soil paramenters that can be adressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [soil_pars](#static--variable--soil_pars).
+
+        | Index  | Description                        | Unit       |
+        | ------ | ---------------------------------- | ---------- |
+        | 0      | Van Genuchten parameter α          |            |
+        | 1      | Van Genuchten parameter l          |            |
+        | 2      | Van Genuchten parameter n          |            |
+        | 3      | saturation hydraulic conductivity  | m s^-1^    |
+        | 4      | saturation soil moisture           | m^3^ m^-3^ |
+        | 5      | field capacity                     | m^3^ m^-3^ |
+        | 6      | wilting point                      | m^3^ m^-3^ |
+        | 7      | residual moisture                  | m^3^ m^-3^ |
+
+#  nsurface_fraction:
+#    mandatory: false
+#    size:
+#      value: 3
+#    description:
+#      short: Maximum number of different surface types that are allowed at a grid point.
+#      long: |
+#        Respective indices are related to the surface type as indicated in the list below. Used by variable [surface_fraction](#static--variable--surface_fraction).
+#        | Index  | Description      |
+#        | ------ | ---------------- |
+#        | 0      | vegetation_type  |
+#        | 1      | pavement_type    |
+#        | 2      | water_type       |
+
+  nvegetation_pars:
+    mandatory: false
+    size:
+      value: 12
+    description:
+      short: Number of different surface vegetation parameters that can be addressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [vegetation_pars](#static--variable--vegetation_pars).
+
+        | Index  | Description                                                                          | Unit           |
+        | ------ | ------------------------------------------------------------------------------------ | -------------  |
+        | 0      | minimum canopy resistance                                                            | s m^-1^        |
+        | 1      | leaf area index                                                                      | m^2^ m^-2^     |
+        | 2      | vegetation coverage                                                                  |                |
+        | 3      | canopy resistance coefficient                                                        | hPa^-1^        |
+        | 4      | roughness length for momentum                                                        | m              |
+        | 5      | roughness length for heat                                                            | m              |
+        | 6      | heat transfer coefficient between skin layer and earth surface (stable conditions)   | W m^-2^ K^-1^  |
+        | 7      | heat transfer coefficient between skin layer and earth surface (unstable conditions) | W m^-2^ K^-1^  |
+        | 8      | shortwave radiation fraction transmitted to soil (not implemented)                   |                |
+        | 9      | heat capacity of the surface                                                         | J m^-2^ K^-1^  |
+        | 10     | albedo_type                                                                          |                |
+        | 11     | surface emissivity                                                                   |                |
+
+  nwater_pars:
+    mandatory: false
+    size:
+      value: 7
+    description:
+      short: Number of different surface water parameters that can be addressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [water_pars](#static--variable--water_pars).
+
+        | Index  | Description                                                                   | Unit          |
+        | ------ | ----------------------------------------------------------------------------- | ------------- |
+        | 0      | water temperature                                                             | K             |
+        | 1      | roughness length for momentum                                                 | m             |
+        | 2      | roughness length for heat                                                     | m             |
+        | 3      | heat transfer coefficient between skin layer and water (stable conditions)    | W m^-2^ K^-1^ |
+        | 4      | heat transfer coefficient between skin layer and water (unstable conditions)  | W m^-2^ K^-1^ |
+        | 5      | albedo_type (for values see [albedo_type](#static--variable--albedo_type))    |               |
+        | 6      | surface emissivity                                                            |               |
+
+  x:
+    mandatory: true
+    size:
+      value_of: 'namelist parameter [nx](../../../Namelists/#initialization_parameters--nx)+1'
+    description:
+      short: Number of grid points along `x`.
+      long: |
+        The number of grid points along `x` must match `nx + 1`, with [nx](../../../Namelists/#initialization_parameters--nx) as given in the initialization parameters namelist. `x` coordinates of the grid points can be given via variable [x](#static--variable--x).
+
+  y:
+    mandatory: true
+    size:
+      value_of: 'namelist parameter [ny](../../../Namelists/#initialization_parameters--ny)+1'
+    description:
+      short: Number of grid points along `y`.
+      long: |
+        The number of grid points along `y` must match `ny + 1`, with [ny](../../../Namelists/#initialization_parameters--ny) as given in the initialization parameters namelist. `y` coordinates of the grid points can be given via variable [y](#static--variable--y).
+
+  z:
+    mandatory: false
+    size:
+      value_of: Index value of highest building grid point.
+    description:
+      short: Number of grid points along `z`.
+      long: |
+        The number of grid points along `z` for mapping buildings, used in [buildings_3d](#static--variable--buildings_3d). Note, that `z` must start at zero height.
+
+  zlad:
+    mandatory: false
+    size:
+      value_of: Index value of highest resolved vegetation grid point.
+    description:
+      short: Maximum number of grid points over which a vegetation layer vertically extends.
+      long: |
+        The z-coordinates in m, relative above the ground, of the vegetation grid points can be given via variable [zlad](#static--variable--zlad). Used in [lad](#static--variable--lad), [bad](#static--variable--bad), and [tree_id](#static--variable--tree_id). Note, that `zlad` must start at zero height, and that [tree_id](#static--variable--tree_id) is currently not realized / not read from the driver.
+
+  zsoil:
+    mandatory: false
+    size:
+      value_of: Index value of deepest soil grid point.
+    description:
+      short: Number of grid points in a vertical soil column.
+      long: |
+        The z-coordinates in m (positive downward) of the soil grid points can be given via variable [zsoil](#static--variable--zsoil). Used in [soil_type](#static--variable--soil_type), [pavement_subsurface_pars](#static--variable--pavement_subsurface_pars), [root_area_dens_r](#static--variable--root_area_dens_r), and [root_area_dens_s](#static--variable--root_area_dens_s).
+
+
+#-------------------------------------------------------------------------------
+# netCDF Variables
+#-------------------------------------------------------------------------------
+variables:
+
+  albedo_pars:
+    modules: ['RAD']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nalbedo_pars,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [albedo_type](../../../Namelists/#radiation_parameters--albedo_type)'
+    description:
+      short: x-y specific settings for surface albedo.
+      long: |
+        First dimension is used to specify the various surface fractions (`wall`, `green`, `window`) and wavelength (broadband, longwave, shortwave) for which the albedo is set. For details, see table for [nalbedo_pars](#static--dimension--nalbedo_pars).
+
+  albedo_type:
+    modules: ['RAD']
+    mandatory: false
+    type: NC_BYTE
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [albedo_type](../../../Namelists/#radiation_parameters--albedo_type)'
+    description:
+      short: x-y specific settings for albedo type.
+      long: |
+        This input variable controls the setting of the surface albedos for broadband/longwave/shortwave. Depending on its value (*1-42*), albedos from the following list of predefined land surface types will be used.
+
+        For [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'rrtmg'* the broadband albedo is ignored and only the shortwave and longwave albedo values are used. In fact, not the values from the list will be used (they are for a solar zenith angle of 60°), but albedos will be calculated from that based on the current solar angle (wich varies in the course of the day).
+
+        For [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'clear-sky'*, only the broadband albedo is used.
+
+        The setting of [albedo_type](#static--variable--albedo_type) overwrites namelist parameter [albedo_type](../../../Namelists/#radiation_parameters--albedo_type) as well as the albedo type given by predefined parameter lists for [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type), [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type) and [water_type](../../../Namelists/#land_surface_parameters--water_type).
+
+        | Type  | Description                           | broadband | longwave | shortwave | Notes                                        |
+        | ----- | ------------------------------------- | --------- | -------- | --------- | -------------------------------------------- |
+        | 1     | ocean                                 | 0.06      | 0.06     | 0.06      |                                              |
+        | 2     | mixed farming, tall grassland         | 0.19      | 0.28     | 0.09      |                                              |
+        | 3     | tall/medium grassland                 | 0.23      | 0.33     | 0.11      |                                              |
+        | 4     | evergreen shrubland                   | 0.23      | 0.33     | 0.11      |                                              |
+        | 5     | short grassland/meadow/shrubland      | 0.25      | 0.34     | 0.14      |                                              |
+        | 6     | evergreen needleleaf forest           | 0.14      | 0.22     | 0.06      |                                              |
+        | 7     | mixed deciduous forest                | 0.17      | 0.27     | 0.06      |                                              |
+        | 8     | deciduous forest                      | 0.19      | 0.31     | 0.06      |                                              |
+        | 9     | tropical evergreen broadleaved forest | 0.14      | 0.22     | 0.06      |                                              |
+        | 10    | medium/tall grassland/woodland        | 0.18      | 0.28     | 0.06      |                                              |
+        | 11    | desert, sandy                         | 0.43      | 0.51     | 0.35      |                                              |
+        | 12    | desert, rocky                         | 0.32      | 0.40     | 0.24      |                                              |
+        | 13    | tundra                                | 0.19      | 0.27     | 0.10      |                                              |
+        | 14    | land ice                              | 0.77      | 0.65     | 0.90      | land ice is treated differently than sea ice |
+        | 15    | sea ice                               | 0.77      | 0.65     | 0.90      |                                              |
+        | 16    | snow                                  | 0.82      | 0.70     | 0.95      |                                              |
+        | 17    | bare soil                             | 0.08      | 0.08     | 0.08      |                                              |
+        | 18    | asphalt/concrete mix                  | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 19    | asphalt (asphalt concrete)            | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 20    | concrete (Portland concrete)          | 0.30      | 0.30     | 0.30      | dummy values                                 |
+        | 21    | sett                                  | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 22    | paving stones                         | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 23    | cobblestone                           | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 24    | metal                                 | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 25    | wood                                  | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 26    | gravel                                | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 27    | fine gravel                           | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 28    | pebblestone                           | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 29    | woodchips                             | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 30    | tartan (sports)                       | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 31    | artificial turf (sports)              | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 32    | clay (sports)                         | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 33    | building (dummy)                      | 0.17      | 0.17     | 0.17      | dummy values                                 |
+        | 34    | building wall reflective              | 0.60      | 0.60     | 0.60      |                                              |
+        | 35    | building wall (very) bright)          | 0.30      | 0.30     | 0.30      |                                              |
+        | 36    | building wall standard                | 0.07      | 0.07     | 0.07      |                                              |
+        | 37    | building window double layer glazing  | 0.12      | 0.12     | 0.12      |                                              |
+        | 38    | building window tripple layer glazing | 0.17      | 0.18     | 0.18      |                                              |
+        | 39    | building window reflective            | 0.48      | 0.48     | 0.48      |                                              |
+        | 40    | building roof reflective              | 0.60      | 0.60     | 0.60      |                                              |
+        | 41    | building roof (very) bright           | 0.30      | 0.30     | 0.30      |                                              |
+        | 42    | building roof standard                | 0.07      | 0.07     | 0.07      |                                              |
+
+  azimuth:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (ns)
+    si-unit: degrees
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: -9999.0
+    description:
+      short: Azimuth angle (orientation) of surface element.
+      long: |
+        This variable describes the orientation of the surface element along the azimuth angle at given [xs](#static--variable--xs), [ys](#static--variable--ys) and [zs](#static--variable--zs).
+    allowed_values:
+      - value: -9999.0
+        description: |
+          upward- or downward-facing
+      - value: 0.0
+        description: |
+          northward-facing
+      - value: 90.0
+        description: |
+          eastward-facing
+      - value: 180.0
+        description: |
+          southward-facing
+      - value: 270.0
+        description: |
+          westward-facing
+
+  bad:
+    modules: ['PCM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zlad,y,x)
+    si-unit: m^2^ m^-3^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0.0
+    description:
+      short:  Basal area density (BAD) in m² per m³ grid volume
+      long: |
+         Representing the area of trunk and branches within the respective grid volume. The dimension [zlad](#static--dimension--zlad) can be limited to the maximum canopy height.
+
+  building_albedo_type:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_type,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of building albedo type.
+      long: |
+        Values are set for all building walls located at this x-y location. See table of [nbuilding_surface_type](#static--dimension--nbuilding_surface_type) for allowed values. The prescribed values are then used to set specific values of broadband, long- and shortwave albedo according to the values described under [albedo_type](#static--variable--albedo_type). Setting of [building_albedo_type](#static--variable--building_albedo_type) overwrites values given by [albedo_type](#static--variable--albedo_type) at building surfaces. Note, even though [building_albedo_type](#static--variable--building_albedo_type) is of type NC_FLOAT, only multiple integer values can be assigned. Setting specific paramters in [building_albedo_type](#static--variable--building_albedo_type) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_emissivity:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_type,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of building emissivity.
+      long: |
+         See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). Setting specific paramters in [building_emissivity](#static--variable--building_emissivity) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_fraction:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_type,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of building fractions.
+      long: |
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the fraction is set, that this surface type has with respect to the total building surface at this point. Values are set for all building surfaces located at this x-y location. See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). Setting specific parameters in [building_fraction](#static--variable--building_fraction) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_general:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_general,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of general building parameters.
+      long: |
+        First dimension is used to specify the specific general building parameter to be set. Values are set for all building surfaces located at this x-y location. See table for [nbuilding_general](#static--dimension--nbuilding_general). Setting specific paramters in [building_general](#static--variable--building_general) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_heat_capacity:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_type,nbuilding_surface_layer,y,x)
+    si-unit: J m^-3^ K^-1^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of heat capacity of building surfaces.
+      long: |
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the heat capacity is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). The second dimension is used to specify the respective wall layer (see table for [nbuilding_surface_layer](#static--dimension--nbuilding_surface_layer)). Setting specific paramters in [building_heat_capacity](#static--variable--building_heat_capacity) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_heat_conductivity:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_type,nbuilding_surface_layer,y,x)
+    si-unit: W m^-1^ K^-1^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of thermal conductivity of building surfaces.
+      long: |
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the thermal conductivity is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_type](#static--variable--nbuilding_surface_type). The second dimension is used to specify the respective wall layer (see table for [nbuilding_surface_layer](#static--dimension--nbuilding_surface_layer)). Setting specific paramters in [building_heat_conductivity](#static--variable--building_heat_conductivity) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_id:
+    modules: ['PAC', 'IDM']
+    type: NC_INT
+    mandatory: false
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0
+    description:
+      short: Building ID to identify single building envelopes.
+      long: |
+        Used to identify single building envelopes which are composed of a number of grid volumes, and which is used for correct mapping of buildings on top of the underlying terrain, as well as for the [indoor model](../../../Namelists/#indoor-parameters). All grid volumes with the same ID are considered to belong to the same building. Note, [building_id](#static--variable--building_id) must not contain any `_FillValue` at grid points where buildings are defined via [buildings_2d](#static--variable--buildings_2d) or [buildings_3d](#static--variable--buildings_3d). There is no range or limitation for the ID numbers, except that each building must have a unique number which needs to fit into the range of a 32-bit integer variable (i.e. -2147483647 to +2147483647).
+
+  building_indoor:
+    modules: ['IDM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_indoor,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of building indoor parameters.
+      long: |
+        First dimension is used to specify respective building indoor parameters for which values are set. Values are set for all building volumes located at this x-y location. See table for [nbuilding_indoor](#static--dimension--nbuilding_indoor). Setting specific paramters in [building_indoor](#static--variable--building_indoor) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_lai:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_level,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of leaf-area index at green fraction of building surfaces.
+      long: |
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the leaf area index of the green fraction is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_lai](#static--variable--building_lai) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_roughness_length:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_level,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of roughness length for momentum at building surfaces.
+      long: |
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the roughness length for momentum is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_roughness_length](#static--variable--building_roughness_length) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_roughness_length_qh:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_level,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of roughness length for heat and moisture at building surfaces.
+      long: |
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the roughness length for heat and moisture is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_roughness_length_qh](#static--variable--building_roughness_length_qh) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_surface_pars:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_pars,ns)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: Surface specific setting of various building parameters.
+      long: |
+        The variable is used to assign building parameters for individual surfaces at a number of locations (points) `ns` (second dimension). The location and orientation of these surfaces need to be specified by [xs](#static--variable--xs), [ys](#static--variable--ys), and [zs](#static--variable--zs), as well as [azimuth](#static--variable--azimuth) and [zenith](#static--variable--zenith). The first dimension is used to specify the specific building surface parameter to be set. See table for [nbuilding_surface_pars](#static--dimension--nbuilding_surface_pars).
+
+        Building parameters given by other input variables, i.e. [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh), [building_transmissivity](#static--variable--building_transmissivity), [building_indoor](#static--variable--building_indoor), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), or [building_fraction](#static--variable--building_fraction), will be overwritten by [building_surface_pars](#static--variable--building_surface_pars).
+
+  building_thickness:
+    modules: ['USM', 'IDM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_type,nbuilding_surface_layer,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of building wall-layer thicknesses.
+      long: |
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the thickness of the layer is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). The second dimension is used to specify the respective wall layer (see table for [nbuilding_surface_layer](#static--dimension--nbuilding_surface_layer)). Setting specific paramters in [building_thickness](#static--variable--building_thickness) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_transmissivity:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nbuilding_surface_level,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: x-y specific setting of transmissivity of windows at building surfaces.
+      long: |
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the transmissivity of the window fraction is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_transmissivity](#static--variable--building_transmissivity) overwrites settings defined by [building_type](#static--variable--building_type).
+
+  building_type:
+    modules: ['USM', 'IDM']
+    mandatory: false
+    type: NC_BYTE
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+    description:
+      short: Building type used to select bulk parameters.
+      long: |
+         The `building_type` is used to define buildings by year of construction and bulding use, as specified via namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type). The different `building_types` are linked to predefined bulk parameters for the fractions and physical properties of the building envelope, the individual components, and the exchange processes with the indoor environment. The `building_type` is required if the [urban surface model](../../../Namelists/#urban-surface-parameters) or the [indoor model](../../../Namelists/#indoor-parameters) are applied. Note, `building_type` must not contain any `_FillValue` at grid points where a building is defined via [buildings_2d](#static--variable--buildings_2d) or [buildings_3d](#static--variable--buildings_3d). Setting of `building_type` = 0 in the static file is not allowed. To further specify building parameters and overwrite the `building_type` bulk paramaters, set the respective [building_albedo_type](#static--variable--building_albedo_type), [building_emissivity](#static--variable--building_emissivity), [building_fraction](#static--variable--building_fraction), [building_general](#static--variable--building_general), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), [building_indoor](#static--variable--building_indoor), [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh), [building_thickness](#static--variable--building_thickness), and [building_transmissivity](#static--variable--building_transmissivity). The previous parameter lists will replace the soon to be deprecated [building_pars](#static--variable--building_pars) (link unavailable!), which are currently active.
+    allowed_values:
+      - depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
+        description: see [building_type](../../../Namelists/#urban_surface_parameters--building_type)
+
+  buildings_2d:
+    modules: ['PAC', 'USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (y,x)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0.0
+    description:
+      short: Building height in m relative to the underlying terrain.
+      long: |
+        Two-dimensional building topology relative to the underlying terrain, i.e. assuming a flat surface at z=0. No holes or overhanging structures are possible. A building with ID given by [building_id](#static--variable--building_id) will be mounted on top of the maximum local terrain height that appears within the ground area covered by that building. Note, `buildings_2d` will not be used if [buildings_3d](#static--variable--buildings_3d) is present on file as well. If `buildings_2d` is given, [building_id](#static--variable--building_id) is required, too. Note, [buildings_2d](#static--variable--buildings_2d) requires [topography](../../../Namelists/#initialization_parameters--topography) = *'read_from_file'*.
+
+  buildings_3d:
+    modules: ['PAC', 'USM']
+    mandatory: false
+    type: NC_BYTE
+    shape: (z,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0
+    description:
+      short: Grid-volume based description of 3d-building topology.
+      long: |
+        Arbitrary three-dimensional building topology relative to the underlying terrain, i.e. assuming a flat surface at z=0. A building with ID given by [building_id](#static--variable--building_id) will be mounted on top of the maximum local terrain height that appears within the ground area covered by that building. Note, the 3d-array `buildings_3d` does not need to be defined and set beyond the top level of the highest buildings, i.e. the [z](#statics--z) dimension can me minimized accordingly. If `buildings_3d` is given, [building_id](#static--variable--building_id) is required, too. Note, [buildings_3d](#static--variable--buildings_3d) requires [topography](../../../Namelists/#initialization_parameters--topography) = *'read_from_file'*.
+    allowed_values:
+      - value: 0
+        description: |
+          Grid volume is not occupied by a building.
+      - value: 1
+        description: |
+          Grid volume is occupied by a building.
+
+  cct_building_id_classification:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Cut-cell topography specific surface definition for building ids.
+      long: |
+        For allowed values and more information see [building_id](#static--variable--building_id). Required for cut-cell topography.
+
+  cct_building_type_classification:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Cut-cell topography specific surface definition for buildings.
+      long: |
+        For allowed values and more information see [building_type](#static--variable--building_type). Required for cut-cell topography.
+
+  cct_face_area:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (cct_num_faces)
+    si-unit: m^2^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Area of cut-cell surface.
+      long: |
+        Required for cut-cell topography.
+
+  cct_face_center:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (dim_3d,cct_num_faces)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Positions of cut-cell surface mass center (z,y,x).
+      long: |
+        Required for cut-cell topography.
+
+  cct_face_normal_vector:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (dim_3d,cct_num_faces)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: (z,y,x) component of normalized normal vector.
+      long: |
+        Required for cut-cell topography.
+
+  cct_num_vertices_per_face:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Number of vertices in each face.
+      long: |
+         Required for cut-cell topography.
+
+  cct_offsets:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (dim_3d,cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: (k,j,i) offset of cut-cell surface.
+      long: |
+         Relates each surface to a building (required for setting properties). Required for cut-cell topography.
+
+  cct_pavement_type_classification:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Cut-cell topography specific surface definition for pavement.
+      long: |
+        For allowed values and more information see [pavement_type](#static--variable--pavement_type). Required for cut-cell topography.
+
+  cct_surface_type_classification:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Surface classification.
+      long: |
+          Required for cut-cell topography.
+    allowed_values:
+      - value: 0
+        description: Natural-type.
+      - value: 1
+        description: Building wall.
+      - value: 2
+        description: Building roof.
+      - value: 3
+        description: Default-type.
+
+  cct_vegetation_type_classification:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Cut-cell topography specific surface definition for vegetation.
+      long: |
+        For allowed values and more information see [vegetation_type](#static--variable--vegetation_type). Required for cut-cell topography.
+
+  cct_vertex_coords:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_dim_vertex_coords,cct_num_vert)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Type of vertices coordinates for radiation module.
+      long: |
+        Order: (k,j,i,dir), kji index of corner, dir direction: (0.+z, 1.-z, 2.+y, 3.-y, 4.+x, 5.-x). Required for cut-cell topography.
+
+  cct_vertex_shifts:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (cct_dim_vertex_shifts,cct_num_vert)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Type of vertices coordinates for radiation module.
+      long: |
+        Order: (len), len distance (corner; vertex). Required for cut-cell topography.
+
+  cct_vertices:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (dim_3d,cct_num_vert)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: (z;y;x) coordinates of vertices.
+      long: |
+        Required for cut-cell topography.
+
+  cct_vertices_per_face:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_max_num_vertices_per_face,cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: List of vertices for each cut-cell surface face.
+      long: |
+        Ordered by right-hand-rule. Required for cut-cell topography.
+
+  cct_water_type_classification:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Cut-cell topography specific surface definition for water.
+      long: |
+        For allowed values and more information see [water_type](#static--variable--water_type). Required for cut-cell topography.
+
+  cct_3d_grid_indices:
+    modules: ['CCT']
+    mandatory: false
+    type: NC_INT
+    shape: (dim_3d,cct_num_faces)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: (k,j,i) location of cut-cell surfaces.
+      long: |
+        Required for cut-cell topography.
+
+  lad:
+    modules: ['PCM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zlad,y,x)
+    si-unit: m^2^ m^-3^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [lad_surface](../../../Namelists/#plant_canopy_parameters--lad_surface)'
+    description:
+      short:  Leaf area density (LAD) in  m^2^ per m^-3^ grid volume.
+      long: |
+         Representing the area of leafs within the respective grid volume for 3D resolved Vegetation. Note, the 3d-array `lad` does not need to be defined and set beyond the top level of the highest canopy, i.e. the [zlad](#static--dimension--zlad) dimension can me minimized accordingly.
+
+  pavement_pars:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (npavement_pars,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type)'
+    description:
+      short:  Grid point specific settings for pavement surfaces.
+      long: |
+        Overwrites settings of pavement surface parameters defined by [pavement_type](#static--variable--pavement_type) at specified x-y locations. The first dimension is used to specify the specific pavement parameter to be set. For possible parameters see table of [npavement_pars](#static--dimension--npavement_pars).
+
+  pavement_subsurface_pars:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (npavement_subsurface_pars,zsoil,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type)'
+    description:
+      short:  Grid point specific settings for pavement subsurfaces.
+      long: |
+        Pavement types not only have a surface property but also change the underlying soil layers. This parameter overwrites the prescribed setting of heat capacity and thermal conductivity defined by [pavement_type](#static--variable--pavement_type) at specified x-y location. See table for [npavement_subsurface_pars](#static--dimension--npavement_subsurface_pars) for possible parameters. The number of pavement layers is fixed to a maximum of 8 levels.
+
+  pavement_type:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_BYTE
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type)'
+    description:
+      short: Bulk classification of pavements on soil.
+      long: |
+        Pavement type for each x-y location which is used to specify physical surface and material properties according to bulk parameters lists described in namelist parameter [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type). [pavement_type](#static--variable--pavement_type) overwrites the horizontally homogeneous setting done via the namelist parameter [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type). A soil type is required at all locations where a pavement_type is set and must not contain any `_FillValues`.
+
+        Please note that setting of [pavement_type](#static--variable--pavement_type) = *0* in the static file is not allowed. Pavement parameters defined via [pavement_type](#static--variable--pavement_type) can be further specified by [pavement_pars](#static--variable--pavement_pars) and [pavement_subsurface_pars](#static--variable--pavement_subsurface_pars).
+    allowed_values:
+      - depends_on: 'namelist parameter [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type)'
+        description: see [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type)
+
+  qsws:
+    modules: ['PAC']
+    type: NC_FLOAT
+    mandatory: false
+    shape: (y,x)
+    si-unit: W m^-2^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [surface_waterflux](../../../Namelists/#initialization_parameters--surface_waterflux)'
+    description:
+      short: Surface latent heat flux, constant with time.
+      long: |
+        Note that input of [qsws](#static--variable--qsws) is only useful for default-type surfaces. In simulations with [land surface model](../../../Namelists/#land-surface-parameters) and [urban surface model](../../../Namelists/#urban-surface-parameters), [qsws](#static--variable--qsws) is overwritten, as the turbulent fluxes are calculated by energy balance solvers for the [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type), [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type), [building_type](../../../Namelists/#urban_surface_parameters--building_type), and [water_type](../../../Namelists/#land_surface_parameters--water_type) surfaces. The unit of the input value must correspond to the setting given by [flux_input_mode](../../../Namelists/#initialization_parameters--flux_input_mode) and can either be kg kg^-1^ m s^-1^ or W m^-2^.
+
+  root_area_dens_r:
+    modules: ['PCM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zsoil,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [root_fraction](../../../Namelists/#land_surface_parameters--root_fraction)'
+    description:
+      short: Root distribution in the soil in terms of a root fraction (for resolved vegetation).
+      long: |
+       Overwrites the horizontally homogeneous setting done by the namelist parameter [root_fraction](../../../Namelists/#land_surface_parameters--root_fraction) or the default setting based on [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type) with grid point specific settings for specified `x`,`y`,`zsoil` location.
+
+  root_area_dens_s:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zsoil,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [root_fraction](../../../Namelists/#land_surface_parameters--root_fraction)'
+    description:
+      short: Root distribution in the soil in terms of a root fraction (for non-resolved vegetation).
+      long: |
+       Overwrites the horizontally homogeneous setting done by the namelist parameter [root_fraction](../../../Namelists/#land_surface_parameters--root_fraction) or the default setting based on [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type) with grid point specific settings for specified `x`,`y`,`zsoil` location.
+
+  shf:
+    modules: ['PAC']
+    type: NC_FLOAT
+    mandatory: false
+    shape: (y,x)
+    si-unit: K m s^-1^
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [surface_heatflux](../../../Namelists/#initialization_parameters--surface_heatflux)'
+    description:
+      short: Surface sensible heat flux, constant with time.
+      long: |
+        Note that input of [shf](#static--variable--shf) is only useful for default-type surfaces. In simulations with [land surface model](../../../Namelists/#land-surface-parameters) and [urban surface model](../../../Namelists/#urban-surface-parameters), [shf](#static--variable--shf) is overwritten with flux values calculated by the energy balance solvers for the [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type), [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type), [building_type](../../../Namelists/#urban_surface_parameters--building_type), and [water_type](../../../Namelists/#land_surface_parameters--water_type) surfaces. The unit of the input value must correspond to the setting given by [flux_input_mode](../../../Namelists/#initialization_parameters--flux_input_mode) and can either be K m s^-1^ or W m^-2^.
+
+  soil_type:
+    modules: ['LSM']
+    type: NC_BYTE
+    mandatory: false
+    shape: ([zsoil],y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [soil_type](../../../Namelists/#land_surface_parameters--soil_type)'
+    description:
+      short: Bulk classification of soil in terms of porosity.
+      long: |
+        [soil_type](#static--variable--soil_type) overwrites the horizontally homogeneous setting done by the namelist parameter [soil_type](../../../Namelists/#land_surface_parameters--soil_type). A soil type is required at all locations where either a [vegetation_type](#static--variable--vegetation_type) or a [pavement_type](#static--variable--pavement_type) is set. In case `lod` = *1*, a 2-dimensional vertically uniform soil texture is prescribed, while for `lod` = *2* the 3-dimensional [soil_type](#static--variable--soil_type) is additionally set for each vertical layer individually.
+
+        Please note, setting of [soil_type](#static--variable--soil_type) = *0* in the static driver is not allowed. To further specify soil parameters, please set respective [soil_pars](#static--variable--soil_pars] in the static driver file.
+    allowed_values:
+      - depends_on: 'namelist parameter [soil_type](../../../Namelists/#land_surface_parameters--soil_type)'
+        description: see [soil_type](../../../Namelists/#land_surface_parameters--soil_type)
+
+  soil_pars:
+    modules: ['LSM']
+    type: NC_FLOAT
+    mandatory: false
+    shape: ([zsoil],y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [soil_type](../../../Namelists/#land_surface_parameters--soil_type)'
+    description:
+      short: Grid point specific settings of surface properties.
+      long: |
+        [soil_pars](#static--variable--soil_pars) overwrites soil parameters defined by [soil_type](#static--variable--soil_type).
+        In case `lod` = *1*, soil parameters given for a specific x-y location are set at all soil layers, while for `lod` = *2* soil parameters can be specified for each soil layer separately. For possible parameters see table of [nsoil_pars](#static--variable--nsoil_pars).
+
+  ssws:
+    modules: ['PAC']
+    type: NC_FLOAT
+    mandatory: false
+    shape: (y,x)
+    si-unit: kg m (m^-1^ s^-1^)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [surface_scalarflux](../../../Namelists/#initialization_parameters--surface_scalarflux)'
+    description:
+      short: Surface passive scalar flux, constant with time.
+      long: |
+        Stationary surface passive scalar flux.
+
+  street_crossing:
+    modules: ['MAS']
+    mandatory: false
+    type: NC_BYTE
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0
+    description:
+      short: Positions of street crossings that can be used by pedestrians.
+      long: |
+        These street crossings comprise traffic lights and pedestrian crossings and are indicated by setting the value `1b`.
+    allowed_values:
+      - value: 1
+        description: Surface is occupied by a street crossing.
+
+  street_type:
+    modules: ['CHM', 'MAS']
+    type: NC_BYTE
+    mandatory: false
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0
+    description:
+      short: Classification of streets, closely following the Open Street Map classification.
+      long: |
+         [street_type](#static--variable--street_type) is required for application of the parameterized traffic emissions (see emission mode LOD 0 in [chemistry_parameters](../../../Namelists/#chemistry-parameters)) and for the multi-agent system.
+    allowed_values:
+      - value: 1
+        description: |
+          unclassified
+      - value: 2
+        description: |
+          cycleway
+      - value: 3
+        description: |
+          footway / pedestrian
+      - value: 4
+        description: |
+          path
+      - value: 5
+        description: |
+          track
+      - value: 6
+        description: |
+          living street
+      - value: 7
+        description: |
+          service
+      - value: 8
+        description: |
+          residential
+      - value: 9
+        description: |
+          tertiary
+      - value: 10
+        description: |
+          tertiary link
+      - value: 11
+        description: |
+          secondary
+      - value: 12
+        description: |
+          secondary link
+      - value: 13
+        description: |
+          primary
+      - value: 14
+        description: |
+          primary link
+      - value: 15
+        description: |
+          trunk
+      - value: 16
+        description: |
+          trunk link
+      - value: 17
+        description: |
+          motorway
+      - value: 18
+        description: |
+          motorway link
+      - value: 19
+        description: |
+          raceway
+
+# Please note, relative fractions are not implemented yet. Set the fraction to 1 for the respective surface at the location and to zero for the other surfaces at the point. For surfaces with buildings, set to '_FillValue' where buildings are located.
+#  surface_fraction:
+#    modules: ['LSM']
+#    type: NC_FLOAT
+#    mandatory: false
+#    shape: (nsurface_fraction,y,x)
+#    attributes:
+#      _FillValue:
+#        mandatory: true
+#    default:
+#      value: ...
+#    description:
+#      short:  Relative fraction of the respective surface type.
+#      long: |
+#       Relative fraction of the respective land surface type. The first dimension is used to specify the respective surface type (vegetation, pavement, water). See table for [nsurface_fraction](#static--variable--nsurface_fraction). The sum over all relative fractions must be equal to one for each x-y location. If one or more than one surface type is defined at a location, the relative fractions of these respective surface types must not be 0. Also, if [surface_fraction](#static--variable--nsurface_fraction) is given for one of the above mentioned surface types, this type needs to be defined at this location.
+
+# Note: Next quantity is currently not read from the driver. May be activated in the future.
+#  tree_id:
+#    modules: ['PCM']
+#    mandatory: false
+#    type: NC_INT
+#    shape: (y,x)
+#    description:
+#      short:  ID of the tree which belongs to the specific grid volume.
+#      long: |
+#        Index to identify the individual trees. Not used internally in PALM.
+
+  tree_type:
+    modules: ['CHM']
+    mandatory: false
+    type: NC_INT
+    shape: (zlad,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short:  Tree type for each grid volume.
+      long: |
+         Positive values indicate the tree species as defined in the tree type database (https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles/pids/palm_csd#Singletrees). Alternatively, if the species is unknown, the tree type contains the value of the corresponding [vegetation_type](#static--variable--vegetation_type) (LSM Vegetation Type) using a minus sign to distinguish it from the tree species.
+
+  vegetation_pars:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (nvegetation_pars,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type)'
+    description:
+      short:  Grid point specific settings for vegetation surfaces.
+      long: |
+        [vegetation_pars](#static--variable--vegetation_pars) overwrites the prescribed settings from [vegetation_type](#static--variable--vegetation_type) with grid point (x-y) specific settings of vegetation parameters. The first dimension is used to specify the respective vegetation parameter to be set. See table of [nvegetation_pars](#static--dimension--nvegetation_pars) for possible parameters.
+
+  vegetation_type:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_BYTE
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type)'
+    description:
+      short: Bulk classification of flat vegetation surfaces and natural surface types.
+      long: |
+        [vegetation_type](#static--variable--vegetation_type) overwrites the horizontally homogeneous setting of non-resolved natural land surfaces done via the land surface namelist parameter [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type). A [soil_type](#static--variable--soil_type) is required at all locations where a [vegetation_type](#static--variable--vegetation_type) is set and must not contain any `_FillValues`.
+
+        Please note that setting of [vegetation_type](#static--variable--vegetation_type) = *0* in the static driver is not allowed. To further specify vegetation parameters, please set respective [vegetation_pars](#static--variable--vegetation_pars) in the static driver file.
+    allowed_values:
+      - depends_on: 'namelist parameter [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type)'
+        description: see [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type)
+
+  water_pars:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (water_pars,y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: 'namelist parameter [water_type](../../../Namelists/#land_surface_parameters--water_type)'
+    description:
+      short:  Grid point specific settings of water parameters.
+      long: |
+        [water_pars](#static--variable--water_pars) overwrites the prescribed setting from [water_type](#static--variable--water_type) with grid point (x-y) specific settings. The first dimension is used to specify the respective water parameter to be set. See table of [nwater_pars](#static--dimension--nwater_pars) for possible parameters.
+
+  water_type:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_BYTE
+    shape: (y,x)
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [water_type](../../../Namelists/#land_surface_parameters--water_type)'
+    description:
+      short: Bulk classification of water bodies.
+      long: |
+        [water_type](#static--variable--water_type) overwrites the horizontally homogeneous setting of water surfaces done by the land surface namelist parameter [water_type](../../../Namelists/#land_surface_parameters--water_type).
+
+        Please note, setting of [water_type](#static--variable--water_type) = *0 * in the static driver is not allowed. To further specify water parameters, please set respective [water_pars](#static--variable--water_pars) in the static driver file.
+    allowed_values:
+      - depends_on: 'namelist parameter [water_type](../../../Namelists/#land_surface_parameters--water_type)'
+        description: see [water_type](../../../Namelists/#land_surface_parameters--water_type)
+
+  x:
+    modules: ['PAC']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (x)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along x-axis to the left border of the model domain.
+      long: |
+        See also dimension [x](#static--dimension--x).
+
+  xs:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (ns)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance of building surface element to the left border of the model domain.
+      long: |
+        See also dimension [ns](#static--dimension--ns).
+
+  y:
+    modules: ['PAC']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (y)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along y-axis to the south border of the model domain.
+      long: |
+        See also dimension [y](#static--dimension--y).
+
+  ys:
+    modules: ['USM']
+    type: NC_FLOAT
+    mandatory: false
+    shape: (ns)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance of building surface element to the south border of the model domain.
+      long: |
+        See also dimension [ns](#static--dimension--ns).
+
+  z:
+    modules: ['PAC']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along z-axis to the bottom of the model domain.
+      long: |
+        See also dimension [z](#static--dimension--z).
+
+  zenith:
+    modules: ['USM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (ns)
+    si-unit: degrees
+    attributes: {}
+    default: ~
+    description:
+      short: Zenith angle (orientation) of surface element.
+      long: |
+        This variable describes the orientation of the respective surface element along the zenith angle at coordinates given by [xs](#static--variable--xs), [ys](#static--variable--ys) and [zs](#static--variable--zs).
+    allowed_values:
+      - value: 0.0
+        description: |
+          upward-facing
+      - value: 90.0
+        description: |
+          vertical
+      - value: 180.0
+        description: |
+          downward-facing
+
+  zlad:
+    modules: ['PAC']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zlad)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance of resolved vegetation to the ground (surface).
+      long: |
+        See also dimension [zlad](#static--dimension--zlad).
+
+  zs:
+    modules: ['USM']
+    type: NC_FLOAT
+    mandatory: false
+    shape: (ns)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance of building surface element to the bottom border of the model domain.
+      long: |
+        See also dimension [ns](#static--dimension--ns).
+
+  zsoil:
+    modules: ['LSM']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zsoil)
+    si-unit: m
+    attributes: {}
+    default:
+      depends_on: 'namelist parameter [dz_soil](../../../Namelists/#land_surface_parameters--dz_soil)'
+    description:
+      short: Distance along z from the surface for the respective soil grid point (always positive).
+      long: |
+        See also dimension [zsoil](#static--dimension--zsoil).
+
+  zt:
+    modules: ['PAC']
+    mandatory: false
+    type: NC_FLOAT
+    shape: (y,x)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value: 0.0
+    description:
+      short: Terrain height relative to the reference height above sea level.
+      long: |
+        Terrain height in m relative to [origin_z](#static--global_attribute--origin_z). If not provided, the relative terrain height will be set to 0 m all over the model domain. Note, `zt` must not contain any `_FillValues`.
+
+
+  z0:
+    modules: ['PAC']
+    type: NC_FLOAT
+    mandatory: false
+    shape: (y,x)
+    si-unit: m
+    attributes:
+      _FillValue:
+        mandatory: true
+    default:
+      value_of: 'namelist parameter [roughness_length](../../../Namelists/#initialization_parameters--roughness_length)'
+    description:
+      short: Roughness length for momentum.
+      long: |
+        Note that input of [z0](#static--variable--z0) is only useful for default-type surfaces. In simulations with [land surface model](../../../Namelists/#land-surface-parameters) and [urban surface model](../../../Namelists/#urban-surface-parameters), [z0](#static--variable--z0) will be overwritten by values that are implicitly set by [vegetation_type](../../../Namelists/#land_surface_parameters--vegetation_type), [pavement_type](../../../Namelists/#land_surface_parameters--pavement_type), [building_type](../../../Namelists/#urban_surface_parameters--building_type), or [water_type](../../../Namelists/#land_surface_parameters--water_type).

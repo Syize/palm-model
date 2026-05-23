@@ -1,0 +1,62 @@
+DET0001:
+  loglevel: ERROR
+  message: |
+    unknown boundary condition: ... = "..."
+  description: |
+    See the respective parameter in the [dust emission and transport module namelist](../Namelists/#dust-emission-and-transport-parameters) for allowed values, and appropriately correct your parameter file.
+
+DET0002:
+  loglevel: ERROR
+  message: |
+    left and right boundary conditions are inconsistent
+  description: |
+    Boundary conditions [bc_dm_l](../Namelists/#det_parameters--bc_dm_l) and [bc_dm_r](../Namelists/#det_parameters--bc_dm_r) must both be cyclic or non-cyclic.
+
+DET0003:
+  loglevel: ERROR
+  message: |
+    north and south boundary conditions are inconsistent
+  description: |
+    Boundary conditions [bc_dm_n](../Namelists/#det_parameters--bc_dm_n) and [bc_dm_s](../Namelists/#det_parameters--bc_dm_s) must both be cyclic or non-cyclic.
+
+DET0004:
+  loglevel: ERROR
+  message: |
+    number of specified dust bins ... exceeds the limit of ...
+  description: |
+    Adjust the number of [n_dust_bins](../Namelists/#det_parameters--n_dust_bins) to the given limit.
+
+DET0005:
+  loglevel: ERROR
+  message: |
+    number of specified saltation bins ... exceeds the limit of ...
+  description: |
+    Adjust the number of [n_saltation_bins](../Namelists/#det_parameters--n_saltation_bins) to the given limit
+
+DET0006:
+  loglevel: WARNING
+  message: |
+    effective diameters of some/all specified dust bins exceed 63.0E-6
+  description: |
+    Effective diameters in [diameter_dust](../Namelists/#det_parameters--diameter_dust) should be all less than 63 microns. For larger particles, the DET module might produce unrealistic results.
+
+DET0007:
+  loglevel: ERROR
+  message: |
+    diameter_saltation(1) = ... is larger than 4.0E-6
+  description: |
+    The first given diameter of [diameter_saltation](../Namelists/#det_parameters--diameter_saltation) must be less than or equal to 4microns (clay), because the calculation of the sandblasting efficiency requires at least one size bin of clay particles.
+
+DET0008:
+  loglevel: ERROR
+  message: |
+    inconsistent number of specified saltation bins
+  description: |
+    The number of saltation size bins [n_saltation_bins](../Namelists/#det_parameters--n_saltation_bins) must match the number of the given values for each of the saltation bin properties [bin_mass_fraction_ssc](../Namelists/#det_parameters--bin_mass_fraction_ssc), [diameter_saltation](../Namelists/#det_parameters--diameter_saltation), [mass_fraction_ssc](../Namelists/#det_parameters--mass_fraction_ssc), and [particle_density_saltation](../Namelists/#det_parameters--particle_density_saltation).
+
+DET0009:
+  loglevel: ERROR
+  message: |
+    inconsistent number of specified dust bins
+  description: |
+        The number of dust size bins [n_dust_bins](../Namelists/#det_parameters--n_dust_bins) must match the number of the given values for each of the dust bin properties [diameter_dust](../Namelists/#det_parameters--diameter_dust), [lower_bound_diameter](../Namelists/#det_parameters--lower_bound_diameter), [upper_bound_diameter](../Namelists/#det_parameters--upper_bound_diameter), and [particle_density_dust](../Namelists/#det_parameters--particle_density_dust).

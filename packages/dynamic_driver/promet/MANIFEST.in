@@ -1,0 +1,7 @@
+graft src
+graft docs
+
+include README.md
+
+exclude tests
+global-exclude *~ *.py[cod] *.so

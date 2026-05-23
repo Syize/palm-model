@@ -1,0 +1,263 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "det_parameters"
+
+alpha_imp:
+  category: Physics
+  type: R
+  default:
+    value: 50.0
+  description:
+    short: Parameter that modifies the magnitude of the impaction efficiency.
+    long: |
+      If [deposition_scheme](#det_parameters--deposition_scheme) = *'Z01'*,  the impaction efficiency is calculated by a power function that depends on the Stockes number and [alpha_imp](#det_parameters--alpha_imp). Equation (7c) of [Zhang et al. (2001)](https://doi.org/10.1016/S1352-2310(00)00326-5) is used. Depending on the land use category that is assumed, [alpha_imp](#det_parameters--alpha_imp) can be different. The default value is for deserts.
+
+bc_dm_b:
+  category: Boundary Conditions
+  type: C*20
+  default:
+    value: neumann
+  description:
+    short: The bottom boundary condition of the dust mass concentrations.
+    long: |
+      The bottom boundary condition for all dust mass concentrations (for each dust size bin). Because surface emissions are always active, [bc_dm_b](#det_parameters--bc_dm_b) = *'neumann'* is  always required.
+  allowed_values:
+    - value: neumann
+      description: |
+        Zero concentration gradient.
+
+bc_dm_l:
+  category: Boundary Conditions
+  type: C*20
+  default:
+    value: cyclic
+  description:
+    short: The left boundary condition of the dust mass concentrations.
+    long: |
+      The left boundary condition for all dust mass concentrations (for each dust size bin). So far, only cyclic boundary conditions along the horizontal directions are allowed.
+  allowed_values:
+    - value: cyclic
+      description: |
+        Cyclic along `x`. For this value, [bc_dm_r](#det_parameters--bc_dm_r) = *'cyclic'* is required, too.
+
+bc_dm_n:
+  category: Boundary Conditions
+  type: C*20
+  default:
+    value: cyclic
+  description:
+    short: The north boundary condition of the dust mass concentrations.
+    long: |
+      The north boundary condition for all dust mass concentrations (for each dust size bin). So far, only cyclic boundary conditions along the horizontal directions are allowed.
+  allowed_values:
+    - value: cyclic
+      description: |
+        Cyclic along `y`. For this value, [bc_dm_s](#det_parameters--bc_dm_s) = *'cyclic'* is required, too.
+
+bc_dm_r:
+  category: Boundary Conditions
+  type: C*20
+  default:
+    value: cyclic
+  description:
+    short: The right boundary condition of the dust mass concentrations.
+    long: |
+      The right boundary condition for all dust mass concentrations (for each dust size bin). So far, only cyclic boundary conditions along the horizontal directions are allowed.
+  allowed_values:
+    - value: cyclic
+      description: |
+        Cyclic along `x`. For this value, [bc_dm_l](#det_parameters--bc_dm_l) = *'cyclic'* is required, too.
+
+bc_dm_s:
+  category: Boundary Conditions
+  type: C*20
+  default:
+    value: cyclic
+  description:
+    short: The south boundary condition of the dust mass concentrations.
+    long: |
+      The south boundary condition for all dust mass concentrations (for each dust size bin). So far, only cyclic boundary conditions along the horizontal directions are allowed.
+  allowed_values:
+    - value: cyclic
+      description: |
+        Cyclic along `y`. For this value, [bc_dm_n](#det_parameters--bc_dm_n) = *'cyclic'* is required, too.
+
+bc_dm_t:
+  category: Boundary Conditions
+  type: C*20
+  default:
+    value: neumann
+  description:
+    short: The top boundary condition of the dust mass concentrations.
+    long: |
+      The top boundary condition for all dust mass concentrations (for each dust size bin).
+  allowed_values:
+    - value: dirichlet
+      description: |
+        Constant concentration over the entire simulation.
+    - value: neumann
+      description: |
+        Zero concentration gradient.
+
+bin_mass_fraction_ssc:
+  category: General Settings
+  type: R
+  shape: (20)
+  default:
+    value: [1.0, 0.25, 0.25, 0.25, 0.25, 0.0205, 0.0410, 0.0359, 0.3897, 0.5128]
+  description:
+    short: Bin-specific mass fraction of corresponding soil separate class.
+    long: |
+      With this parameter, the mass fraction of every salation size bin is set with respect to a specific soil separate class (clay, silt or sand). For example, the default setting assumes 1 clay, 4 silt, and 5 sand bins. Because there is only one clay bin the mass fraction is 1.0. The silt bins have uniform mass fractions of 0.25 and the 5 sand bins have fractions that increase from 0.0205 to 0.5128. All mass fractions of each soil separate class should amount to 1 (100%). Up to 20 values can be specified.
+
+      **Note:** <br>
+      One clay bin must at least be specified. Otherwise, the sandblasting efficiency (see [Marticorena et al. (1995)](https://doi.org/10.1029/95JD00690) equation (47)) can not be calculated.
+
+brownian_diffusion_coefficient:
+  category: Physics
+  type: R
+  default:
+    value: 0.54
+  description:
+    short: Exponent that scales Brownian diffusion.
+    long: |
+      If [deposition_scheme](#det_parameters--deposition_scheme) = *'Z01'*,  the particle collection efficiency from Brwonian diffusion is calculated by the Schmidt number to the power of - [brownian_diffusion_coefficient](#det_parameters--brownian_diffusion_coefficient). Equation (6) of [Zhang et al. (2001)](https://doi.org/10.1016/S1352-2310(00)00326-5) is used. Depending on the land use category that is assumed, [brownian_diffusion_coefficient](#det_parameters--brownian_diffusion_coefficient) can be different. The default value is for deserts.
+
+deposition_scheme:
+  category: Parameterization
+  type: C*4
+  default:
+    value: Z01
+  description:
+    short: Method to solve the dry deposition velocity for dust particels over the ground.
+    long: |
+      The default method is described by [Zhang et al. (2001)](https://doi.org/10.1016/S1352-2310(00)00326-5). This parameterization calculates particle dry deposition velocities as a function of particle size and density as well as relevant meteorological variables. It includes deposition processes, such as, turbulent transfer, Brownian diffusion, impaction, interception, gravitational settling and particle rebound. It is widely used in numerical codes, e.g. in WRF-Chem ([Zeng et al. (2020)](https://doi.org/10.5194/gmd-13-2125-2020)). So far, this is the only implemented method.
+  allowed_values:
+    - value: Z01
+      description: See [Zhang et al. (2001)](https://doi.org/10.1016/S1352-2310(00)00326-5).
+
+det_start_time:
+  category: General Settings
+  type: R
+  default:
+    value: 0.0
+  si-unit: s
+  description:
+    short: Time after which DET is switched on.
+    long: |
+      Can be used to allow the LES model to develop turbulence before dust physics are switched on.
+
+diameter_dust:
+  category: General Settings
+  type: R
+  shape: (10)
+  default:
+    value: [1.46E-6, 2.8E-6, 4.8E-6, 9.0E-6, 16.0E-6]
+  si-unit: m
+  description:
+    short: Effective diameter of a dust size bin.
+    long: |
+      By default, effective diameters for 5 dust particle size bins are given. They are mainly used to distribute the calculated bulk dust emission flux to different bins, to calculate the settling velocities, and to calculate dry deposition. The highest given diameter must be equal or less than 63.0E-6. Particle diameters larger than that are considered as sand for which the dust emission and transport module is not designed. Up to 10 values can be specified.
+
+diameter_saltation:
+  category: General Settings
+  type: R
+  shape: (20)
+  default:
+    value: [1.42E-6, 8.0E-6, 20.0E-6, 32.0E-6, 44.0E-6, 70.0E-6, 130.0E-6, 200.0E-6, 620.0E-6, 1500.0E-6]
+  si-unit: m
+  description:
+    short: Effective diameter of a saltation size bin.
+    long: |
+      By default, effective diameters for 10 saltation particle size bins are given. They are mainly used to calculate the bin-specific threshold friction velocities above which saltation occurs and to calculate the weighting factors that determine the contribution of the specific bin to the total horizontal saltation flux. Up to 20 values can be specified.
+
+lower_bound_diameter:
+  category: General Settings
+  type: R
+  shape: (10)
+  default:
+    value: [0.2E-6, 2.0E-6, 3.6E-6, 6.0E-6, 12.0E-6]
+  si-unit: m
+  description:
+    short: Lowest diameter of a certain dust size bin.
+    long: |
+      This parameter represents the minimum effective diameter of a certain dust size bin. The maximum is characterized by [upper_bound_diameter](#det_parameters--upper_bound_diameter). It is used to calculate the normalized volume distributions of each dust size bin. Up to 10 values can be specified.
+
+mass_fraction_ssc:
+  category: General Settings
+  type: R
+  shape: (20)
+  default:
+    value: [0.03, 0.05, 0.05, 0.05, 0.05, 0.92, 0.92, 0.92, 0.92, 0.92]
+  description:
+    short: Mass fraction of soil separate class.
+    long: |
+      With this parameter, the mass fractions of every soil separate class (clay, silt or sand) are set. For example, the default setting assumes 1 clay, 4 silt, and 5 sand bins. All clay, silt, and sand bins contirbute to 3%, 5%, and 92%, respectively, to the soil composition. These values should amount to 1 (100%) and they are based on mass fractions of the soil type sand of the STATSGO-FAO database ([Pérez, et al. (2011)](https://doi.org/10.5194/acpd-11-17551-2011). Up to 20 values can be specified.
+
+      **Note:** <br>
+      One clay bin must at least be specified. Otherwise, the sandblasting efficiency (see [Marticorena et al. (1995)](https://doi.org/10.1029/95JD00690) equation (47)) can not be calculated.
+
+n_dust_bins:
+  category: General Settings
+  type: I
+  default:
+    value: 5
+  description:
+    short: Number of dust particle bins.
+    long: |
+      By default, 5 dust size bins are specified among which the calculated bulk dust emission flux is distributed and for which the prognostic equations are solved.
+
+n_saltation_bins:
+  category: General Settings
+  type: I
+  default:
+    value: 10
+  description:
+    short: Number of saltation particle bins.
+    long: |
+      By default, 10 saltation bins are specified for which particle-size-dependent horizontal saltation fluxes are calculated to finally determine the vertical bulk dust emission flux.
+
+particle_density_dust:
+  category: General Settings
+  type: R
+  shape: (10)
+  default:
+    value: [2500.0, 2650.0, 2650.0, 2650.0, 2650.0]
+  si-unit: kg m^-3^
+  description:
+    short: Particle density of a dust size bin.
+    long: |
+      By default, 5 dust bins and their particle densities are specified. Up to 10 can be given.
+
+particle_density_saltation:
+  category: General Settings
+  type: R
+  shape: (20)
+  default:
+    value: [2500.0, 2650.0, 2650.0, 2650.0, 2650.0, 2650.0, 2650.0, 2650.0, 2650.0, 2650.0]
+  si-unit: kg m^-3^
+  description:
+    short: Particle density of a saltation size bin.
+    long: |
+      By default, 10 saltation bins and their particle densities are specified. Up to 20 can be given.
+
+switch_off_module:
+  category: General Settings
+  type: L
+  default:
+    value: .FALSE.
+  description:
+    short: Enables/Disables entire module.
+    long: |
+      When set to .TRUE., the entire module is switched off without the requirement to remove the namelist from the parameter file.
+
+upper_bound_diameter:
+  category: General Settings
+  type: R
+  shape: (5)
+  default:
+    value: [2.0E-6, 3.6E-6, 6.0E-6, 12.0E-6, 20.0E-6]
+  si-unit: m
+  description:
+    short: Highest diameter of a certain dust size bin.
+    long: |
+      This parameter represents the maximum effective diameter of a certain dust size bin. The minimum is characterized by [lower_bound_diameter](#det_parameters--lower_bound_diameter). It is used to calculate the normalized volume distributions of each dust size bin.

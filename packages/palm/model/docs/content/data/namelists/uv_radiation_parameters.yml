@@ -1,0 +1,43 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "uv_radiation_parameters"
+
+num_reflections:
+  category: UV Settings
+  type: I
+  default:
+    value: 0
+  description:
+    short: Number of reflection steps for UV radiation to be performed inside the RTM.
+    long: |
+      The number of reflection steps for the reflected UV radiation between mutually visible surfaces. Since UV radiation is spectrally resolved, each wavelength is treated separately. Reflections are treated identical as in the radiative transfer model, where reflections are considered as purely Lambertian (diffuse), i.e. no specular reflections are considered. The corresponding surface-type dependent albedo is taken from pre-defined bulk parameters.
+
+switch_off_module:
+  category: Mode
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switch to turn off the module.
+    long: |
+      If [switch_off_module](#uv_radiation_parameters--switch_off_module) = *.T.*, the UV radiation model is not activated even if the namelist is present in the parameter file.
+
+uv_integration_method:
+  category: UV Settings
+  type: C*50
+  default:
+    value: 'from_irradiance'
+  description:
+    short: Methods used to compute the UV irradiance.
+    long:  |
+      This parameter describes the method used to compute UV-radiances at the surface including partial shading and reflections.
+      Values may be combined, separated by one or more blanks, i.e. [uv_integration_method](#uv_radiation_parameters--uv_integration_method) = *'from_irradiance from_radiance'*. The usage of this UV module requires the RTM switched-on with [radiation_interactions_on](#radiation_parameters--radiation_interactions_on) to compute realistic shading and reflections.
+      The UV irradiance is computed from externally provided UV irradiances considering the obstruction of the upper hemisphere by buildings, tall canopy and other transparent or non-transparent obstacles. Therefore, for the actual sun zenith and azimuth angle, the corresponding UV scenario is read from an external file [PIDS_UV](#iofiles--PIDS_UV), preprocessed by the tool *uv2palm*, which computes spectrally-resolved UV irradiances and UV radiances using the LIBRADTRAN library (Mayer and Kylling, 2005). The spectral resolution as well as the number of considered sun-zenith angles can be freely chosen with *uv2palm*.
+      The UV model is purely diagnostic and independent on the computed flow, i.e. if only the UV radiance is of interest, it is sufficient to run a spinup only (see [spinup_time](#initialization_parameters--spinup_time)), and to enable output via [data_output_during_spinup](#initialization_parameters--data_output_during_spinup). The UV model is called each 2d horizontal cross section output step as given by [dt_do2d_xy](#runtime_parameters--dt_do2d_xy).
+  allowed_values:
+    - value: 'from_irradiance'
+      description: |
+        The UV irradiance is computed from externally-provided spectrally resolved UV irradiances separated into a direct and diffuse portion. The external values are multiplied with the local sky-view factor and transparency inferred from the radiative transfer model. This method neglects the effect of non-isotropic diffuse UV radiation on shading patterns.
+    - value: 'from_radiance'
+      description: |
+        The UV irradiance is computed from externally-provided spectrally resolved UV radiances. The discrete resolution along azimuth and zenith can be freely chosen with *uv2palm*, though the spherical resolution of the UV input file needs to correspond to the settings of [raytrace_discrete_azims](#radiation_parameters--raytrace_discrete_azims) and [raytrace_discrete_elevs](#radiation_parameters--raytrace_discrete_elevs). With this approach, the spherical directions obstructed by transparent or non-transparent obstacles are stored during the initialization. The local UV irradiance is then computed by integration over all azimuth and zenith angles neglecting spherical directions obstructed by non-transparent obstacles. Spherical directions obstructed by transparent obstacles are considered, but the radiance originating from these directions is reduced by the reflected and absorbed portions at the obstacles, i.e. only the transmitted portion is considered.
+        With this method, the effect of non-isotropic diffuse radiation is considered.

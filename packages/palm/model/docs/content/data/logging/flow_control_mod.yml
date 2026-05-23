@@ -1,0 +1,35 @@
+FCT0001:
+  loglevel: ERROR
+  message: |
+    illegal setting of bc_lr / bc_ns for geostrophic wind controller
+  description: |
+    Using [geostrophic_wind_controller](../Namelists/#flow_control_parameters--geostrophic_wind_controller) = *.T.* requires both horizontal boundary conditions [bc_lr](../Namelists/#initialization_parameters--bc_lr) and [bc_ns](../Namelists/#initialization_parameters--bc_ns) to be cyclic.
+
+FCT0002:
+  loglevel: ERROR
+  message: |
+    illegal setting of topography for geostrophic wind controller
+  description: |
+    Using [geostrophic_wind_controller](../Namelists/#flow_control_parameters--geostrophic_wind_controller) = *.T.* requires to set [topography](../Namelists/#initialization_parameters--topography) = *'flat'*.
+
+FCT003:
+  loglevel: ERROR
+  message: |
+    illegal value for inertial_oscillation_damping_factor for geostrophic wind controller
+  description: |
+    Using [geostrophic_wind_controller](../Namelists/#flow_control_parameters--geostrophic_wind_controller) = *.T.* requires to set [inertial_oscillation_damping_factor](../Namelists/#damping_parameters--inertial_oscillation_damping_factor) /= *0.0*. Otherwise the inertial oscillation might be amplified by the geostrophic wind controller.
+
+FCT004:
+  loglevel: ERROR
+  message: |
+    illegal value for target_height for geostrophic wind controller
+  description: |
+    The [target_height](../Namelists/#flow_control_parameters--target_height) must be positive and below the height of the the uppermost grid point `zu(nz)`.
+
+FCT005:
+  loglevel: ERROR
+  message: |
+    illegal value for rayleigh_damping_factor for geostrophic wind controller
+  description: |
+    Using [geostrophic_wind_controller](../Namelists/#flow_control_parameters--geostrophic_wind_controller) = *.T.* requires to set [rayleigh_damping_factor](../Namelists/#initialization_parameters--rayleigh_damping_factor) = *0.0*, because the Rayleigh damping is not designed to work with time-dependent basic states (geostrophic wind profiles).
+

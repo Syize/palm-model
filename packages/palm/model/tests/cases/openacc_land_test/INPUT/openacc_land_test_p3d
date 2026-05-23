@@ -1,0 +1,198 @@
+!-------------------------------------------------------------------------------
+!-- INITIALIZATION PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&initialization_parameters
+!
+!-- grid parameters
+!-------------------------------------------------------------------------------
+    nx                         = 39, ! Number of gridboxes in x-direction (nx+1)
+    ny                         = 39, ! Number of gridboxes in y-direction (ny+1)
+    nz                         = 50, ! Number of gridboxes in z-direction (nz)
+
+    dx                         = 100.0, ! Size of single gridbox in x-direction
+    dy                         = 100.0, ! Size of single gridbox in y-direction
+    dz                         = 25.0,  ! Size of single gridbox in z-direction
+
+    dz_stretch_level           = 100.0,
+    dz_max                     = 50.0,
+!
+!-- initialization
+!------------------------------------------------------------------------------
+    initializing_actions       = 'set_constant_profiles',
+
+    ug_surface                 = 2.5,
+    vg_surface                 = 0.0,
+
+    pt_surface                 = 293.0,
+
+    pt_vertical_gradient       = 0.0, 3.0, 0.0,
+    pt_vertical_gradient_level = 0.0, 800.0, 1600.0,
+ 
+    q_surface                  = 0.01,   ! mixing ratio --> rel. hum. = ?
+
+    surface_pressure           = 1000.0, ! in hPa
+
+    origin_date_time           = '2019-06-21 12:00:00 +00', ! does the year matter?
+!
+!-- physics
+!------------------------------------------------------------------------------
+    latitude                   = 53.37,
+    longitude                  = 9.73,
+!
+!-- boundary conditions
+!------------------------------------------------------------------------------
+    constant_flux_layer        = .TRUE., ! use a constant flux layer at 
+                                         ! the bottom boundary
+
+    bc_pt_b                    = 'dirichlet', ! required when using LSM
+    bc_q_b                     = 'dirichlet', ! required when using LSM
+!
+!-- mode
+!------------------------------------------------------------------------------
+    humidity                   = .TRUE.,  ! use prognostic equation for humidity
+
+    reference_state            = 'horizontal_average', ! set reference state for
+                                                       ! buoyancy term
+    loop_optimization          = 'vector',
+!
+!-- numerics
+!------------------------------------------------------------------------------
+    fft_method                 = 'temperton-algorithm', ! build-in fft method
+
+    rayleigh_damping_height    = 1600.0,
+    rayleigh_damping_factor    = 0.01,
+
+/
+
+!-------------------------------------------------------------------------------
+!-- RUNTIME PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&runtime_parameters
+!
+!-- run steering
+!-------------------------------------------------------------------------------
+    end_time                   = 0120.0,   !   216000.0, ! (2.5 days)
+
+    create_disturbances        = .TRUE.,
+    dt_disturb                 = 120.0,
+    disturbance_energy_limit   = 0.0001,
+    enable_openacc             = .FALSE.,
+    enable_lsm_openacc             = .TRUE.,
+!
+!-- data output
+!------------------------------------------------------------------------------
+    netcdf_data_format         = 2, ! use NetCDF3
+
+    dt_run_control             = 0.0,
+    dt_data_output             = 21600.0,
+    dt_data_output_av          = 3600.0,
+
+    averaging_interval         = 1800.0,
+!
+!-- profile output
+!-------------------------------------------------------------------------------
+    data_output_pr             = '#u',
+                                 '#v',
+                                 '#theta',
+                                 '#q',
+                                 '#thetav',
+                                 '#km',
+                                 '#kh',
+                                 '#l',
+                                 'w',
+                                 'e',
+                                 'e*',
+                                 'p',
+                                 'wu',
+                                 'w"u"',
+                                 'w*u*',
+                                 'w"v"',
+                                 'w*v*',
+                                 'w"theta"',
+                                 'w*theta*',
+                                 'w"thetav"',
+                                 'w*thetav*',
+                                 'w"q"',
+                                 'w*q*',
+                                 'w*e*',
+                                 'theta*2',
+                                 'q*2',
+                                 'u*2',
+                                 'v*2',
+                                 'w*2',
+                                 '#t_soil',
+                                 '#m_soil',
+
+    section_xy                 = 0,
+!
+!-- 2d and/or 3d data output
+!-------------------------------------------------------------------------------
+    data_output                = 'theta',
+                                 'theta_av',
+                                 'thetav',
+                                 'thetav_av',
+                                 'q',
+                                 'q_av',
+                                 'u',
+                                 'u_av',
+                                 'v',
+                                 'v_av',
+                                 't_soil',
+                                 't_soil_av',
+                                 'm_soil',
+                                 'm_soil_av',
+                                 'us*_xy',
+                                 'us*_xy_av',
+                                 't*_xy',
+                                 't*_xy_av',
+                                 'r_a*_xy',
+                                 'r_a*_xy_av',
+                                 'r_s*_xy',
+                                 'r_s*_xy_av',
+                                 'tsurf*_xy',
+                                 'tsurf*_xy_av',
+                                 'ghf*_xy',
+                                 'ghf*_xy_av',
+                                 'shf*_xy',
+                                 'shf*_xy_av',
+                                 'qsws_liq*_xy',
+                                 'qsws_liq*_xy_av',
+                                 'qsws_soil*_xy',
+                                 'qsws_soil*_xy_av',
+                                 'qsws_veg*_xy',
+                                 'qsws_veg*_xy_av',
+                                 'c_liq*_xy',
+                                 'c_liq*_xy_av',
+                                 'c_soil*_xy',
+                                 'c_soil*_xy_av',
+                                 'c_veg*_xy',
+                                 'c_veg*_xy_av',
+/
+
+!-------------------------------------------------------------------------------
+!-- LAND-SURFACE PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&land_surface_parameters
+!
+!-- define soil type and tempature
+!-------------------------------------------------------------------------------
+    soil_type                  = 3,  ! medium-fine
+    soil_moisture              = 0.35,  0.35,  0.35,  0.35, 0.35,  0.35,  0.35,  0.35,
+    soil_temperature           = 293.0, 293.0, 293.0, 293.0, 293.0, 293.0, 293.0, 293.0,
+    deep_soil_temperature      = 293.0,
+
+    surface_type               = 'vegetation',
+    vegetation_type            = 3, ! short grass
+    vegetation_coverage        = 0.95,
+    conserve_water_content     = .TRUE.,  ! closed (T) or open (F) lower boundary
+
+/
+
+!-------------------------------------------------------------------------------
+!-- RADIATION PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&radiation_parameters
+    radiation_scheme           = 'clear-sky', ! Radiation scheme to be used
+    dt_radiation               = 60.0,
+
+/

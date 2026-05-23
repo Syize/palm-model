@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+cmdclass = {install = "setup_commands.PrometInstallCommand"}
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project]
+name = "promet"
+version = "1.0.0"
+authors = [
+  { name="Helge Knoop", email="helge.knoop@pecanode.com" },
+]
+description = "PROMET is a dynamic driver creator for PALM"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3 (AGPLv3)",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Console",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+"Homepage" = "https://pecanode.com/promet"
+"Bug Tracker" = "https://pecanode.com/promet"

@@ -1,0 +1,20 @@
+---
+# this is a palmtest job configuration file
+
+allowed_builds:
+  - gfortran_default
+
+allowed_number_of_cores:
+  - 4
+
+activation_strings:
+  - "d3#"
+
+significant_digits_for_netcdf_checks:
+  timeseries: 2
+  profiles: 2
+  other: 3
+
+threshold_value_for_comparison: 1e-12
+
+compare_ascii_up_to_column: 116

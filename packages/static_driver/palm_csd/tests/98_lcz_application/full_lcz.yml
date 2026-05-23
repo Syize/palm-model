@@ -1,0 +1,45 @@
+---
+attributes:
+  author: Sebastian Schubert, schubert.2@tu-berlin.de
+  contact_person: Sebastian Schubert, schubert.2@tu-berlin.de
+  acronym: TUB
+  comment: created with palm_csd
+  data_content: Static driver data
+  source: LCZ and orography
+  location: Berlin
+
+settings:
+  epsg: 25832
+  rotation_angle: 0.
+  season: "summer"
+
+input_01:
+  path: tests/98_lcz_application/
+  pixel_size: 150.0
+  file_zt: zt.tif
+  file_lcz: lcz.tif
+
+output:
+  path: tests/98_lcz_application/
+  file_out: lcz
+  version: 1
+
+domain_root:
+  pixel_size: 150.0
+  origin_lon: 13.004
+  origin_lat: 51.984
+  nx: 17
+  ny: 11
+  dz: 5.0
+  use_palm_z_axis: False
+  interpolate_terrain: False
+  lcz_input: full
+  dcep: True
+  water_temperature: 
+    1: 285
+
+lcz:
+  open_lowrise:
+    building_plan_area_fraction: 0.4
+    impervious_plan_area_fraction: 0.2
+    aspect_ratio: 0.75

@@ -1,0 +1,69 @@
+UVM0001:
+  loglevel: ERROR
+  message: |
+    time averaging of quantity "..." is not provided
+  description: |
+    Remove this quantity from the list of output quantities given via [data_output](../Namelists/#runtime_parameters--data_output), or just remove the appendix *'_av'* from the respective string. 
+
+UVM0002:
+  loglevel: ERROR
+  message: |
+    num_reflections = ... out of range for quantity "..."
+  description: |
+    Output quantity "..." requires to set [num_reflections](../Namelists/#uv_radiation_parameters--num_reflections) > *1*.
+
+UVM0003:
+  loglevel: ERROR
+  message: |
+    unknown uv_integration_method = "..."
+  description: |
+    See [uv_integration_method](../Namelists/#uv_radiation_parameters--uv_integration_method) for allowed values.
+
+UVM0004:
+  loglevel: WARNING
+  message: |
+    plant canopy is switched-off and thus not considered in computation of UV-radiation
+  description: |
+    You may include a plant canopy to consider shading by plants.
+
+UVM0005:
+  loglevel: ERROR
+  message: |
+    no UV-input file found
+  description: |
+    A UV input file is required and can be created using the pre-processor *uv2palm*. See description of [uv_integration_method](../Namelists/#uv_radiation_parameters--uv_integration_method) for more details.
+
+UVM0006:
+  loglevel: ERROR
+  message: |
+    mismatch between "..." = ... and value found in in UV input file = ...
+  description: |
+    If [uv_integration_method](../Namelists/#uv_radiation_parameters--uv_integration_method) = *'from_radiance'* is set, the spherical resolution of the UV input file must exactly correspond to the spherical resolution of the RTM. Either process the UV input file again, or adjust the spherical resolution of the RTM.
+
+UVM0007:
+  loglevel: ERROR
+  message: |
+    num_reflections > 0 but no variables "..." and "..." found in UV input file
+  description: |
+    UV reflections are based on input of *uv_diff_irradiance* and *uv_dir_irradiance*. Both variables must be available in the UV input file.
+
+UVM0008:
+  loglevel: WARNING
+  message: |
+    UV-radiation model runs without information from radiative transfer model
+  description: |
+    If the radiative transfer model is switched-off, i.e. [radiation_interactions_on](../Namelists/#radiation_parameters--radiation_interactions_on) = *.F.*, the UV-radiation model just integrates the provided externally provided UV input without any consideration of obstacle and plant shading.
+
+UVM0009:
+  loglevel: ERROR
+  message: |
+    view_azimuth and view_zenith angles provided via UV input file do not cover an upper half-sphere
+  description: |
+    The area integration over all provided *view_azimuth* and *view_zenith* angles must correspond to the area of the unit half sphere, i.e. $2 \pi$. Please revise your UV input file accordingly.
+
+UVM0010:
+  loglevel: ERROR
+  message: |
+    dimension(s) / variable(s): ... not found in UV input file
+  description: |
+    Required dimensions and variables are not available in the UV input file. Please revise your UV driver input accordingly.

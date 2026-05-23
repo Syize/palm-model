@@ -1,0 +1,110 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "indoor_parameters"
+#
+
+high_vent_end_industry_building:
+  category: Geographical
+  type: C*23
+  default:
+    value: '2019-06-21 22:00:00 +00'
+  description:
+    short: End date and time of high ventilation load for industry buildings.
+    long: |
+      The default is set to 21st of June 2019 at 22UTC. Please see also explanations given for [origin_date_time](#initialization_parameters--origin_date_time). The given date should correspond to [origin_date_time](#initialization_parameters--origin_date_time).
+
+high_vent_end_office_building:
+  category: Geographical
+  type: C*23
+  default:
+    value: '2019-06-21 18:00:00 +00'
+  description:
+    short: End date and time of high ventilation load for office buildings.
+    long: |
+      The default is set to 21st of June 2019 at 22UTC. Please see also explanations given for [origin_date_time](#initialization_parameters--origin_date_time). The given date should correspond to [origin_date_time](#initialization_parameters--origin_date_time).
+
+high_vent_end_residential_building:
+  category: Geographical
+  type: C*23
+  default:
+    value: '2019-06-21 18:00:00 +00'
+  description:
+    short: End date and time of high ventilation load for residential buildings.
+    long: |
+      The default is set to 21st of June 2019 at 22UTC. Please see also explanations given for [origin_date_time](#initialization_parameters--origin_date_time). The given date should correspond to [origin_date_time](#initialization_parameters--origin_date_time).
+
+high_vent_start_industry_building:
+  category: Geographical
+  type: C*23
+  default:
+    value: '2019-06-21 06:00:00 +00'
+  description:
+    short: Start date and time of high ventilation load for industry buildings.
+    long: |
+      The default is set to 21st of June 2019 at 22UTC. Please see also explanations given for [origin_date_time](#initialization_parameters--origin_date_time). The given date should correspond to [origin_date_time](#initialization_parameters--origin_date_time).
+
+high_vent_start_office_building:
+  category: Geographical
+  type: C*23
+  default:
+    value: '2019-06-21 08:00:00 +00'
+  description:
+    short: Start date and time of high ventilation load for office buildings.
+    long: |
+      The default is set to 21st of June 2019 at 22UTC. Please see also explanations given for [origin_date_time](#initialization_parameters--origin_date_time). The given date should correspond to [origin_date_time](#initialization_parameters--origin_date_time).
+
+high_vent_start_residential_building:
+  category: Geographical
+  type: C*23
+  default:
+    value: '2019-06-21 08:00:00 +00'
+  description:
+    short: Start date and time of high ventilation load for residential buildings.
+    long: |
+      The default is set to 21st of June 2019 at 22UTC. Please see also explanations given for [origin_date_time](#initialization_parameters--origin_date_time). The given date should correspond to [origin_date_time](#initialization_parameters--origin_date_time).
+
+indoor_during_spinup:
+  category: Spinup
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switch on the indoor-climate model during wall/soil spinup.
+    long: ''
+
+initial_indoor_temperature:
+  category: Inititial Conditions
+  type: R
+  default:
+    value: 293.15
+  si-unit: K
+  description:
+    short: Initial indoor temperature.
+    long: ''
+
+switch_off_module:
+  category: Mode
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switch to turn off the module.
+    long: |
+       If *.T.*, the indoor-climate module is not activated even if the namelist is present in the parameter file.
+
+warm_season_start:
+  category: Geographical
+  type: I
+  default:
+    value: 80
+  description:
+    short: Begin of warm season given in days of year.
+    long: ''
+
+warm_season_end:
+  category: Geographical
+  type: I
+  default:
+    value: 264
+  description:
+    short: End of warm season given in days of year.
+    long: ''

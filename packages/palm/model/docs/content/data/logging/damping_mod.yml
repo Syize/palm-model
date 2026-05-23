@@ -1,0 +1,14 @@
+DMP0001:
+  loglevel: ERROR
+  message: |
+    illegal setting of bc_lr / bc_ns for inertial_oscillation_damping_factor
+  description: |
+    Using an [inertial_oscillation_damping_factor](../Namelists/#damping_parameters--inertial_oscillation_damping_factor) /= *0.0* requires both horizontal boundary conditions [bc_lr](../Namelists/#initialization_parameters--bc_lr) and [bc_ns](../Namelists/#initialization_parameters--bc_ns) to be cyclic.
+
+DMP0002:
+  loglevel: ERROR
+  message: |
+    illegal setting of topography for inertial_oscillation_damping_factor
+  description: |
+    Using an [inertial_oscillation_damping_factor](../Namelists/#damping_parameters--inertial_oscillation_damping_factor) /= *0.0* requires to set [topography](../Namelists/#initialization_parameters--topography) = $'flat'$.
+

@@ -1,0 +1,26 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "damping_parameters"
+
+
+inertial_oscillation_damping_factor:
+  category: Numerics
+  type: R
+  default:
+    value: 0.0
+  description:
+    short: Damping factor for inertial oscillation damping.
+    long:  |
+      The inertial oscillation damping can be used in precursor simulations to accelerate the decay of the inertial oscillation and thus shorten the time of reaching a steady mean flow. If the recommended value of 0.9 is used, the inertial oscillation usually decays completely within one oscillation period (approximately 15 h for a latitude of 55°).
+      
+      This method requires cyclic lateral boundary conditions in x- and y-direction (see [bc_lr](#initialization_parameters--bc_lr) and [bc_ns](#initialization_parameters--bc_ns)) and a flat topography (see [topography](#initialization_parameters--topography)). The damping factor must be positive and smaller than *1.0*. 
+  
+      If [inertial_oscillation_damping_factor](#damping_parameters--inertial_oscillation_damping_factor) is greater than zero, additional tendencies for $u$ and $v$ are added to the prognostic equations at every grid point. These tendencies depend on the temporal change of the horizontally avaraged profiles of $u$ and $v$. A temporal change of the horizontal average $<u>$ adds a tendency on $v$ and a temporal change of $<v>$ adds a tendency on $u$ like
+
+      $\frac{\partial u}{\partial t} = SIGN(lat) * df * \frac{\partial <v>}{\partial t}$ <br>
+      $\frac{\partial v}{\partial t} = -SIGN(lat) * df * \frac{\partial <u>}{\partial t} \quad ,$ 
+
+      where $lat$ is the [latitude](#initialization_parameters--latitude) and $df$ is the [inertial_oscillation_damping_factor](#damping_parameters--inertial_oscillation_damping_factor).
+
+      Note that the damping tendencies vanish if the mean flow has reached a steady state, because the temporal derivatives on the right hand side become zero. The final flow field is not affected by the damping, it is just reached faster.
+      
+      An [inertial_oscillation_damping_factor](#damping_parameters--inertial_oscillation_damping_factor) /= *0.0* is required if the geostrohic wind controller is enabled (see [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller)).

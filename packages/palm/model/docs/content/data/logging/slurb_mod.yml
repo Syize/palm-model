@@ -1,0 +1,300 @@
+SLU0000:
+  loglevel: ERROR
+  message: |
+    SLUrb requires does not support strictly neutral flow.
+  description: |
+    SLUrb impelements a computation of surface energy balance and therefore does not support setting of neutral = .T. [radiation_parameters](../Namelists/#radiation_parameters--radiation_interactions_on).
+
+SLU0001:
+  loglevel: ERROR
+  message: |
+    SLUrb requires the radiation model to be switched on.
+  description: |
+    SLUrb requires a radiation model to be enabled to provide incoming surface radiative fluxes. Currently supported schemes are `clear-sky`, `external`, `constant` and `rrtmg`. Please refer to the [radiation_parameters](../Namelists/#radiation_parameters--radiation_scheme) for more information.
+
+SLU0002:
+  loglevel: ERROR
+  message: |
+    SLUrb does not support average radiation if radiation interactions are disabled ( radiation_interactions_on = .F. ).
+  description: |
+    SLUrb supports average radiation only if radiative transfer model (RTM) is enabled ( radiation_interactions_on = .T. ). Please refer to the [radiation_parameters](../Namelists/#radiation_parameters--radiation_interactions_on) for more information.
+
+SLU0003:
+  loglevel: ERROR
+  message: |
+    SLUrb requires constant_diffusion = .F.
+  description: |
+    Urban fluxes from SLUrb enter the atmosphere through the subgrid-scale diffusion model, and thus constant diffusion is not allowed with SLUrb.
+
+SLU0004:
+  loglevel: ERROR
+  message: |
+    Using 3D plant canopy module together with SLUrb is not supported.
+  description: |
+    Prescribing resolved-scale plant canopy is not allowed with SLUrb and thus the plant canopy model (PCM) must be disabled. You may use the land surface model to model the surface fluxes from vegetation instead.
+
+SLU0005:
+  loglevel: ERROR
+  message: |
+    Using radiation_scheme = "constant" with the SLUrb model requires the setting of use_fixed_time = .T..
+  description: |
+    As SLUrb parametrizes the shortwave reflections and shading using solar angles, using constant net surface radiation requires fixing the time of day in the simulation by setting use_fixed_time = .T. [initialization_parameters](../Namelists/#initialization_parameters).
+
+SLU0006:
+  loglevel: ERROR
+  message: |
+    Enabling the urban surface model for resolved buildings (USM) is not allowed together with the single-layer urban model (SLUrb) enabled in the same simulation domain or nest.
+  description: |
+    SLUrb is a single-layer urban surface model and does not support mixing resolved-scale buildings in the same simulation domain. In case of nesting, SLUrb and USM may not both be enabled for any single domain, but SLUrb and USM domains may be mixed (e.g. SLUrb for the root domain, USM for the child).
+
+SLU0007:
+  loglevel: ERROR
+  message: |
+    Using the SLUrb model with precipitation enabled requires the setting of moist_physics = .T.
+  description: |
+    To ensure conservation of mass and energy, the moist physical processes in SLUrb have to be enabled if precipitation is allowed in the simulation. Please refer to the [slurb_parameters](../Namelists/#slurb_parameters--moist_physics) and [bulk-cloud-parameters](../Namelists/#bulk-cloud-parameters--cloud_scheme) for more information.
+
+SLU0008:
+  loglevel: ERROR
+  message: |
+    Invalid setting for the parametrization of the aerodynamic roughness for heat aero_roughness_heat = ...
+  description: |
+    See [aero_roughness_heat](../Namelists/#slurb_parameters--aero_roughness_heat) for available parametrizations.
+
+SLU0009:
+  loglevel: ERROR
+  message: |
+    Invalid setting for the parametrization of the street canyon wind speed street_canyon_wspeed_factor = ...
+  description: |
+    See [street_canyon_wspeed_factor ](../Namelists/#slurb_parameters--street_canyon_wspeed_factor ) for available parametrizations.
+
+SLU0010:
+  loglevel: ERROR
+  message: |
+    At least three layers are required to model road surfaces in SLUrb. Current setting is n_layers_roads = ...
+  description: |
+    Modelling the heat diffusion through roads requires at least three material layers to ensure stability of the solution. At least four layers are recommended.
+
+SLU0011:
+  loglevel: ERROR
+  message: |
+    At least three layers are required to model roof surfaces in SLUrb. Current setting is n_layers_roofs = ...
+  description: |
+    Modelling the heat diffusion through roofs requires at least three material layers to ensure stability of the solution. At least four layers are recommended.
+
+SLU0012:
+  loglevel: ERROR
+  message: |
+    At least three layers are required to model wall surfaces in SLUrb. Current setting is n_layers_walls = ...
+  description: |
+    Modelling the heat diffusion through walls requires at least three material layers to ensure stability of the solution. At least four layers are recommended.
+
+SLU0013:
+  loglevel: ERROR
+  message: |
+    At least three layers are required to model window surfaces in SLUrb. Current setting is n_layers_windows = ...
+  description: |
+    Modelling the heat diffusion through windows requires at least three material layers to ensure stability of the solution. At least four layers are recommended.
+
+SLU0014:
+  loglevel: ERROR
+  message: |
+    Mismatch in the number of road layers in the SLUrb input driver and the SLUrb model configuration (... and ... respectively).
+  description: |
+    The number of road layers defined in the [SLUrb input driver](../../Iofiles/PIDS_SLURB) needs to match the number of layers set in [slurb_parameters](../Namelists/#slurb_parameters--n_layers_roads).
+
+SLU0015:
+  loglevel: ERROR
+  message: |
+    Mismatch in the number of roof layers in the SLUrb input driver and the SLUrb model configuration (... and ... respectively).
+  description: |
+    The number of roof layers defined in the [SLUrb input driver](../Iofiles/PIDS_SLURB) needs to match the number of layers set in [slurb_parameters](../Namelists/#slurb_parameters--n_layers_roofs).
+
+SLU0016:
+  loglevel: ERROR
+  message: |
+    Mismatch in the number of wall layers in the SLUrb input driver and the SLUrb model configuration (... and ... respectively).
+  description: |
+    The number of wall layers defined in the [SLUrb input driver](../Iofiles/PIDS_SLURB) needs to match the number of layers set in [slurb_parameters](../Namelists/#slurb_parameters--n_layers_walls).
+
+SLU0017:
+  loglevel: ERROR
+  message: |
+    Mismatch in the number of window layers in the SLUrb input driver and the SLUrb model configuration (... and ... respectively).
+  description: |
+    The number of window layers defined in the [SLUrb input driver](../Iofiles/PIDS_SLURB) needs to match the number of layers set in [slurb_parameters](../Namelists/#slurb_parameters--n_layers_windows).
+
+SLU0018:
+  loglevel: ERROR
+  message: |
+    Input variable ... for grid cell (j,i)= ..., ... set to ... valid range is [..., ...].
+  description: |
+    An incorrect value has been set for an input variable named in the error message. Check that a physically meaningful value is set to the variable either in [slurb_parameters](../Namelists/#slurb_parameters) or in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0019:
+  loglevel: ERROR
+  message: |
+    Input variable ... for grid cell (j,i)= ..., ... set to ... valid range is [..., ...].
+  description: |
+    An incorrect value has been set for an input variable named in the error message. Check that a physically meaningful value is set to the variable either in [slurb_parameters](../Namelists/#slurb_parameters) or in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0020:
+  loglevel: ERROR
+  message: |
+    Input variable ... for grid cell  (k,j,i) = ..., ..., ... set to ... valid range is [..., ...].
+  description: |
+    An incorrect value has been set for an input variable named in the error message. Check that a physically meaningful value is set to the variable either in [slurb_parameters](../Namelists/#slurb_parameters) or in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0021:
+  loglevel: ERROR
+  message: |
+    Missing value for ... for grid cell (j,i)= ..., ... with non-zero urban fraction in file ...
+  description: |
+    A value is missing from an input variable named in the error message for a grid cell with non-zero urban fraction. Check that a physically meaningful value is set to the variable in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0022:
+  loglevel: ERROR
+  message: |
+    Missing value for ... for grid cell (j,i)= ..., ... with non-zero urban fraction in file ...
+  description: |
+    A value is missing for an input variable named in the error message for a grid cell with non-zero urban fraction. Check that a physically meaningful value is given to the variable in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0023:
+  loglevel: ERROR
+  message: |
+    Missing value for ... for grid cell (j,i)= ..., ... with non-zero urban fraction in file ...
+  description: |
+    A value is missing from an input variable named in the error message for a grid cell with non-zero urban fraction. Check that a physically meaningful value is given to the variable in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0024:
+  loglevel: ERROR
+  message: |
+    Building height or street canyon aspect ratio set to zero at (j,i)= ..., ... with non-zero urban fraction = ', fr_urb(j,i)
+  description: |
+    Check that a physically meaningful value is set to the variable either in [slurb_parameters](../Namelists/#slurb_parameters) or in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0025:
+  loglevel: ERROR
+  message: |
+    Time dimension of the SLUrb input driver does not cover the entire simulation period.
+  description: |
+     The time dimension of the SLUrb input driver does not cover the requested simulation time, i.e. the last time stamp is less than `end_time` of the simulation. Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) for more information.
+
+SLU0026:
+  loglevel: WARNING
+  message: |
+    Time dimension of the SLUrb input driver does not cover the spinup period (negative reference time). The first input values will be used for temporally dynamic inputs during the spinup.
+  description: |
+    The time dimension of the SLUrb input driver does not cover the spinup period (negative reference times). Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) for more information.
+
+SLU0027:
+  loglevel: ERROR
+  message: |
+    Time dimension of the SLUrb input driver does not cover the reference initialization time (0.0 seconds).
+  description: |
+    The time dimension of the SLUrb input should cover the reference initialization time of the simulation (which is always 0.0 seconds). Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) for more information.
+
+SLU0028:
+  loglevel: ERROR
+  message: |
+    Missing value found in input time series ... in file ...
+  description: |
+    The time axis of a temporally dynamic SLUrb input must not contain missing values. Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) for more information.
+
+SLU0029:
+  loglevel: ERROR
+  message: |
+    Missing value for shf_external for grid cell (j,i) = ..., ... with non-zero urban fraction in file ...
+  description: |
+    The temporally dynamic SLUrb input must not contain missing values for grid cells with non-zero urban fraction. Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) for more information.
+
+SLU0030:
+  loglevel: ERROR
+  message: |
+    Invalid lod attribute for input variable ... in file ...: lod=..., expected lod=1 or lod=2.
+  description: |
+    Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) on how to set the `lod` attribute for the temporally dynamic SLUrb inputs.
+
+SLU0031:
+  loglevel: ERROR
+  message: |
+    Grid dimensions of the SLUrb input driver does not match the PALM grid configuration in initialization_parameters.
+  description: |
+    Either of the horizontal coordinate variables `x` or `y` in the SLUrb input driver has a different length than what is set [initialization_parameters](../Namelists/#initialization_parameters).
+
+SLU0032:
+  loglevel: ERROR
+  message: |
+    urban_fraction ... is out of the valid range at (j,i) = ...,  ... in file ...
+  description: |
+    Urban fraction must have a value set between 0 and 1 in every grid cell. Please refer to the [SLUrb input driver documentation](../Iofiles/PIDS_SLURB) for more information.
+
+SLU0033:
+  loglevel: ERROR
+  message: |
+    urban_fraction not set in slurb_parameters or ...
+  description: |
+    The user must provide a value for urban fraction either in [slurb_parameters](../Namelists/#slurb_parameters--urban_fraction) (for homogeneous initialization only) or in the [SLUrb input driver](../Iofiles/PIDS_SLURB).
+
+SLU0034:
+  loglevel: ERROR
+  message: |
+    building_plan_area_fraction = ... is higher than urban_fraction = ... for grid cell (j,i) = ..., ...
+  description: |
+    The building plan area fraction is defined as the ratio of building plan area to total plan area incl. natural surfaces and thus cannot exceed the urban fraction.
+
+SLU0035:
+  loglevel: ERROR
+  message: |
+    Unknown SLUrb output ... requested.
+  description: |
+    Please refer to the [list of available output quantities](../Output_quantities/#SLUrb-quantities).
+
+SLU0036:
+  loglevel: ERROR
+  message: |
+    Unknown temporally averaged SLUrb output ... requested.
+  description: |
+    Please refer to the [list of available output quantities](../Output_quantities/#SLUrb-quantities).
+
+SLU0037:
+  loglevel: ERROR
+  message: |
+    Output of ... requires slurb = .T.
+  description: |
+    Output of the named variable requires enabling the single-layer urban surface model (PALM-SLUrb).
+
+SLU0038:
+  loglevel: ERROR
+  message: |
+    Output of .. requires moist_physics = .T. in slurb_parameters and humidity = .T. in initialization_parameters.
+  description: |
+    Output of the named variable requires enabling the prognostic equation for water vapor mixing ration and the moist dynamical processes for SLUrb.
+
+SLU0039:
+  loglevel: WARNING
+  message: |
+    Cyclic fill initialization is not implemented in SLUrb. Restart data is not used for initialization of surfaces.
+  description: |
+    SLUrb and LSM currently do not support cyclic fill initialization (initializing_actions= 'cyclic_fill' in [initialization_parameters](../Namelists/#initialization_parameters--initializing_actions)). The restart data will be ignored and default initialization will be used instead. Check results carefully.
+
+SLU0041:
+  loglevel: ERROR
+  message: |
+    Invalid setting for the parametrization of aerodynamic resistance for facades facade_resistance_parametrization = ...
+  description: |
+    See [facade_resistance_parametrization](../Namelists/#slurb_parameters--facade_resistance_parametrization ) for available parametrizations.
+
+SLU0041:
+  loglevel: ERROR
+  message: |
+    Output of ... requires facade_resistance_parametrization = "krayenhoff&voogt" or "mills".
+  description: |
+    The output is available only with the given facade resistance parametrizations. See [facade_resistance_parametrization](../Namelists/#slurb_parameters--facade_resistance_parametrization ) for available parametrizations.
+
+SLU0042:
+  loglevel: ERROR
+  message: |
+    Output of ... requires facade_resistance_parametrization = "doe-2".
+  description: |
+    The output is available only with the given facade resistance parametrization. See [facade_resistance_parametrization](../Namelists/#slurb_parameters--facade_resistance_parametrization ) for available parametrizations.

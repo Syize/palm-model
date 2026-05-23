@@ -1,0 +1,276 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "slurb_parameters"
+
+aero_roughness_heat:
+  category: General Settings
+  type: C*20
+  default:
+    value: kanda
+  description:
+    short: Parametrization for the aerodynamic roughness lengths for heat for horizontal surfaces.
+    long: |
+      Parametrization used to compute the aerodynamic roughness lengths for heat ($z_{0,h}$) for horizontal surfaces.
+  allowed_values:
+    - value: kanda
+      description: |
+        Parametrization by Kanda et al. (2007) where $z_{0,h}$ is dynamically computed at every time step.
+    - value: fixed
+      description: |
+        $z_{0,h}$ is fixed to a material default or user input value throughout the simulation.
+
+anisotropic_street_canyons:
+  category: General Settings
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Enables anisotropic street canyons.
+    long: |
+      Enables anisotropic street canyons, i.e. separtion between walls and windows A and B. When false, average radiation for walls (windows) is used and prognostic equations are computed only for wall (window) A, with outputs of wall (window) B copied from A. The street canyon orientation can be set using either [street_canyon_orientation](#slurb_parameters--street_canyon_orientation) in the namelist or `theta_can` in netCDF input or both. If neither is set, an isotropic canyon is used in that grid cell regardless of value of this parameter. This allows mixing isotropic and anisotropic street canyons in the same simulation.
+
+building_frontal_area_fraction:
+  category: Surface Parameters
+  type: R
+  default:
+    value: -9999.0
+  description:
+    short: Frontal area fraction of buildings.
+    long: |
+      Ratio of building frontal area to total plan area (incl. natural surfaces/pervious surfaces).
+
+building_height:
+  category: Surface Parameters
+  type: R
+  default:
+    value: -9999.0
+  si-unit: m
+  description:
+    short: Mean building height within the cell.
+    long: |
+      Mean building height within the cell. Note that a single-layer model like SLUrb does not perform very well with deep urban canopies (>60 m).
+
+building_indoor_temperature:
+  category: Surface Parameters
+  type: R
+  default:
+    value: 295.15
+  si-unit: K
+  description:
+    short: Building indoor temperature.
+    long: |
+      Building indoor temperature. Kept constant throughout the simulation.
+
+building_plan_area_fraction:
+  category: Surface Parameters
+  type: R
+  default:
+    value: -9999.0
+  description:
+    short: Building plan area fraction.
+    long: |
+      Ratio of building plan area to total plan area incl. natural surfaces. Cannot exceed `urban_fraction`.
+
+building_type:
+  category: Surface Parameters
+  type: I
+  default:
+    value: 2
+  description:
+    short: Building type.
+    long: |
+      Building type corresponding to building types as described in the SLUrb's model driver documentation. The building material properties are set according to the type.
+
+deep_soil_temperature:
+  category: Surface Parameters
+  type: R
+  default:
+    value: -9999.0
+  si-unit: K
+  description:
+    short: Deep soil temperature.
+    long: |
+      Deep soil temperature to be used as a bottom boundary condition for the road model.
+
+facade_resistance_parametrization:
+  category: General Settings
+  type: C*20
+  default:
+    value: doe-2
+  description:
+    short: Parametrization for the aerodynamic resistance between facade surfaces and the street canyon air.
+    long: |
+      Parametrization used to compute the aerodynamic roughness resistances for heat ($r_{ah}$) for facade surfaces (i.e. walls and windows).
+  allowed_values:
+    - value: doe-2
+      description: |
+         DOE-2 parametrization from the EnergyPlus building energy simulation system (EnergyPlus(TM) version 23.2.0 Engineering Reference, 2023), which is a function of natural convection strength, local surface roughness and street canyon effective wind speed. An average of windward and leeward parametrization are used.
+    - value: krayenhoff&voogt
+      description: |
+        Parametrization following Krayenhoff & Voogt (2007), which is a function of local surface roughness and the street canyon effective wind speed.
+    - value: rowley
+      description: |
+        Parametrization following Rowley (1932), which is a simple function of the street canyon effective wind speed.
+
+moist_physics:
+  category: General Settings
+  type: L
+  default:
+    value: .T.
+  description:
+    short: Enables moist dynamical processes in SLUrb.
+    long: |
+      Enables condensation/evaporation processes on roofs and roads as well as prognostic equation for street canyon mixing ratio. Only effective if [humidity](#initialization_parameters--humidity) = .T., otherwise ignored.
+
+n_layers_roads:
+  category: General Settings
+  type: I
+  default:
+    value: 4
+  description:
+    short: Number of road layers.
+    long: |
+      Number of road layers to be modelled. Non-default configuration requires setting of all road material parameters manually using the netCDF input.  A minimum of three layers is required.
+
+n_layers_roofs:
+  category: General Settings
+  type: I
+  default:
+    value: 4
+  description:
+    short: Number of roof layers.
+    long: |
+      Number of roof layers to be modelled. Non-default configuration requires setting of all roof material parameters manually using the netCDF input. A minimum of three layers is required.
+
+n_layers_walls:
+  category: General Settings
+  type: I
+  default:
+    value: 4
+  description:
+    short: Number of wall layers.
+    long: |
+      Number of wall layers to be modelled. Non-default configuration requires setting of all wall material parameters manually using the netCDF input. A minimum of three layers is required.
+
+n_layers_windows:
+  category: General Settings
+  type: I
+  default:
+    value: 4
+  description:
+    short: Number of window layers.
+    long: |
+      Number of window layers to be modelled. Non-default configuration requires setting of all window material parameters manually using the netCDF input. A minimum of three layers is required.
+
+pavement_type:
+  category: Surface Parameters
+  type: I
+  default:
+    value: 2
+  description:
+    short: Pavement type.
+    long: |
+      Pavement type corresponding to pavement types as described in the SLUrb's model driver documentation. The pavement material properties are set according to the type.
+
+qsws_external:
+  category: Fluxes
+  type: R
+  default:
+    value: 0.0
+  si-unit: W m^-2^
+  description:
+    short: Latent heat flux from external sources.
+    long: |
+      Additional latent heat flux from sources external to the model (e.g. industry or HVAC exhaust) per unit area. The flux is internally scaled to unit urban area and aggregated to atmospheric fluxes.
+
+shf_external:
+  category: Fluxes
+  type: R
+  default:
+    value: 0.0
+  si-unit: W m^-2^
+  description:
+    short: Sensible heat flux from external sources.
+    long: |
+      Additional sensible heat flux from sources external to the model (e.g. industry or HVAC exhaust) per unit area. The flux is internally scaled to unit urban area and aggregated to atmospheric fluxes.
+
+shf_traffic:
+  category: Fluxes
+  type: R
+  default:
+    value: 0.0
+  si-unit: W m^-2^
+  description:
+    short: Sensible heat flux from traffic.
+    long: |
+      Additional sensible heat flux from traffic per unit urban area. The flux is internally scaled and entered into the prognostic equation for street canyon air temperature.
+
+street_canyon_aspect_ratio:
+  category: Surface Parameters
+  type: R
+  default:
+    value: -9999.0
+  description:
+    short: Street canyon aspect ratio.
+    long: |
+      Street canyon aspect ratio (height-to-width ratio, $H/W$).
+
+street_canyon_orientation:
+  category: Surface Parameters
+  type: R
+  default:
+    value: -9999.0
+  si-unit: degrees
+  description:
+    short: Street canyon orientation.
+    long: |
+      Only effective when [anisotropic_street_canyons](#slurb_parameters--anisotropic_street_canyons) = *.T.* .
+
+street_canyon_wspeed_factor:
+  category: General Settings
+  type: C*20
+  default:
+    value: 'surfex'
+  description:
+    short: Parametrization for the factor for the street canyon wind speed.
+    long: |
+      Parametrization for the factor used to compute street canyon wind speed from first atmospheric grid level wind speed.
+  allowed_values:
+    - value: surfex
+      description: |
+         The street canyon wind speed is computed as in the SURFEX model v8.1.
+    - value: krayenhoff&voogt
+      description: |
+         The street canyon wind speed is computed following Krayenhoff and Voogt (2007).
+    - value: masson
+      description: |
+         The street canyon wind speed is computed following Masson (2000).
+
+switch_off_module:
+  category: General Settings
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Disables the module.
+    long: |
+      Switch to turn off the module without having to remove [slurb_parameters](#slurb-parameters) from the namelist.
+
+urban_fraction:
+  category: General Settings
+  type: R
+  default:
+    value: -9999.0
+  description:
+    short: Urban fraction.
+    long: |
+      The plan area fraction of buildings and streets combined. The remaining surface area will be modelled as vegetation, water or open pavement surface by PALM-LSM depending on the user's setup. Any pervious or water surfaces should be included in the non-urban fraction, irregardless if they are part of urban fabric or not. As SLUrb's physical formulation is based on a street canyon, large paved areas without buildings (e.g. large parking lots) are better to be omitted from this fraction as well and modelled with PALM-LSM instead (surface type `pavement`).
+
+window_fraction:
+  category: General Settings
+  type: R
+  default:
+    depends_on: '[building_type](#slurb_parameters--building_type)'
+  description:
+    short: Window fraction.
+    long: |
+      Area fraction of windows of the total facade area. Setting the fraction to zero disables the window model.

@@ -1,0 +1,7 @@
+# An example of a minimal config
+
+case: example #case name (required)
+
+domain:
+    nz: 30 #required
+

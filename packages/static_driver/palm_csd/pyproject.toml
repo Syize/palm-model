@@ -1,0 +1,24 @@
+[tool.pytest.ini_options]
+addopts = "-n auto --cov=palm_csd --cov-report=term --cov-report=xml --cov-report=html:coverage"
+
+[tool.mypy]
+plugins = ["numpy.typing.mypy_plugin", "pydantic.mypy"]
+install_types = true
+non_interactive = true
+ignore_missing_imports = true
+
+[tool.pymarkdown]
+# line-length rule MD013 currently does not support tables
+# https://github.com/jackdewinter/pymarkdown/issues/771
+# disable for now
+plugins.line-length.enabled = false
+plugins.no-inline-html.allowed_elements = "code, img"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["D", "E", "F", "I"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

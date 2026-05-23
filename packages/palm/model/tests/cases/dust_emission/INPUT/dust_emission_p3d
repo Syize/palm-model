@@ -1,0 +1,118 @@
+!-------------------------------------------------------------------------------
+!-- INITIALIZATION PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&initialization_parameters
+!
+!-- grid parameters
+!-------------------------------------------------------------------------------
+    nx                =  63, ! Number of gridboxes in x-direction (nx+1)
+    ny                =  63, ! Number of gridboxes in y-direction (ny+1)
+    nz                =  52, ! Number of gridboxes in z-direction (nz)
+
+    dx                = 20.0, ! Size of single gridbox in x-direction
+    dy                = 20.0, ! Size of single gridbox in y-direction
+    dz                = 20.0, ! Size of single gridbox in z-direction
+
+!
+!-- mode
+!-------------------------------------------------------------------------------
+    large_scale_subsidence       = .TRUE.,     ! Parameter to enable large-scale subsidence
+    subs_vertical_gradient       = -0.0023, 0.0, ! Gradient(s) of the profile for the
+                                                ! large-scale subsidence/ascent velocity
+                                                ! (in (m/s) / 100 m)
+    subs_vertical_gradient_level = 0.0, 1000.0, ! Height level from which on the gradient
+                                                ! for the subsidence velocity is effective
+                                                ! (in m, uv-grid)
+
+!
+!-- initialization
+!-------------------------------------------------------------------------------
+    initializing_actions       = 'set_constant_profiles', ! initial conditions
+
+    ug_surface                 = 0.0, ! u-comp of geostrophic wind at surface
+    vg_surface                 = 0.0, ! v-comp of geostrophic wind at surface
+
+    pt_surface                 = 300.0, ! initial surface potential temp
+
+    pt_vertical_gradient       =    0.0,
+                                    1.0, ! piecewise temp gradients
+    pt_vertical_gradient_level =    0.0,
+                                  800.0, ! height level of temp gradients
+
+
+!
+!-- boundary conditions
+!-------------------------------------------------------------------------------
+    surface_heatflux           = 0.24,      ! sensible heat flux at the bottom surface
+    bc_pt_b                    = 'neumann', ! required with surface_heatflux
+
+    roughness_length           = 0.1,    ! Roughness length (in m)
+    constant_flux_layer        = .TRUE., ! Parameter to switch on a constant flux layer
+                                         ! at the bottom boundary.
+
+/ ! end of initialization parameter namelist
+
+
+
+!-------------------------------------------------------------------------------
+!-- RUNTIME PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&runtime_parameters
+!
+!-- run steering
+!-------------------------------------------------------------------------------
+    end_time                   = 900.0,  ! simulation time of the 3D model
+
+    create_disturbances        = .TRUE., ! randomly perturbate horiz. velocity
+    dt_disturb                 = 150.0,  ! interval for random perturbations
+    disturbance_energy_limit   = 0.01,   ! upper limit for perturbation energy
+
+!
+!-- data output
+!-------------------------------------------------------------------------------
+    netcdf_data_format         = 5, ! netCDF-4 (HDF5) format with parallel I/O support
+
+    dt_run_control             = 0.0,    ! output interval for run control
+    dt_data_output             = 900.0, ! output interval for general data
+    dt_data_output_av          = 900.0, ! output interval for averaged data
+    dt_dopr                    = 900.0, ! output interval for profile data
+
+    data_output_pr             = 'theta',
+                                 'hyp', 'rho',
+                                 'clay', 'silt', 'dust',
+                                 ! 'wtheta', 'w"theta"', 'w*theta*', do not pass the test server
+
+    averaging_interval         = 900.0, ! averaging interval general data
+    dt_averaging_input         = 60.0,   ! averaging general data sampling rate
+
+    averaging_interval_pr      = 900.0, ! averaging interval profile data
+    dt_averaging_input_pr      = 60.0,   ! averaging profile data sampling rate
+
+/ ! end of runtime parameter namelist
+
+!-------------------------------------------------------------------------------
+!-- DUST EMISSION AND TRANSPORT PARAMETER NAMELIST
+!-------------------------------------------------------------------------------
+&det_parameters
+!
+!-- general parameters
+    det_start_time    = 0.0,     ! simulation time after det is active
+    switch_off_module = .FALSE., ! switch of (de)activating det
+
+!
+!-- boundary conditions
+    bc_dm_b   = 'neumann', ! bottom boundary condition for prognostic det variables
+    bc_dm_l   = 'cyclic',  ! west/left boundary condition for prognostic det variables
+    bc_dm_n   = 'cyclic',  ! north boundary condition for prognostic det variables
+    bc_dm_r   = 'cyclic',  ! east/right boundary condition for prognostic det variables
+    bc_dm_s   = 'cyclic',  ! south boundary condition for prognostic det variables
+    bc_dm_t   = 'neumann', ! top boundary condition for prognostic det variables
+
+!
+!-- saltation bin parameters: default values are used
+    n_saltation_bins = 10, ! number of saltation bins
+!
+!-- dust bin parameters: default values are used
+    n_dust_bins      =  5, ! number of dust size bins
+
+/ ! end of det parameter namelist
