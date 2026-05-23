@@ -53,7 +53,7 @@ MODULE chem_gasphase_mod
 
 ! Set kpp Double Precision to PALM Default Precision
 
-  USE kinds,           ONLY: dp=>wp
+  USE kinds,           ONLY: wp
 
   USE pegrid,          ONLY: myid, threads_per_task
 
@@ -102,7 +102,7 @@ MODULE chem_gasphase_mod
                                                                  
                                                                  
   LOGICAL                     :: data_loaded = .FALSE.             
-  REAL(dp), POINTER, DIMENSION(:), CONTIGUOUS    :: var             
+  REAL(wp), POINTER, DIMENSION(:), CONTIGUOUS    :: var             
 ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ! 
 ! Parameter Module File
@@ -204,33 +204,33 @@ MODULE chem_gasphase_mod
 ! Declaration of global variables
 
 ! C - Concentration of all species
-  REAL(kind=dp), TARGET    :: c(nspec)
+  REAL(kind=wp), TARGET    :: c(nspec)
 ! VAR - Concentrations of variable species (global)
-! REAL(kind=dp):: var(nvar)  var is now POINTER
+! REAL(kind=wp):: var(nvar)  var is now POINTER
 ! FIX - Concentrations of fixed species (global)
-  REAL(kind=dp):: fix(nfix)
+  REAL(kind=wp):: fix(nfix)
 ! VAR,FIX are chunks of array C
 ! RCONST - Rate constants (global)
-  REAL(kind=dp):: rconst(nreact)
+  REAL(kind=wp):: rconst(nreact)
 ! TIME - Current integration time
-  REAL(kind=dp):: time
+  REAL(kind=wp):: time
 ! TEMP - Temperature
-  REAL(kind=dp):: temp
+  REAL(kind=wp):: temp
 ! ATOL - Absolute tolerance
-  REAL(kind=dp):: atol(nvar)
+  REAL(kind=wp):: atol(nvar)
 ! RTOL - Relative tolerance
-  REAL(kind=dp):: rtol(nvar)
+  REAL(kind=wp):: rtol(nvar)
 ! STEPMIN - Lower bound for integration step
-  REAL(kind=dp):: stepmin
+  REAL(kind=wp):: stepmin
 ! CFACTOR - Conversion factor for concentration units
-  REAL(kind=dp):: cfactor
+  REAL(kind=wp):: cfactor
 
 ! INLINED global variable declarations
 
 ! QVAP - Water vapor
-  REAL(kind=dp):: qvap
+  REAL(kind=wp):: qvap
 ! FAKT - Conversion factor
-  REAL(kind=dp):: fakt
+  REAL(kind=wp):: fakt
 
 ! CS_MECH for check of mechanism name with namelist
   CHARACTER(len=30):: cs_mech
@@ -315,10 +315,10 @@ MODULE chem_gasphase_mod
 ! INLINED global variables
 
   !   inline f90_data: declaration of global variables for photolysis
-  !   REAL(kind=dp):: phot(nphot)must eventually be moved to global later for 
+  !   REAL(kind=wp):: phot(nphot)must eventually be moved to global later for 
   INTEGER, PARAMETER :: nphot = 1
   !   phot photolysis frequencies
-  REAL(kind=dp):: phot(nphot)
+  REAL(kind=wp):: phot(nphot)
 
   INTEGER, PARAMETER, PUBLIC :: j_no2 = 1
 
@@ -494,7 +494,7 @@ MODULE chem_gasphase_mod
 
 
 ! A - Rate for each equation
-  REAL(kind=dp):: a(nreact)
+  REAL(kind=wp):: a(nreact)
 
 ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ! 
@@ -569,9 +569,9 @@ MODULE chem_gasphase_mod
   !
   ! steering PARAMETERs for chemistry solver (see kpp domumentation)
   INTEGER, DIMENSION(nkppctrl), PUBLIC      :: icntrl = 0
-  REAL(dp), DIMENSION(nkppctrl), PUBLIC     :: rcntrl = 0.0_dp
+  REAL(wp), DIMENSION(nkppctrl), PUBLIC     :: rcntrl = 0.0_wp
   ! t_steps: fixed time steps in vector mode
-  REAL(dp), DIMENSION(nmaxfixsteps), PUBLIC :: t_steps = 0.0_dp
+  REAL(wp), DIMENSION(nmaxfixsteps), PUBLIC :: t_steps = 0.0_wp
 
   ! END header MODULE initialize_kpp_ctrl_template
 
@@ -661,12 +661,12 @@ SUBROUTINE initialize()
  INTEGER         :: k
 
   INTEGER :: i
-  REAL(kind=dp):: x
+  REAL(kind=wp):: x
   k = is
-  cfactor = 1.000000e+00_dp
+  cfactor = 1.000000e+00_wp
 !  
 ! Following lines are just to avoid compiler message about unused variables
-   IF ( time >= -1.0_dp )  CONTINUE
+   IF ( time >= -1.0_wp )  CONTINUE
    IF ( lu_crow(1) == 1  .OR.  lu_icol(1) == 1  .OR.  lu_irow(1) == 1 )  CONTINUE 
 !  
 
@@ -693,23 +693,23 @@ SUBROUTINE integrate( tin, tout, &
   icntrl_u, rcntrl_u, istatus_u, rstatus_u, ierr_u)
 
 
-   REAL(kind=dp), INTENT(IN):: tin  ! start time
-   REAL(kind=dp), INTENT(IN):: tout ! END time
+   REAL(kind=wp), INTENT(IN):: tin  ! start time
+   REAL(kind=wp), INTENT(IN):: tout ! END time
    ! OPTIONAL input PARAMETERs and statistics
    INTEGER,      INTENT(IN), OPTIONAL :: icntrl_u(20)
-   REAL(kind=dp), INTENT(IN), OPTIONAL :: rcntrl_u(20)
+   REAL(kind=wp), INTENT(IN), OPTIONAL :: rcntrl_u(20)
    INTEGER,      INTENT(OUT), OPTIONAL :: istatus_u(20)
-   REAL(kind=dp), INTENT(OUT), OPTIONAL :: rstatus_u(20)
+   REAL(kind=wp), INTENT(OUT), OPTIONAL :: rstatus_u(20)
    INTEGER,      INTENT(OUT), OPTIONAL :: ierr_u
 
-   REAL(kind=dp):: rcntrl(20), rstatus(20)
+   REAL(kind=wp):: rcntrl(20), rstatus(20)
    INTEGER       :: icntrl(20), istatus(20), ierr
 
 
    icntrl(:) = 0
-   rcntrl(:) = 0.0_dp
+   rcntrl(:) = 0.0_wp
    istatus(:) = 0
-   rstatus(:) = 0.0_dp
+   rstatus(:) = 0.0_wp
 
     !~~~> fine-tune the integrator:
    icntrl(1) = 0      ! 0 - non- autonomous, 1 - autonomous
@@ -745,21 +745,21 @@ END SUBROUTINE integrate
 SUBROUTINE fun(v, f, rct, vdot)
 
 ! V - Concentrations of variable species (local)
-  REAL(kind=dp):: v(nvar)
+  REAL(kind=wp):: v(nvar)
 ! F - Concentrations of fixed species (local)
-  REAL(kind=dp):: f(nfix)
+  REAL(kind=wp):: f(nfix)
 ! RCT - Rate constants (local)
-  REAL(kind=dp):: rct(nreact)
+  REAL(kind=wp):: rct(nreact)
 ! Vdot - Time derivative of variable species concentrations
-  REAL(kind=dp):: vdot(nvar)
+  REAL(kind=wp):: vdot(nvar)
 
 
 ! The following lines are just to avoid compiler message about unused variables
 ! (some of the are only required if there only passive tracers)
-   IF ( f(nfix) >= 0.0_dp )  CONTINUE
-   IF ( v(nvar) >= 0.0_dp )  CONTINUE
-   IF ( rct(nreact) >= 0.0_dp )  CONTINUE
-   IF ( a(nreact) >= 0.0_dp )  CONTINUE
+   IF ( f(nfix) >= 0.0_wp )  CONTINUE
+   IF ( v(nvar) >= 0.0_wp )  CONTINUE
+   IF ( rct(nreact) >= 0.0_wp )  CONTINUE
+   IF ( a(nreact) >= 0.0_wp )  CONTINUE
 !  
 ! Computation of equation rates
 
@@ -772,9 +772,9 @@ END SUBROUTINE fun
 SUBROUTINE kppsolve(jvs, x)
 
 ! JVS - sparse Jacobian of variables
-  REAL(kind=dp):: jvs(lu_nonzero)
+  REAL(kind=wp):: jvs(lu_nonzero)
 ! X - Vector for variables
-  REAL(kind=dp):: x(nvar)
+  REAL(kind=wp):: x(nvar)
 
   x(2) = x(2) / jvs(2)
   x(1) = x(1) / jvs(1)
@@ -784,22 +784,22 @@ END SUBROUTINE kppsolve
 SUBROUTINE jac_sp(v, f, rct, jvs)
 
 ! V - Concentrations of variable species (local)
-  REAL(kind=dp):: v(nvar)
+  REAL(kind=wp):: v(nvar)
 ! F - Concentrations of fixed species (local)
-  REAL(kind=dp):: f(nfix)
+  REAL(kind=wp):: f(nfix)
 ! RCT - Rate constants (local)
-  REAL(kind=dp):: rct(nreact)
+  REAL(kind=wp):: rct(nreact)
 ! JVS - sparse Jacobian of variables
-  REAL(kind=dp):: jvs(lu_nonzero)
+  REAL(kind=wp):: jvs(lu_nonzero)
 
 
 ! Local variables
 ! B - Temporary array
-  REAL(kind=dp):: b(2)
+  REAL(kind=wp):: b(2)
 !
 ! The following lines are just to avoid compiler message about unused variables
-   IF ( f(nfix) >= 0.0_dp )  CONTINUE
-   IF ( v(nvar) >= 0.0_dp )  CONTINUE
+   IF ( f(nfix) >= 0.0_wp )  CONTINUE
+   IF ( v(nvar) >= 0.0_wp )  CONTINUE
 
 ! B(1) = dA(1)/dV(1)
   b(1) = rct(1)
@@ -824,8 +824,8 @@ SUBROUTINE update_rconst()
 
 ! End INLINED RCONST
 
-  rconst(1) = (1.0_dp)
-  rconst(2) = (1.0_dp)
+  rconst(1) = (1.0_wp)
+  rconst(2) = (1.0_wp)
       
 END SUBROUTINE update_rconst
  
@@ -836,19 +836,19 @@ SUBROUTINE initialize_kpp_ctrl(status)
   INTEGER,         INTENT(OUT):: status
 
   ! local
-  REAL(dp):: tsum
+  REAL(wp):: tsum
   INTEGER  :: i
 
   ! check fixed time steps
-  tsum = 0.0_dp
+  tsum = 0.0_wp
   DO i=1, nmaxfixsteps
-     IF ( t_steps(i)< tiny(0.0_dp))exit
+     IF ( t_steps(i)< tiny(0.0_wp))exit
      tsum = tsum + t_steps(i)
   ENDDO
 
   nfsteps = i- 1
 
-  l_fixed_step = (nfsteps > 0).and.((tsum - 1.0)< tiny(0.0_dp))
+  l_fixed_step = (nfsteps > 0).and.((tsum - 1.0)< tiny(0.0_wp))
 
   IF ( l_vector ) THEN
      WRITE(*,*) ' MODE             : VECTOR (LENGTH=',VL_DIM,')'
@@ -884,16 +884,16 @@ SUBROUTINE error_output(c, ierr, pe)
 
   INTEGER, INTENT(IN):: ierr
   INTEGER, INTENT(IN):: pe
-  REAL(dp), DIMENSION(:), INTENT(IN):: c
+  REAL(wp), DIMENSION(:), INTENT(IN):: c
 
   write(6,*) 'ERROR in chem_gasphase_mod ',ierr,C(1),PE
 
 
 END SUBROUTINE error_output
  
-REAL(kind=dp)FUNCTION arr2( a0, b0, temp)
-    REAL(kind=dp):: temp
-    REAL(kind=dp):: a0, b0
+REAL(kind=wp)FUNCTION arr2( a0, b0, temp)
+    REAL(kind=wp):: temp
+    REAL(kind=wp):: a0, b0
     arr2 = a0 * exp( - b0 / temp)
 END FUNCTION arr2
  
@@ -907,8 +907,8 @@ END FUNCTION arr2
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
       INTEGER  :: i, incx, incy, m, mp1, n
-      REAL(kind=dp):: x(n), y(n), alpha
-      REAL(kind=dp), PARAMETER :: zero = 0.0_dp
+      REAL(kind=wp):: x(n), y(n), alpha
+      REAL(kind=wp), PARAMETER :: zero = 0.0_wp
 
 !  
 ! Following line is just to avoid compiler message about unused variables
@@ -943,8 +943,8 @@ END FUNCTION arr2
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
       INTEGER  :: i, incx, m, mp1, n
-      REAL(kind=dp) :: x(n), alpha
-      REAL(kind=dp), PARAMETER  :: zero=0.0_dp, one=1.0_dp
+      REAL(kind=wp) :: x(n), alpha
+      REAL(kind=wp), PARAMETER  :: zero=0.0_wp, one=1.0_wp
 !  
 ! Following line is just to avoid compiler message about unused variables
    IF ( incx == 0 )  CONTINUE
@@ -1118,30 +1118,30 @@ SUBROUTINE rosenbrock(n, y, tstart, tend, &
 
 !~~~>  arguments
    INTEGER,      INTENT(IN)  :: n
-   REAL(kind=dp), INTENT(INOUT):: y(n)
-   REAL(kind=dp), INTENT(IN)  :: tstart, tend
-   REAL(kind=dp), INTENT(IN)  :: abstol(n), reltol(n)
+   REAL(kind=wp), INTENT(INOUT):: y(n)
+   REAL(kind=wp), INTENT(IN)  :: tstart, tend
+   REAL(kind=wp), INTENT(IN)  :: abstol(n), reltol(n)
    INTEGER,      INTENT(IN)  :: icntrl(20)
-   REAL(kind=dp), INTENT(IN)  :: rcntrl(20)
+   REAL(kind=wp), INTENT(IN)  :: rcntrl(20)
    INTEGER,      INTENT(INOUT):: istatus(20)
-   REAL(kind=dp), INTENT(INOUT):: rstatus(20)
+   REAL(kind=wp), INTENT(INOUT):: rstatus(20)
    INTEGER, INTENT(OUT) :: ierr
 !~~~>  PARAMETERs of the rosenbrock method, up to 6 stages
    INTEGER ::  ros_s, rosmethod
    INTEGER, PARAMETER :: rs2=1, rs3=2, rs4=3, rd3=4, rd4=5, rg3=6
-   REAL(kind=dp):: ros_a(15), ros_c(15), ros_m(6), ros_e(6), &
+   REAL(kind=wp):: ros_a(15), ros_c(15), ros_m(6), ros_e(6), &
                     ros_alpha(6), ros_gamma(6), ros_elo
    LOGICAL :: ros_newf(6)
    CHARACTER(len=12):: ros_name
 !~~~>  local variables
-   REAL(kind=dp):: roundoff, facmin, facmax, facrej, facsafe
-   REAL(kind=dp):: hmin, hmax, hstart
-   REAL(kind=dp):: texit
+   REAL(kind=wp):: roundoff, facmin, facmax, facrej, facsafe
+   REAL(kind=wp):: hmin, hmax, hstart
+   REAL(kind=wp):: texit
    INTEGER       :: i, uplimtol, max_no_steps
    LOGICAL       :: autonomous, vectortol
 !~~~>   PARAMETERs
-   REAL(kind=dp), PARAMETER :: zero = 0.0_dp, one  = 1.0_dp
-   REAL(kind=dp), PARAMETER :: deltamin = 1.0e-5_dp
+   REAL(kind=wp), PARAMETER :: zero = 0.0_wp, one  = 1.0_wp
+   REAL(kind=wp), PARAMETER :: deltamin = 1.0e-5_wp
 
 !~~~>  initialize statistics
    istatus(1:8) = 0
@@ -1226,7 +1226,7 @@ SUBROUTINE rosenbrock(n, y, tstart, tend, &
    ENDIF
 !~~~>  step size can be changed s.t.  facmin < hnew/hold < facmax
    IF ( rcntrl(4) == zero ) THEN
-      facmin = 0.2_dp
+      facmin = 0.2_wp
    ELSEIF ( rcntrl(4)> zero ) THEN
       facmin = rcntrl(4)
    ELSE
@@ -1235,7 +1235,7 @@ SUBROUTINE rosenbrock(n, y, tstart, tend, &
       RETURN
    ENDIF
    IF ( rcntrl(5) == zero ) THEN
-      facmax = 6.0_dp
+      facmax = 6.0_wp
    ELSEIF ( rcntrl(5)> zero ) THEN
       facmax = rcntrl(5)
    ELSE
@@ -1245,7 +1245,7 @@ SUBROUTINE rosenbrock(n, y, tstart, tend, &
    ENDIF
 !~~~>   facrej: factor to decrease step after 2 succesive rejections
    IF ( rcntrl(6) == zero ) THEN
-      facrej = 0.1_dp
+      facrej = 0.1_wp
    ELSEIF ( rcntrl(6)> zero ) THEN
       facrej = rcntrl(6)
    ELSE
@@ -1255,7 +1255,7 @@ SUBROUTINE rosenbrock(n, y, tstart, tend, &
    ENDIF
 !~~~>   facsafe: safety factor in the computation of new step size
    IF ( rcntrl(7) == zero ) THEN
-      facsafe = 0.9_dp
+      facsafe = 0.9_wp
    ELSEIF ( rcntrl(7)> zero ) THEN
       facsafe = rcntrl(7)
    ELSE
@@ -1265,8 +1265,8 @@ SUBROUTINE rosenbrock(n, y, tstart, tend, &
    ENDIF
 !~~~>  check IF tolerances are reasonable
     DO i=1, uplimtol
-      IF ( (abstol(i)<= zero).or. (reltol(i)<= 10.0_dp* roundoff)&
-         .or. (reltol(i)>= 1.0_dp) ) THEN
+      IF ( (abstol(i)<= zero).or. (reltol(i)<= 10.0_wp* roundoff)&
+         .or. (reltol(i)>= 1.0_wp) ) THEN
         PRINT *,' AbsTol(',i,') = ',AbsTol(i)
         PRINT *,' RelTol(',i,') = ',RelTol(i)
         CALL ros_errormsg(- 5, tstart, zero, ierr)
@@ -1295,7 +1295,7 @@ CONTAINS !  SUBROUTINEs internal to rosenbrock
 !    Handles all error messages
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   
   
-   REAL(kind=dp), INTENT(IN):: t, h
+   REAL(kind=wp), INTENT(IN):: t, h
    INTEGER, INTENT(IN) :: code
    INTEGER, INTENT(OUT):: ierr
    
@@ -1346,35 +1346,35 @@ CONTAINS !  SUBROUTINEs internal to rosenbrock
 
 
 !~~~> input: the initial condition at tstart; output: the solution at t
-   REAL(kind=dp), INTENT(INOUT):: y(n)
+   REAL(kind=wp), INTENT(INOUT):: y(n)
 !~~~> input: integration interval
-   REAL(kind=dp), INTENT(IN):: tstart, tend
+   REAL(kind=wp), INTENT(IN):: tstart, tend
 !~~~> output: time at which the solution is RETURNed (t=tendIF success)
-   REAL(kind=dp), INTENT(OUT)::  t
+   REAL(kind=wp), INTENT(OUT)::  t
 !~~~> input: tolerances
-   REAL(kind=dp), INTENT(IN)::  abstol(n), reltol(n)
+   REAL(kind=wp), INTENT(IN)::  abstol(n), reltol(n)
 !~~~> input: integration PARAMETERs
    LOGICAL, INTENT(IN):: autonomous, vectortol
-   REAL(kind=dp), INTENT(IN):: hstart, hmin, hmax
+   REAL(kind=wp), INTENT(IN):: hstart, hmin, hmax
    INTEGER, INTENT(IN):: max_no_steps
-   REAL(kind=dp), INTENT(IN):: roundoff, facmin, facmax, facrej, facsafe
+   REAL(kind=wp), INTENT(IN):: roundoff, facmin, facmax, facrej, facsafe
 !~~~> output: error indicator
    INTEGER, INTENT(OUT):: ierr
 ! ~~~~ Local variables
-   REAL(kind=dp):: ynew(n), fcn0(n), fcn(n)
-   REAL(kind=dp):: k(n* ros_s), dfdt(n)
+   REAL(kind=wp):: ynew(n), fcn0(n), fcn(n)
+   REAL(kind=wp):: k(n* ros_s), dfdt(n)
 #ifdef full_algebra    
-   REAL(kind=dp):: jac0(n, n), ghimj(n, n)
+   REAL(kind=wp):: jac0(n, n), ghimj(n, n)
 #else
-   REAL(kind=dp):: jac0(lu_nonzero), ghimj(lu_nonzero)
+   REAL(kind=wp):: jac0(lu_nonzero), ghimj(lu_nonzero)
 #endif
-   REAL(kind=dp):: h, hnew, hc, hg, fac, tau
-   REAL(kind=dp):: err, yerr(n)
+   REAL(kind=wp):: h, hnew, hc, hg, fac, tau
+   REAL(kind=wp):: err, yerr(n)
    INTEGER :: pivot(n), direction, ioffset, j, istage
    LOGICAL :: rejectlasth, rejectmoreh, singular
 !~~~>  local PARAMETERs
-   REAL(kind=dp), PARAMETER :: zero = 0.0_dp, one  = 1.0_dp
-   REAL(kind=dp), PARAMETER :: deltamin = 1.0e-5_dp
+   REAL(kind=wp), PARAMETER :: zero = 0.0_wp, one  = 1.0_wp
+   REAL(kind=wp), PARAMETER :: deltamin = 1.0e-5_wp
 !~~~>  locally called FUNCTIONs
 !    REAL(kind=dp) WLAMCH
 !    EXTERNAL WLAMCH
@@ -1385,7 +1385,7 @@ CONTAINS !  SUBROUTINEs internal to rosenbrock
    t = tstart
    rstatus(nhexit) = zero
    h = min( max(abs(hmin), abs(hstart)), abs(hmax))
-   IF ( abs(h)<= 10.0_dp* roundoff)h = deltamin
+   IF ( abs(h)<= 10.0_wp* roundoff)h = deltamin
 
    IF ( tend  >=  tstart ) THEN
      direction = + 1
@@ -1406,7 +1406,7 @@ timeloop: DO WHILE((direction > 0).and.((t- tend) + roundoff <= zero)&
       CALL ros_errormsg(- 6, t, h, ierr)
       RETURN
    ENDIF
-   IF ( ((t+ 0.1_dp* h) == t).or.(h <= roundoff) ) THEN  ! step size too small
+   IF ( ((t+ 0.1_wp* h) == t).or.(h <= roundoff) ) THEN  ! step size too small
       CALL ros_errormsg(- 7, t, h, ierr)
       RETURN
    ENDIF
@@ -1533,20 +1533,20 @@ stage: DO istage = 1, ros_s
 
 
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  REAL(kind=dp)FUNCTION ros_errornorm(y, ynew, yerr, &
+  REAL(kind=wp)FUNCTION ros_errornorm(y, ynew, yerr, &
                                abstol, reltol, vectortol)
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !~~~> computes the "scaled norm" of the error vector yerr
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ! Input arguments
-   REAL(kind=dp), INTENT(IN):: y(n), ynew(n), &
+   REAL(kind=wp), INTENT(IN):: y(n), ynew(n), &
           yerr(n), abstol(n), reltol(n)
    LOGICAL, INTENT(IN)::  vectortol
 ! Local variables
-   REAL(kind=dp):: err, scale, ymax
+   REAL(kind=wp):: err, scale, ymax
    INTEGER  :: i
-   REAL(kind=dp), PARAMETER :: zero = 0.0_dp
+   REAL(kind=wp), PARAMETER :: zero = 0.0_wp
 
    err = zero
    DO i=1, n
@@ -1560,7 +1560,7 @@ stage: DO istage = 1, ros_s
    ENDDO
    err  = sqrt(err/n)
 
-   ros_errornorm = max(err, 1.0d-10)
+   ros_errornorm = max(err, 1.0e-10_wp)
 
   END FUNCTION ros_errornorm
 
@@ -1573,12 +1573,12 @@ stage: DO istage = 1, ros_s
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 !~~~> input arguments
-   REAL(kind=dp), INTENT(IN):: t, roundoff, y(n), fcn0(n)
+   REAL(kind=wp), INTENT(IN):: t, roundoff, y(n), fcn0(n)
 !~~~> output arguments
-   REAL(kind=dp), INTENT(OUT):: dfdt(n)
+   REAL(kind=wp), INTENT(OUT):: dfdt(n)
 !~~~> local variables
-   REAL(kind=dp):: delta
-   REAL(kind=dp), PARAMETER :: one = 1.0_dp, deltamin = 1.0e-6_dp
+   REAL(kind=wp):: delta
+   REAL(kind=wp), PARAMETER :: one = 1.0_wp, deltamin = 1.0e-6_wp
 
    delta = sqrt(roundoff) * max(deltamin, abs(t))
    CALL funtemplate(t+ delta, y, dfdt)
@@ -1603,26 +1603,26 @@ stage: DO istage = 1, ros_s
 
 !~~~> input arguments
 #ifdef full_algebra    
-   REAL(kind=dp), INTENT(IN)::  jac0(n, n)
+   REAL(kind=wp), INTENT(IN)::  jac0(n, n)
 #else
-   REAL(kind=dp), INTENT(IN)::  jac0(lu_nonzero)
+   REAL(kind=wp), INTENT(IN)::  jac0(lu_nonzero)
 #endif   
-   REAL(kind=dp), INTENT(IN)::  gam
+   REAL(kind=wp), INTENT(IN)::  gam
    INTEGER, INTENT(IN)::  direction
 !~~~> output arguments
 #ifdef full_algebra    
-   REAL(kind=dp), INTENT(OUT):: ghimj(n, n)
+   REAL(kind=wp), INTENT(OUT):: ghimj(n, n)
 #else
-   REAL(kind=dp), INTENT(OUT):: ghimj(lu_nonzero)
+   REAL(kind=wp), INTENT(OUT):: ghimj(lu_nonzero)
 #endif   
    LOGICAL, INTENT(OUT)::  singular
    INTEGER, INTENT(OUT)::  pivot(n)
 !~~~> inout arguments
-   REAL(kind=dp), INTENT(INOUT):: h   ! step size is decreased when lu fails
+   REAL(kind=wp), INTENT(INOUT):: h   ! step size is decreased when lu fails
 !~~~> local variables
    INTEGER  :: i, ising, nconsecutive
-   REAL(kind=dp):: ghinv
-   REAL(kind=dp), PARAMETER :: one  = 1.0_dp, half = 0.5_dp
+   REAL(kind=wp):: ghinv
+   REAL(kind=wp), PARAMETER :: one  = 1.0_wp, half = 0.5_wp
 
    nconsecutive = 0
    singular = .TRUE.
@@ -1680,9 +1680,9 @@ stage: DO istage = 1, ros_s
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !~~~> inout variables
 #ifdef full_algebra    
-   REAL(kind=dp), INTENT(INOUT):: a(n, n)
+   REAL(kind=wp), INTENT(INOUT):: a(n, n)
 #else   
-   REAL(kind=dp), INTENT(INOUT):: a(lu_nonzero)
+   REAL(kind=wp), INTENT(INOUT):: a(lu_nonzero)
 #endif
 !~~~> output variables
    INTEGER, INTENT(OUT):: pivot(n), ising
@@ -1705,14 +1705,14 @@ stage: DO istage = 1, ros_s
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !~~~> input variables
 #ifdef full_algebra    
-   REAL(kind=dp), INTENT(IN):: a(n, n)
+   REAL(kind=wp), INTENT(IN):: a(n, n)
    INTEGER :: ising
 #else   
-   REAL(kind=dp), INTENT(IN):: a(lu_nonzero)
+   REAL(kind=wp), INTENT(IN):: a(lu_nonzero)
 #endif
    INTEGER, INTENT(IN):: pivot(n)
 !~~~> inout variables
-   REAL(kind=dp), INTENT(INOUT):: b(n)
+   REAL(kind=wp), INTENT(INOUT):: b(n)
 !  
 ! Following line is just to avoid compiler message about unused variables
   IF ( pivot(1) == 0 )  CONTINUE
@@ -1740,7 +1740,7 @@ stage: DO istage = 1, ros_s
 
    double precision g
 
-    g = 1.0_dp + 1.0_dp/sqrt(2.0_dp)
+    g = 1.0_wp + 1.0_wp/sqrt(2.0_wp)
     rosmethod = rs2
 !~~~> name of the method
     ros_Name = 'ROS-2'
@@ -1754,24 +1754,24 @@ stage: DO istage = 1, ros_s
 !       A(i,j) = ros_A( (i-1)*(i-2)/2 + j)
 !       C(i,j) = ros_C( (i-1)*(i-2)/2 + j)
 
-    ros_a(1) = (1.0_dp) /g
-    ros_c(1) = (- 2.0_dp) /g
+    ros_a(1) = (1.0_wp) /g
+    ros_c(1) = (- 2.0_wp) /g
 !~~~> does the stage i require a new FUNCTION evaluation (ros_newf(i) =true)
 !   or does it re-use the function evaluation from stage i-1 (ros_NewF(i) =FALSE)
     ros_newf(1) = .TRUE.
     ros_newf(2) = .TRUE.
 !~~~> m_i = coefficients for new step solution
-    ros_m(1) = (3.0_dp) /(2.0_dp* g)
-    ros_m(2) = (1.0_dp) /(2.0_dp* g)
+    ros_m(1) = (3.0_wp) /(2.0_wp* g)
+    ros_m(2) = (1.0_wp) /(2.0_wp* g)
 ! E_i = Coefficients for error estimator
-    ros_e(1) = 1.0_dp/(2.0_dp* g)
-    ros_e(2) = 1.0_dp/(2.0_dp* g)
+    ros_e(1) = 1.0_wp/(2.0_wp* g)
+    ros_e(2) = 1.0_wp/(2.0_wp* g)
 !~~~> ros_elo = estimator of local order - the minimum between the
 !    main and the embedded scheme orders plus one
-    ros_elo = 2.0_dp
+    ros_elo = 2.0_wp
 !~~~> y_stage_i ~ y( t + h* alpha_i)
-    ros_alpha(1) = 0.0_dp
-    ros_alpha(2) = 1.0_dp
+    ros_alpha(1) = 0.0_wp
+    ros_alpha(2) = 1.0_wp
 !~~~> gamma_i = \sum_j  gamma_{i, j}
     ros_gamma(1) = g
     ros_gamma(2) = -g
@@ -1798,37 +1798,37 @@ stage: DO istage = 1, ros_s
 !       A(i,j) = ros_A( (i-1)*(i-2)/2 + j)
 !       C(i,j) = ros_C( (i-1)*(i-2)/2 + j)
 
-   ros_a(1) = 1.0_dp
-   ros_a(2) = 1.0_dp
-   ros_a(3) = 0.0_dp
+   ros_a(1) = 1.0_wp
+   ros_a(2) = 1.0_wp
+   ros_a(3) = 0.0_wp
 
-   ros_c(1) = - 0.10156171083877702091975600115545e+01_dp
-   ros_c(2) =  0.40759956452537699824805835358067e+01_dp
-   ros_c(3) =  0.92076794298330791242156818474003e+01_dp
+   ros_c(1) = - 0.10156171083877702091975600115545e+01_wp
+   ros_c(2) =  0.40759956452537699824805835358067e+01_wp
+   ros_c(3) =  0.92076794298330791242156818474003e+01_wp
 !~~~> does the stage i require a new FUNCTION evaluation (ros_newf(i) =true)
 !   or does it re-use the function evaluation from stage i-1 (ros_NewF(i) =FALSE)
    ros_newf(1) = .TRUE.
    ros_newf(2) = .TRUE.
    ros_newf(3) = .FALSE.
 !~~~> m_i = coefficients for new step solution
-   ros_m(1) =  0.1e+01_dp
-   ros_m(2) =  0.61697947043828245592553615689730e+01_dp
-   ros_m(3) = - 0.42772256543218573326238373806514_dp
+   ros_m(1) =  0.1e+01_wp
+   ros_m(2) =  0.61697947043828245592553615689730e+01_wp
+   ros_m(3) = - 0.42772256543218573326238373806514_wp
 ! E_i = Coefficients for error estimator
-   ros_e(1) =  0.5_dp
-   ros_e(2) = - 0.29079558716805469821718236208017e+01_dp
-   ros_e(3) =  0.22354069897811569627360909276199_dp
+   ros_e(1) =  0.5_wp
+   ros_e(2) = - 0.29079558716805469821718236208017e+01_wp
+   ros_e(3) =  0.22354069897811569627360909276199_wp
 !~~~> ros_elo = estimator of local order - the minimum between the
 !    main and the embedded scheme orders plus 1
-   ros_elo = 3.0_dp
+   ros_elo = 3.0_wp
 !~~~> y_stage_i ~ y( t + h* alpha_i)
-   ros_alpha(1) = 0.0_dp
-   ros_alpha(2) = 0.43586652150845899941601945119356_dp
-   ros_alpha(3) = 0.43586652150845899941601945119356_dp
+   ros_alpha(1) = 0.0_wp
+   ros_alpha(2) = 0.43586652150845899941601945119356_wp
+   ros_alpha(3) = 0.43586652150845899941601945119356_wp
 !~~~> gamma_i = \sum_j  gamma_{i, j}
-   ros_gamma(1) = 0.43586652150845899941601945119356_dp
-   ros_gamma(2) = 0.24291996454816804366592249683314_dp
-   ros_gamma(3) = 0.21851380027664058511513169485832e+01_dp
+   ros_gamma(1) = 0.43586652150845899941601945119356_wp
+   ros_gamma(2) = 0.24291996454816804366592249683314_wp
+   ros_gamma(3) = 0.21851380027664058511513169485832e+01_wp
 
   END SUBROUTINE ros3
 
@@ -1861,19 +1861,19 @@ stage: DO istage = 1, ros_s
 !       A(i,j) = ros_A( (i-1)*(i-2)/2 + j)
 !       C(i,j) = ros_C( (i-1)*(i-2)/2 + j)
 
-   ros_a(1) = 0.2000000000000000e+01_dp
-   ros_a(2) = 0.1867943637803922e+01_dp
-   ros_a(3) = 0.2344449711399156_dp
+   ros_a(1) = 0.2000000000000000e+01_wp
+   ros_a(2) = 0.1867943637803922e+01_wp
+   ros_a(3) = 0.2344449711399156_wp
    ros_a(4) = ros_a(2)
    ros_a(5) = ros_a(3)
-   ros_a(6) = 0.0_dp
+   ros_a(6) = 0.0_wp
 
-   ros_c(1) = -0.7137615036412310e+01_dp
-   ros_c(2) = 0.2580708087951457e+01_dp
-   ros_c(3) = 0.6515950076447975_dp
-   ros_c(4) = -0.2137148994382534e+01_dp
-   ros_c(5) = -0.3214669691237626_dp
-   ros_c(6) = -0.6949742501781779_dp
+   ros_c(1) = -0.7137615036412310e+01_wp
+   ros_c(2) = 0.2580708087951457e+01_wp
+   ros_c(3) = 0.6515950076447975_wp
+   ros_c(4) = -0.2137148994382534e+01_wp
+   ros_c(5) = -0.3214669691237626_wp
+   ros_c(6) = -0.6949742501781779_wp
 !~~~> does the stage i require a new FUNCTION evaluation (ros_newf(i) =true)
 !   or does it re-use the function evaluation from stage i-1 (ros_NewF(i) =FALSE)
    ros_newf(1) = .TRUE.
@@ -1881,28 +1881,28 @@ stage: DO istage = 1, ros_s
    ros_newf(3) = .TRUE.
    ros_newf(4) = .FALSE.
 !~~~> m_i = coefficients for new step solution
-   ros_m(1) = 0.2255570073418735e+01_dp
-   ros_m(2) = 0.2870493262186792_dp
-   ros_m(3) = 0.4353179431840180_dp
-   ros_m(4) = 0.1093502252409163e+01_dp
+   ros_m(1) = 0.2255570073418735e+01_wp
+   ros_m(2) = 0.2870493262186792_wp
+   ros_m(3) = 0.4353179431840180_wp
+   ros_m(4) = 0.1093502252409163e+01_wp
 !~~~> e_i  = coefficients for error estimator
-   ros_e(1) = -0.2815431932141155_dp
-   ros_e(2) = -0.7276199124938920e-01_dp
-   ros_e(3) = -0.1082196201495311_dp
-   ros_e(4) = -0.1093502252409163e+01_dp
+   ros_e(1) = -0.2815431932141155_wp
+   ros_e(2) = -0.7276199124938920e-01_wp
+   ros_e(3) = -0.1082196201495311_wp
+   ros_e(4) = -0.1093502252409163e+01_wp
 !~~~> ros_elo  = estimator of local order - the minimum between the
 !    main and the embedded scheme orders plus 1
-   ros_elo  = 4.0_dp
+   ros_elo  = 4.0_wp
 !~~~> y_stage_i ~ y( t + h* alpha_i)
-   ros_alpha(1) = 0.0_dp
-   ros_alpha(2) = 0.1145640000000000e+01_dp
-   ros_alpha(3) = 0.6552168638155900_dp
+   ros_alpha(1) = 0.0_wp
+   ros_alpha(2) = 0.1145640000000000e+01_wp
+   ros_alpha(3) = 0.6552168638155900_wp
    ros_alpha(4) = ros_alpha(3)
 !~~~> gamma_i = \sum_j  gamma_{i, j}
-   ros_gamma(1) = 0.5728200000000000_dp
-   ros_gamma(2) = -0.1769193891319233e+01_dp
-   ros_gamma(3) = 0.7592633437920482_dp
-   ros_gamma(4) = -0.1049021087100450_dp
+   ros_gamma(1) = 0.5728200000000000_wp
+   ros_gamma(2) = -0.1769193891319233e+01_wp
+   ros_gamma(3) = 0.7592633437920482_wp
+   ros_gamma(4) = -0.1049021087100450_wp
 
   END SUBROUTINE ros4
 
@@ -1926,19 +1926,19 @@ stage: DO istage = 1, ros_s
 !       A(i,j) = ros_A( (i-1)*(i-2)/2 + j)
 !       C(i,j) = ros_C( (i-1)*(i-2)/2 + j)
 
-   ros_a(1) = 0.0_dp
-   ros_a(2) = 2.0_dp
-   ros_a(3) = 0.0_dp
-   ros_a(4) = 2.0_dp
-   ros_a(5) = 0.0_dp
-   ros_a(6) = 1.0_dp
+   ros_a(1) = 0.0_wp
+   ros_a(2) = 2.0_wp
+   ros_a(3) = 0.0_wp
+   ros_a(4) = 2.0_wp
+   ros_a(5) = 0.0_wp
+   ros_a(6) = 1.0_wp
 
-   ros_c(1) = 4.0_dp
-   ros_c(2) = 1.0_dp
-   ros_c(3) = -1.0_dp
-   ros_c(4) = 1.0_dp
-   ros_c(5) = -1.0_dp
-   ros_c(6) = -(8.0_dp/3.0_dp)
+   ros_c(1) = 4.0_wp
+   ros_c(2) = 1.0_wp
+   ros_c(3) = -1.0_wp
+   ros_c(4) = 1.0_wp
+   ros_c(5) = -1.0_wp
+   ros_c(6) = -(8.0_wp/3.0_wp)
 
 !~~~> does the stage i require a new FUNCTION evaluation (ros_newf(i) =true)
 !   or does it re-use the function evaluation from stage i-1 (ros_NewF(i) =FALSE)
@@ -1947,28 +1947,28 @@ stage: DO istage = 1, ros_s
    ros_newf(3) = .TRUE.
    ros_newf(4) = .TRUE.
 !~~~> m_i = coefficients for new step solution
-   ros_m(1) = 2.0_dp
-   ros_m(2) = 0.0_dp
-   ros_m(3) = 1.0_dp
-   ros_m(4) = 1.0_dp
+   ros_m(1) = 2.0_wp
+   ros_m(2) = 0.0_wp
+   ros_m(3) = 1.0_wp
+   ros_m(4) = 1.0_wp
 !~~~> e_i  = coefficients for error estimator
-   ros_e(1) = 0.0_dp
-   ros_e(2) = 0.0_dp
-   ros_e(3) = 0.0_dp
-   ros_e(4) = 1.0_dp
+   ros_e(1) = 0.0_wp
+   ros_e(2) = 0.0_wp
+   ros_e(3) = 0.0_wp
+   ros_e(4) = 1.0_wp
 !~~~> ros_elo  = estimator of local order - the minimum between the
 !    main and the embedded scheme orders plus 1
-   ros_elo  = 3.0_dp
+   ros_elo  = 3.0_wp
 !~~~> y_stage_i ~ y( t + h* alpha_i)
-   ros_alpha(1) = 0.0_dp
-   ros_alpha(2) = 0.0_dp
-   ros_alpha(3) = 1.0_dp
-   ros_alpha(4) = 1.0_dp
+   ros_alpha(1) = 0.0_wp
+   ros_alpha(2) = 0.0_wp
+   ros_alpha(3) = 1.0_wp
+   ros_alpha(4) = 1.0_wp
 !~~~> gamma_i = \sum_j  gamma_{i, j}
-   ros_gamma(1) = 0.5_dp
-   ros_gamma(2) = 1.5_dp
-   ros_gamma(3) = 0.0_dp
-   ros_gamma(4) = 0.0_dp
+   ros_gamma(1) = 0.5_wp
+   ros_gamma(2) = 1.5_wp
+   ros_gamma(3) = 0.0_wp
+   ros_gamma(4) = 0.0_wp
 
   END SUBROUTINE rodas3
 
@@ -1991,20 +1991,20 @@ stage: DO istage = 1, ros_s
     ros_s = 6
 
 !~~~> y_stage_i ~ y( t + h* alpha_i)
-    ros_alpha(1) = 0.000_dp
-    ros_alpha(2) = 0.386_dp
-    ros_alpha(3) = 0.210_dp
-    ros_alpha(4) = 0.630_dp
-    ros_alpha(5) = 1.000_dp
-    ros_alpha(6) = 1.000_dp
+    ros_alpha(1) = 0.000_wp
+    ros_alpha(2) = 0.386_wp
+    ros_alpha(3) = 0.210_wp
+    ros_alpha(4) = 0.630_wp
+    ros_alpha(5) = 1.000_wp
+    ros_alpha(6) = 1.000_wp
 
 !~~~> gamma_i = \sum_j  gamma_{i, j}
-    ros_gamma(1) = 0.2500000000000000_dp
-    ros_gamma(2) = -0.1043000000000000_dp
-    ros_gamma(3) = 0.1035000000000000_dp
-    ros_gamma(4) = -0.3620000000000023e-01_dp
-    ros_gamma(5) = 0.0_dp
-    ros_gamma(6) = 0.0_dp
+    ros_gamma(1) = 0.2500000000000000_wp
+    ros_gamma(2) = -0.1043000000000000_wp
+    ros_gamma(3) = 0.1035000000000000_wp
+    ros_gamma(4) = -0.3620000000000023e-01_wp
+    ros_gamma(5) = 0.0_wp
+    ros_gamma(6) = 0.0_wp
 
 !~~~> the coefficient matrices a and c are strictly lower triangular.
 !   The lower triangular (subdiagonal) elements are stored in row-wise order:
@@ -2012,53 +2012,53 @@ stage: DO istage = 1, ros_s
 !   The general mapping formula is:  A(i,j) = ros_A( (i-1)*(i-2)/2 + j)
 !                  C(i,j) = ros_C( (i-1)*(i-2)/2 + j)
 
-    ros_a(1) = 0.1544000000000000e+01_dp
-    ros_a(2) = 0.9466785280815826_dp
-    ros_a(3) = 0.2557011698983284_dp
-    ros_a(4) = 0.3314825187068521e+01_dp
-    ros_a(5) = 0.2896124015972201e+01_dp
-    ros_a(6) = 0.9986419139977817_dp
-    ros_a(7) = 0.1221224509226641e+01_dp
-    ros_a(8) = 0.6019134481288629e+01_dp
-    ros_a(9) = 0.1253708332932087e+02_dp
-    ros_a(10) = -0.6878860361058950_dp
+    ros_a(1) = 0.1544000000000000e+01_wp
+    ros_a(2) = 0.9466785280815826_wp
+    ros_a(3) = 0.2557011698983284_wp
+    ros_a(4) = 0.3314825187068521e+01_wp
+    ros_a(5) = 0.2896124015972201e+01_wp
+    ros_a(6) = 0.9986419139977817_wp
+    ros_a(7) = 0.1221224509226641e+01_wp
+    ros_a(8) = 0.6019134481288629e+01_wp
+    ros_a(9) = 0.1253708332932087e+02_wp
+    ros_a(10) = -0.6878860361058950_wp
     ros_a(11) = ros_a(7)
     ros_a(12) = ros_a(8)
     ros_a(13) = ros_a(9)
     ros_a(14) = ros_a(10)
-    ros_a(15) = 1.0_dp
+    ros_a(15) = 1.0_wp
 
-    ros_c(1) = -0.5668800000000000e+01_dp
-    ros_c(2) = -0.2430093356833875e+01_dp
-    ros_c(3) = -0.2063599157091915_dp
-    ros_c(4) = -0.1073529058151375_dp
-    ros_c(5) = -0.9594562251023355e+01_dp
-    ros_c(6) = -0.2047028614809616e+02_dp
-    ros_c(7) = 0.7496443313967647e+01_dp
-    ros_c(8) = -0.1024680431464352e+02_dp
-    ros_c(9) = -0.3399990352819905e+02_dp
-    ros_c(10) = 0.1170890893206160e+02_dp
-    ros_c(11) = 0.8083246795921522e+01_dp
-    ros_c(12) = -0.7981132988064893e+01_dp
-    ros_c(13) = -0.3152159432874371e+02_dp
-    ros_c(14) = 0.1631930543123136e+02_dp
-    ros_c(15) = -0.6058818238834054e+01_dp
+    ros_c(1) = -0.5668800000000000e+01_wp
+    ros_c(2) = -0.2430093356833875e+01_wp
+    ros_c(3) = -0.2063599157091915_wp
+    ros_c(4) = -0.1073529058151375_wp
+    ros_c(5) = -0.9594562251023355e+01_wp
+    ros_c(6) = -0.2047028614809616e+02_wp
+    ros_c(7) = 0.7496443313967647e+01_wp
+    ros_c(8) = -0.1024680431464352e+02_wp
+    ros_c(9) = -0.3399990352819905e+02_wp
+    ros_c(10) = 0.1170890893206160e+02_wp
+    ros_c(11) = 0.8083246795921522e+01_wp
+    ros_c(12) = -0.7981132988064893e+01_wp
+    ros_c(13) = -0.3152159432874371e+02_wp
+    ros_c(14) = 0.1631930543123136e+02_wp
+    ros_c(15) = -0.6058818238834054e+01_wp
 
 !~~~> m_i = coefficients for new step solution
     ros_m(1) = ros_a(7)
     ros_m(2) = ros_a(8)
     ros_m(3) = ros_a(9)
     ros_m(4) = ros_a(10)
-    ros_m(5) = 1.0_dp
-    ros_m(6) = 1.0_dp
+    ros_m(5) = 1.0_wp
+    ros_m(6) = 1.0_wp
 
 !~~~> e_i  = coefficients for error estimator
-    ros_e(1) = 0.0_dp
-    ros_e(2) = 0.0_dp
-    ros_e(3) = 0.0_dp
-    ros_e(4) = 0.0_dp
-    ros_e(5) = 0.0_dp
-    ros_e(6) = 1.0_dp
+    ros_e(1) = 0.0_wp
+    ros_e(2) = 0.0_wp
+    ros_e(3) = 0.0_wp
+    ros_e(4) = 0.0_wp
+    ros_e(5) = 0.0_wp
+    ros_e(6) = 1.0_wp
 
 !~~~> does the stage i require a new FUNCTION evaluation (ros_newf(i) =true)
 !   or does it re-use the function evaluation from stage i-1 (ros_NewF(i) =FALSE)
@@ -2071,7 +2071,7 @@ stage: DO istage = 1, ros_s
 
 !~~~> ros_elo  = estimator of local order - the minimum between the
 !        main and the embedded scheme orders plus 1
-    ros_elo = 4.0_dp
+    ros_elo = 4.0_wp
 
   END SUBROUTINE rodas4
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2139,7 +2139,7 @@ stage: DO istage = 1, ros_s
 
 !~~~> ros_elo  = estimator of local order - the minimum between the
 !        main and the embedded scheme orders plus 1
-    ros_elo = 3.0_dp
+    ros_elo = 3.0_wp
 
   END SUBROUTINE rang3
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2155,11 +2155,11 @@ SUBROUTINE funtemplate( t, y, ydot)
 !  Updates the rate coefficients (and possibly the fixed species) at each call
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !~~~> input variables
-   REAL(kind=dp):: t, y(nvar)
+   REAL(kind=wp):: t, y(nvar)
 !~~~> output variables
-   REAL(kind=dp):: ydot(nvar)
+   REAL(kind=wp):: ydot(nvar)
 !~~~> local variables
-   REAL(kind=dp):: told
+   REAL(kind=wp):: told
 
    told = time
    time = t
@@ -2174,15 +2174,15 @@ SUBROUTINE jactemplate( t, y, jcb)
 !  Updates the rate coefficients (and possibly the fixed species) at each call
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !~~~> input variables
-    REAL(kind=dp):: t, y(nvar)
+    REAL(kind=wp):: t, y(nvar)
 !~~~> output variables
 #ifdef full_algebra    
-    REAL(kind=dp):: jv(lu_nonzero), jcb(nvar, nvar)
+    REAL(kind=wp):: jv(lu_nonzero), jcb(nvar, nvar)
 #else
-    REAL(kind=dp):: jcb(lu_nonzero)
+    REAL(kind=wp):: jcb(lu_nonzero)
 #endif   
 !~~~> local variables
-    REAL(kind=dp):: told
+    REAL(kind=wp):: told
 #ifdef full_algebra    
     INTEGER :: i, j
 #endif   
@@ -2193,7 +2193,7 @@ SUBROUTINE jactemplate( t, y, jcb)
     CALL jac_sp(y, fix, rconst, jv)
     DO j=1, nvar
       DO i=1, nvar
-         jcb(i, j) = 0.0_dp
+         jcb(i, j) = 0.0_wp
       ENDDO
     ENDDO
     DO i=1, lu_nonzero
@@ -2213,14 +2213,14 @@ END SUBROUTINE jactemplate
   ! loop expansion generated by kp4                                   
                                                                       
     INTEGER  :: ier                                                   
-    REAL(kind=dp):: jvs(lu_nonzero), a                         
+    REAL(kind=wp):: jvs(lu_nonzero), a                         
                                                                       
     a = 0.                                                            
     ier = 0                                                           
                                                                       
 ! Following line is just to avoid compiler message about unused variables
 ! if there are only passive tracers
-    IF ( jvs(1) >= 0.0_dp )  CONTINUE
+    IF ( jvs(1) >= 0.0_wp )  CONTINUE
 !  
 !   i = 1
 !   i = 2
@@ -2244,12 +2244,12 @@ SUBROUTINE chem_gasphase_integrate (time_step_len, conc, tempi, qvapi, fakti, ph
                                                                     
   IMPLICIT NONE                                                     
                                                                     
-  REAL(dp), INTENT(IN)                  :: time_step_len           
-  REAL(dp), DIMENSION(:, :), INTENT(INOUT) :: conc                    
-  REAL(dp), DIMENSION(:, :), INTENT(IN)   :: photo                   
-  REAL(dp), DIMENSION(:), INTENT(IN)     :: tempi                   
-  REAL(dp), DIMENSION(:), INTENT(IN)     :: qvapi                   
-  REAL(dp), DIMENSION(:), INTENT(IN)     :: fakti                   
+  REAL(wp), INTENT(IN)                  :: time_step_len           
+  REAL(wp), DIMENSION(:, :), INTENT(INOUT) :: conc                    
+  REAL(wp), DIMENSION(:, :), INTENT(IN)   :: photo                   
+  REAL(wp), DIMENSION(:), INTENT(IN)     :: tempi                   
+  REAL(wp), DIMENSION(:), INTENT(IN)     :: qvapi                   
+  REAL(wp), DIMENSION(:), INTENT(IN)     :: fakti                   
   INTEGER, INTENT(OUT), OPTIONAL        :: ierrf(:)               
   INTEGER, INTENT(OUT), OPTIONAL        :: xnacc(:)               
   INTEGER, INTENT(OUT), OPTIONAL        :: xnrej(:)               
@@ -2257,10 +2257,10 @@ SUBROUTINE chem_gasphase_integrate (time_step_len, conc, tempi, qvapi, fakti, ph
   INTEGER, INTENT(IN), OPTIONAL         :: pe                      
   LOGICAL, INTENT(IN), OPTIONAL         :: l_debug                 
   INTEGER, DIMENSION(nkppctrl), INTENT(IN), OPTIONAL  :: icntrl_i         
-  REAL(dp), DIMENSION(nkppctrl), INTENT(IN), OPTIONAL  :: rcntrl_i         
+  REAL(wp), DIMENSION(nkppctrl), INTENT(IN), OPTIONAL  :: rcntrl_i         
                                                                     
   INTEGER                                 :: k   ! loop variable     
-  REAL(dp)                               :: dt                      
+  REAL(wp)                               :: dt                      
   INTEGER, DIMENSION(20)                :: istatus_u               
   INTEGER                                :: ierr_u                  
   INTEGER                                :: vl_dim_lo               
@@ -2297,7 +2297,7 @@ SUBROUTINE chem_gasphase_integrate (time_step_len, conc, tempi, qvapi, fakti, ph
     dt = time_step_len                                              
                                                                     
     ! integrate from t=0 to t=dt                                    
-    CALL integrate(0._dp, dt, icntrl, rcntrl, istatus_u = istatus_u, ierr_u=ierr_u)
+    CALL integrate(0._wp, dt, icntrl, rcntrl, istatus_u = istatus_u, ierr_u=ierr_u)
                                                                     
                                                                     
    IF ( PRESENT(l_debug) .AND. PRESENT(pe) ) THEN                       

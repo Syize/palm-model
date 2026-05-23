@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Package of palm_csd, a tool to create static-driver files for the PALM model.
 
@@ -25,10 +25,15 @@ custom Formatter ColorFormatter.
 
 import logging
 
+import pandas as pd
+
 from palm_csd.logger import STATUS, ColorFormatter, StatusLogger
 
 debug_logging = False
 """Debug logging mode with additional output not required by the user."""
+
+# Use new approach of pandas.
+pd.options.mode.copy_on_write = True
 
 # Ensure that getLogger returns a StatusLogger.
 logging.setLoggerClass(StatusLogger)

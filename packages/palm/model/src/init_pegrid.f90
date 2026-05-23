@@ -36,13 +36,7 @@
                bc_radiation_n,                                                                     &
                bc_radiation_r,                                                                     &
                bc_radiation_s,                                                                     &
-               grid_level,                                                                         &
-               grid_level_count,                                                                   &
-               maximum_grid_level,                                                                 &
-               message_string,                                                                     &
-               mg_switch_to_pe0_level,                                                             &
                pe_grid_prescribed,                                                                 &
-               psolver,                                                                            &
                serial_run
 
 #if defined( _OPENACC )
@@ -52,12 +46,12 @@
 
 #if defined( __parallel )
     USE control_parameters,                                                                        &
-        ONLY:  gathered_size,                                                                      &
+        ONLY:  message_string,                                                                     &
                momentum_advec,                                                                     &
                nested_run,                                                                         &
                outflow_source_plane,                                                               &
+               psolver,                                                                            &
                scalar_advec,                                                                       &
-               subdomain_size,                                                                     &
                syn_turb_gen,                                                                       &
                turbulent_inflow,                                                                   &
                turbulent_outflow,                                                                  &
@@ -74,35 +68,19 @@
                nnz,                                                                                &
                nx,                                                                                 &
                nxl,                                                                                &
-               nxl_mg,                                                                             &
                nxlu,                                                                               &
                nxr,                                                                                &
-               nxr_mg,                                                                             &
                ny,                                                                                 &
                nyn,                                                                                &
-               nyn_mg,                                                                             &
                nys,                                                                                &
-               nys_mg,                                                                             &
                nysv,                                                                               &
                nz,                                                                                 &
                nzb,                                                                                &
-               nzt,                                                                                &
-               nzt_mg,                                                                             &
-               topo_flags_1,                                                                       &
-               topo_flags_2,                                                                       &
-               topo_flags_3,                                                                       &
-               topo_flags_4,                                                                       &
-               topo_flags_5,                                                                       &
-               topo_flags_6,                                                                       &
-               topo_flags_7,                                                                       &
-               topo_flags_8,                                                                       &
-               topo_flags_9,                                                                       &
-               topo_flags_10
+               nzt
 
 #if defined( __parallel )
     USE indices,                                                                                   &
-        ONLY:  mg_loc_ind,                                                                         &
-               nbgp,                                                                               &
+        ONLY:  nbgp,                                                                               &
                nnx_pe,                                                                             &
                nny_pe,                                                                             &
                nxl_pe,                                                                             &
@@ -184,43 +162,25 @@
     CHARACTER(LEN=7) ::  myid_char_prel = ''  !< preliminary processor id number
 #endif
 
-    INTEGER(iwp) :: i                        !< running index over number of processors or number of multigrid level
 #if defined( __parallel )
-    INTEGER(iwp) ::  id_outflow_l             !< local value of id_outflow
-    INTEGER(iwp) ::  id_outflow_source_l      !< local value of id_outflow_source
-    INTEGER(iwp) ::  id_stg_left_l            !< left lateral boundary local core id in case of turbulence generator
-    INTEGER(iwp) ::  id_stg_north_l           !< north lateral boundary local core id in case of turbulence generator
-    INTEGER(iwp) ::  id_stg_right_l           !< right lateral boundary local core id in case of turbulence generator
-    INTEGER(iwp) ::  id_stg_south_l           !< south lateral boundary local core id in case of turbulence generator
-    INTEGER(iwp) ::  ind(5)                   !< array containing the subdomain bounds
+    INTEGER(iwp) ::  i                    !< loop index
+    INTEGER(iwp) ::  id_outflow_l         !< local value of id_outflow
+    INTEGER(iwp) ::  id_outflow_source_l  !< local value of id_outflow_source
+    INTEGER(iwp) ::  id_stg_left_l        !< left lateral boundary local core id in case of turbulence generator
+    INTEGER(iwp) ::  id_stg_north_l       !< north lateral boundary local core id in case of turbulence generator
+    INTEGER(iwp) ::  id_stg_right_l       !< right lateral boundary local core id in case of turbulence generator
+    INTEGER(iwp) ::  id_stg_south_l       !< south lateral boundary local core id in case of turbulence generator
+    INTEGER(iwp) ::  j                    !< loop index, used for various loops
+    INTEGER(iwp) ::  nnx_y                !< quotient of number of grid points along x-direction and number of PEs used along y-direction
+    INTEGER(iwp) ::  nny_x                !< quotient of number of grid points along y-direction and number of PEs used along x-direction
+    INTEGER(iwp) ::  nny_z                !< quotient of number of grid points along y-direction and number of PEs used along x-direction
+    INTEGER(iwp) ::  nnz_x                !< quotient of number of grid points along z-direction and number of PEs used along x-direction
+    INTEGER(iwp) ::  nnz_y                !< quotient of number of grid points along z-direction and number of PEs used along x-direction
+    INTEGER(iwp) ::  numproc_sqr          !< square root of the number of processors
 #endif
-    INTEGER(iwp) ::  j                        !< running index, used for various loops
-    INTEGER(iwp) ::  k                        !< number of vertical grid points in different multigrid level
-    INTEGER(iwp) ::  maximum_grid_level_l     !< maximum number of grid level without switching to PE 0
-    INTEGER(iwp) ::  mg_levels_x              !< maximum number of grid level allowed along x-direction
-    INTEGER(iwp) ::  mg_levels_y              !< maximum number of grid level allowed along y-direction
-    INTEGER(iwp) ::  mg_levels_z              !< maximum number of grid level allowed along z-direction
-    INTEGER(iwp) ::  mg_switch_to_pe0_level_l !< maximum number of grid level with switching to PE 0
-#if defined( __parallel )
-    INTEGER(iwp) ::  nnx_y                    !< quotient of number of grid points along x-direction and number of PEs used along y-direction
-    INTEGER(iwp) ::  nny_x                    !< quotient of number of grid points along y-direction and number of PEs used along x-direction
-    INTEGER(iwp) ::  nny_z                    !< quotient of number of grid points along y-direction and number of PEs used along x-direction
-    INTEGER(iwp) ::  nnz_x                    !< quotient of number of grid points along z-direction and number of PEs used along x-direction
-    INTEGER(iwp) ::  nnz_y                    !< quotient of number of grid points along z-direction and number of PEs used along x-direction
-    INTEGER(iwp) ::  numproc_sqr              !< square root of the number of processors
-#endif
-    INTEGER(iwp) ::  nxl_l                    !< lower index bound along x-direction on subdomain and different multigrid level
-    INTEGER(iwp) ::  nxr_l                    !< upper index bound along x-direction on subdomain and different multigrid level
-    INTEGER(iwp) ::  nyn_l                    !< lower index bound along y-direction on subdomain and different multigrid level
-    INTEGER(iwp) ::  nys_l                    !< upper index bound along y-direction on subdomain and different multigrid level
-#if defined( __parallel )
-    INTEGER(iwp) ::  nzb_l                    !< lower index bound along z-direction on subdomain and different multigrid level
-#endif
-    INTEGER(iwp) ::  nzt_l                    !< upper index bound along z-direction on subdomain and different multigrid level
-!$  INTEGER(iwp) ::  omp_get_num_threads      !< number of OpenMP threads
+!$  INTEGER(iwp) ::  omp_get_num_threads  !< number of OpenMP threads
 
 #if defined( __parallel )
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  ind_all !< dummy array containing index bounds on subdomain, used for gathering
     INTEGER(iwp), DIMENSION(2) ::  npe_xy = 1     !< number of processors along x-y dimension
     INTEGER(iwp)               ::  lcoord(2)      !< PE coordinates of left neighbor along x and y
     INTEGER(iwp)               ::  rcoord(2)      !< PE coordinates of right neighbor along x and y
@@ -456,14 +416,6 @@
     CALL check_subdomain_uniformity
 
 !
-!-- The multigrid solver doesn't allow non-uniform subdomains, because then subdomains would have
-!-- different numbers of coarsening levels.
-    IF ( non_uniform_subdomain  .AND.  psolver(1:9) == 'multigrid' )  THEN
-       message_string = 'multigrid-solver does not allow to use non-uniform subdomains'
-       CALL message( 'init_pegrid', 'PAC0239', 1, 2, 0, 6, 0 )
-    ENDIF
-
-!
 !-- Calculate array bounds along x-direction for every PE.
     ALLOCATE( nnx_pe(0:npex-1), nny_pe(0:npey-1), nxl_pe(0:npex-1),                    &
               nxr_pe(0:npex-1), nyn_pe(0:npey-1), nys_pe(0:npey-1) )
@@ -623,6 +575,7 @@
     CALL MPI_TYPE_COMMIT( type_xy, ierr )
 
     serial_run = .FALSE.
+
 #else
 
 !
@@ -680,212 +633,6 @@
 
 #endif
 
-!
-!-- Calculate number of grid levels necessary for the multigrid poisson solver as well as the
-!-- gridpoint indices on each level
-    IF ( psolver(1:9) == 'multigrid' )  THEN
-
-!
-!--    First calculate number of possible grid levels for the subdomains
-       mg_levels_x = 1
-       mg_levels_y = 1
-       mg_levels_z = 1
-
-       i = nnx
-       DO WHILE ( MOD( i, 2 ) == 0  .AND.  i /= 2 )
-          i = i / 2
-          mg_levels_x = mg_levels_x + 1
-       ENDDO
-
-       j = nny
-       DO WHILE ( MOD( j, 2 ) == 0  .AND.  j /= 2 )
-          j = j / 2
-          mg_levels_y = mg_levels_y + 1
-       ENDDO
-
-       k = nz    ! do not use nnz because it might be > nz due to transposition
-                 ! requirements
-       DO WHILE ( MOD( k, 2 ) == 0  .AND.  k /= 2 )
-          k = k / 2
-          mg_levels_z = mg_levels_z + 1
-       ENDDO
-!
-!--    The optimized MG-solver does not allow odd values for nz at the coarsest grid level
-       IF ( TRIM( psolver ) /= 'multigrid_noopt' )  THEN
-          IF ( MOD( k, 2 ) /= 0 )  mg_levels_z = mg_levels_z - 1
-!
-!--       An odd value of nz does not work. The finest level must have an even value.
-          IF (  mg_levels_z == 0 )  THEN
-             message_string = 'optimized multigrid method requires nz to be even'
-             CALL message( 'init_pegrid', 'PAC0241', 1, 2, 0, 6, 0 )
-          ENDIF
-       ENDIF
-
-       maximum_grid_level = MIN( mg_levels_x, mg_levels_y, mg_levels_z )
-!
-!--    Check if subdomain sizes prevents any coarsening.
-!--    This case, the maximum number of grid levels is 1, i.e. effectively a Gauss-Seidel scheme is
-!--    applied rather than a multigrid approach.
-!--    Give a warning in this case.
-       IF ( maximum_grid_level == 1  .AND.  mg_switch_to_pe0_level == -1 )  THEN
-          message_string = 'no grid coarsening possible, multigrid ' //                            &
-                           'approach effectively reduces to a Gauss-Seidel scheme'
-          CALL message( 'poismg', 'PAC0242', 0, 1, 0, 6, 0 )
-       ENDIF
-
-!
-!--    Find out, if the total domain allows more levels. These additional levels are identically
-!--    processed on all PEs.
-       IF ( numprocs > 1  .AND.  mg_switch_to_pe0_level /= -1 )  THEN
-
-          IF ( mg_levels_z > MIN( mg_levels_x, mg_levels_y ) )  THEN
-
-             mg_switch_to_pe0_level_l = maximum_grid_level
-
-             mg_levels_x = 1
-             mg_levels_y = 1
-
-             i = nx+1
-             DO WHILE ( MOD( i, 2 ) == 0  .AND.  i /= 2 )
-                i = i / 2
-                mg_levels_x = mg_levels_x + 1
-             ENDDO
-
-             j = ny+1
-             DO WHILE ( MOD( j, 2 ) == 0  .AND.  j /= 2 )
-                j = j / 2
-                mg_levels_y = mg_levels_y + 1
-             ENDDO
-
-             maximum_grid_level_l = MIN( mg_levels_x, mg_levels_y, mg_levels_z )
-
-             IF ( maximum_grid_level_l > mg_switch_to_pe0_level_l )  THEN
-                mg_switch_to_pe0_level_l = maximum_grid_level_l - mg_switch_to_pe0_level_l + 1
-             ELSE
-                mg_switch_to_pe0_level_l = 0
-             ENDIF
-
-          ELSE
-
-             mg_switch_to_pe0_level_l = 0
-             maximum_grid_level_l = maximum_grid_level
-
-          ENDIF
-
-!
-!--       Use switch level calculated above only if it is not pre-defined by user
-          IF ( mg_switch_to_pe0_level == 0 )  THEN
-             IF ( mg_switch_to_pe0_level_l /= 0 )  THEN
-                mg_switch_to_pe0_level = mg_switch_to_pe0_level_l
-                maximum_grid_level     = maximum_grid_level_l
-             ENDIF
-
-          ELSE
-!
-!--          Check pre-defined value and reset to default, if neccessary
-             IF ( mg_switch_to_pe0_level < mg_switch_to_pe0_level_l  .OR.                          &
-                  mg_switch_to_pe0_level >= maximum_grid_level_l )  THEN
-                message_string = 'mg_switch_to_pe0_level out of range and reset to 0'
-                CALL message( 'init_pegrid', 'PAC0243', 0, 1, 0, 6, 0 )
-                mg_switch_to_pe0_level = 0
-             ELSE
-!
-!--             Use the largest number of possible levels anyway and recalculate the switch level to
-!--             this largest number of possible values
-                maximum_grid_level = maximum_grid_level_l
-
-             ENDIF
-
-          ENDIF
-
-       ENDIF
-
-       ALLOCATE( grid_level_count(maximum_grid_level),                                             &
-                 nxl_mg(0:maximum_grid_level), nxr_mg(0:maximum_grid_level),                       &
-                 nyn_mg(0:maximum_grid_level), nys_mg(0:maximum_grid_level),                       &
-                 nzt_mg(0:maximum_grid_level) )
-
-       grid_level_count = 0
-!
-!--    Index zero required as dummy due to definition of arrays f2 and p2 in recursive subroutine
-!--    next_mg_level
-       nxl_mg(0) = 0; nxr_mg(0) = 0; nyn_mg(0) = 0; nys_mg(0) = 0; nzt_mg(0) = 0
-
-       nxl_l = nxl; nxr_l = nxr; nys_l = nys; nyn_l = nyn; nzt_l = nzt
-
-       DO  i = maximum_grid_level, 1 , -1
-
-          IF ( i == mg_switch_to_pe0_level )  THEN
-#if defined( __parallel )
-!
-!--          Save the grid size of the subdomain at the switch level, because it is needed in poismg.
-             ind(1) = nxl_l; ind(2) = nxr_l
-             ind(3) = nys_l; ind(4) = nyn_l
-             ind(5) = nzt_l
-             ALLOCATE( ind_all(5*numprocs), mg_loc_ind(5,0:numprocs-1) )
-             CALL MPI_ALLGATHER( ind, 5, MPI_INTEGER, ind_all, 5, &
-                                 MPI_INTEGER, comm2d, ierr )
-             DO  j = 0, numprocs-1
-                DO  k = 1, 5
-                   mg_loc_ind(k,j) = ind_all(k+j*5)
-                ENDDO
-             ENDDO
-             DEALLOCATE( ind_all )
-!
-!--          Calculate the grid size of the total domain
-             nxr_l = ( nxr_l-nxl_l+1 ) * npex - 1
-             nxl_l = 0
-             nyn_l = ( nyn_l-nys_l+1 ) * npey - 1
-             nys_l = 0
-!
-!--          The size of this gathered array must not be larger than the array tend, which is used
-!--          in the multigrid scheme as a temporary array. Therefore the subdomain size of an PE is
-!--          calculated and the size of the gathered grid. These values are used in routines pres
-!--          and poismg.
-             subdomain_size = ( nxr - nxl + 2 * nbgp + 1 ) *                                       &
-                              ( nyn - nys + 2 * nbgp + 1 ) * ( nzt - nzb + 2 )
-             gathered_size  = ( nxr_l - nxl_l + 3 ) * ( nyn_l - nys_l + 3 ) * ( nzt_l - nzb + 2 )
-
-#else
-             message_string = 'multigrid gather/scatter impossible in non parallel mode'
-             CALL message( 'init_pegrid', 'PAC0244', 1, 2, 0, 6, 0 )
-#endif
-          ENDIF
-
-          nxl_mg(i) = nxl_l
-          nxr_mg(i) = nxr_l
-          nys_mg(i) = nys_l
-          nyn_mg(i) = nyn_l
-          nzt_mg(i) = nzt_l
-
-          nxl_l = nxl_l / 2
-          nxr_l = nxr_l / 2
-          nys_l = nys_l / 2
-          nyn_l = nyn_l / 2
-          nzt_l = nzt_l / 2
-
-       ENDDO
-
-!
-!--    Temporary problem: Currently calculation of maxerror in routine poismg crashes if grid data
-!--    are collected on PE0 already on the finest grid level.
-!--    To be solved later.
-       IF ( maximum_grid_level == mg_switch_to_pe0_level )  THEN
-          message_string = 'grid coarsening on subdomain level cannot be performed'
-          CALL message( 'poismg', 'PAC0245', 1, 2, 0, 6, 0 )
-       ENDIF
-
-    ELSE
-
-       maximum_grid_level = 0
-
-    ENDIF
-
-!
-!-- Default level 0 tells exchange_horiz that all ghost planes have to be exchanged. grid_level is
-!-- adjusted in poismg, where only one ghost plane is required.
-    grid_level = 0
-
 #if defined( __parallel )
 !
 !-- Gridpoint number for the exchange of ghost points (y-line for 2D-arrays)
@@ -914,36 +661,27 @@
     CALL MPI_TYPE_COMMIT( type_y_byte, ierr )
 !
 !-- 32-bit Integer
-    ALLOCATE( type_x_int(0:maximum_grid_level), type_y_int(0:maximum_grid_level) )
+    CALL MPI_TYPE_VECTOR( nxr-nxl+1+2*nbgp, nbgp, ngp_y, MPI_INTEGER, type_x_int, ierr )
+    CALL MPI_TYPE_COMMIT( type_x_int, ierr )
 
-    CALL MPI_TYPE_VECTOR( nxr-nxl+1+2*nbgp, nbgp, ngp_y, MPI_INTEGER, type_x_int(0), ierr )
-    CALL MPI_TYPE_COMMIT( type_x_int(0), ierr )
-
-    CALL MPI_TYPE_VECTOR( nbgp, ngp_y, ngp_y, MPI_INTEGER, type_y_int(0), ierr )
-    CALL MPI_TYPE_COMMIT( type_y_int(0), ierr )
+    CALL MPI_TYPE_VECTOR( nbgp, ngp_y, ngp_y, MPI_INTEGER, type_y_int, ierr )
+    CALL MPI_TYPE_COMMIT( type_y_int, ierr )
 !
 !-- Calculate gridpoint numbers for the exchange of ghost points along x (yz-plane for 3D-arrays)
 !-- and define MPI derived data type(s) for the exchange of ghost points in y-direction (xz-plane).
-!-- Do these calculations for the model grid and (if necessary) also for the coarser grid levels
-!-- used in the multigrid method
-    ALLOCATE ( ngp_xz(0:maximum_grid_level),                                                       &
-               ngp_xz_int(0:maximum_grid_level),                                                   &
-               ngp_yz(0:maximum_grid_level),                                                       &
-               ngp_yz_int(0:maximum_grid_level),                                                   &
-               type_xz(0:maximum_grid_level),                                                      &
-               type_xz_int(0:maximum_grid_level),                                                  &
-               type_yz(0:maximum_grid_level),                                                      &
-               type_yz_int(0:maximum_grid_level) )
-
-    nxl_l = nxl; nxr_l = nxr; nys_l = nys; nyn_l = nyn; nzb_l = nzb; nzt_l = nzt
-
+!-- Calculations are done here only for the model grid and that is why the dimension has only a
+!-- size of 1. If required, arrays will later be re-allocated in the multigrid module to hold the
+!-- data for the coarser grid levels.
+    ALLOCATE ( ngp_xz(0:0),                                                                        &
+               ngp_xz_int(0:0),                                                                    &
+               ngp_yz(0:0),                                                                        &
+               ngp_yz_int(0:0),                                                                    &
+               type_xz(0:0),                                                                       &
+               type_xz_int(0:0),                                                                   &
+               type_yz(0:0),                                                                       &
+               type_yz_int(0:0) )
 !
-!-- Discern between the model grid, which needs nbgp ghost points and grid levels for the multigrid
-!-- scheme. In the latter case only one ghost point is necessary.
-!-- First definition of MPI-datatypes for exchange of ghost layers on normal grid. The following
-!-- loop is needed for data exchange in poismg.f90.
-!
-!-- Determine number of grid points of yz-layer for exchange
+!-- Determine number of grid points of yz-layer for exchange.
     ngp_yz(0) = (nzt - nzb + 2) * (nyn - nys + 1 + 2 * nbgp)
 
 !
@@ -968,62 +706,6 @@
 
     CALL MPI_TYPE_VECTOR( nbgp, ngp_yz_int(0), ngp_yz_int(0), MPI_INTEGER, type_yz_int(0), ierr )
     CALL MPI_TYPE_COMMIT( type_yz_int(0), ierr )
-
-!
-!-- Definition of MPI-datatypes for multigrid method (coarser level grids)
-    IF ( psolver(1:9) == 'multigrid' )  THEN
-!
-!--    Definition of MPI-datatyoe as above, but only 1 ghost level is used
-       DO  i = maximum_grid_level, 1 , -1
-!
-!--       For 3D-exchange on different multigrid level, one ghost point for REAL arrays, two ghost
-!--       points for INTEGER arrays
-          ngp_xz(i) = (nzt_l - nzb_l + 2) * (nxr_l - nxl_l + 3)
-          ngp_yz(i) = (nzt_l - nzb_l + 2) * (nyn_l - nys_l + 3)
-
-          ngp_xz_int(i) = (nzt_l - nzb_l + 2) * (nxr_l - nxl_l + 3)
-          ngp_yz_int(i) = (nzt_l - nzb_l + 2) * (nyn_l - nys_l + 3)
-!
-!--       MPI data type for REAL arrays, for xz-layers
-          CALL MPI_TYPE_VECTOR( nxr_l-nxl_l+3, nzt_l-nzb_l+2, ngp_yz(i), MPI_REAL, type_xz(i),     &
-                                ierr )
-          CALL MPI_TYPE_COMMIT( type_xz(i), ierr )
-
-!
-!--       MPI data type for INTEGER arrays, for xz-layers
-          CALL MPI_TYPE_VECTOR( nxr_l-nxl_l+3, nzt_l-nzb_l+2, ngp_yz_int(i), MPI_INTEGER,          &
-                                type_xz_int(i), ierr )
-          CALL MPI_TYPE_COMMIT( type_xz_int(i), ierr )
-
-!
-!--       MPI data type for REAL arrays, for yz-layers
-          CALL MPI_TYPE_VECTOR( 1, ngp_yz(i), ngp_yz(i), MPI_REAL, type_yz(i), ierr )
-          CALL MPI_TYPE_COMMIT( type_yz(i), ierr )
-!
-!--       MPI data type for INTEGER arrays, for yz-layers
-          CALL MPI_TYPE_VECTOR( 1, ngp_yz_int(i), ngp_yz_int(i), MPI_INTEGER, type_yz_int(i), ierr )
-          CALL MPI_TYPE_COMMIT( type_yz_int(i), ierr )
-
-
-!--       For 2D-exchange of INTEGER arrays on coarser grid level, where 2 ghost points need to be
-!--       exchanged. Only required for 32-bit Integer arrays.
-          CALL MPI_TYPE_VECTOR( nxr_l-nxl_l+5, 2, nyn_l-nys_l+5, MPI_INTEGER, type_x_int(i), ierr )
-          CALL MPI_TYPE_COMMIT( type_x_int(i), ierr )
-
-
-          CALL MPI_TYPE_VECTOR( 2, nyn_l-nys_l+5, nyn_l-nys_l+5, MPI_INTEGER, type_y_int(i), ierr )
-          CALL MPI_TYPE_COMMIT( type_y_int(i), ierr )
-
-          nxl_l = nxl_l / 2
-          nxr_l = nxr_l / 2
-          nys_l = nys_l / 2
-          nyn_l = nyn_l / 2
-          nzt_l = nzt_l / 2
-
-       ENDDO
-
-    ENDIF
-
 #endif
 
 #if defined( __parallel )
@@ -1151,7 +833,8 @@
 #endif
 
 !
-!-- At the inflow or outflow, u or v, respectively, have to be calculated for one more grid point.
+!-- At the inflow or outflow, u or v, respectively, have to be calculated for one grid point less
+!-- in case of non-cyclic boundary conditions.
     IF ( bc_dirichlet_l  .OR.  bc_radiation_l )  THEN
        nxlu = nxl + 1
     ELSE
@@ -1161,74 +844,6 @@
        nysv = nys + 1
     ELSE
        nysv = nys
-    ENDIF
-
-!
-!-- Allocate wall flag arrays used in the multigrid solver
-    IF ( psolver(1:9) == 'multigrid' )  THEN
-
-       DO  i = maximum_grid_level, 1, -1
-
-           SELECT CASE ( i )
-
-              CASE ( 1 )
-                 ALLOCATE( topo_flags_1(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 2 )
-                 ALLOCATE( topo_flags_2(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 3 )
-                 ALLOCATE( topo_flags_3(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 4 )
-                 ALLOCATE( topo_flags_4(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 5 )
-                 ALLOCATE( topo_flags_5(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 6 )
-                 ALLOCATE( topo_flags_6(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 7 )
-                 ALLOCATE( topo_flags_7(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 8 )
-                 ALLOCATE( topo_flags_8(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 9 )
-                 ALLOCATE( topo_flags_9(nzb:nzt_mg(i)+1,                                           &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE ( 10 )
-                 ALLOCATE( topo_flags_10(nzb:nzt_mg(i)+1,                                          &
-                                        nys_mg(i)-1:nyn_mg(i)+1,                                   &
-                                        nxl_mg(i)-1:nxr_mg(i)+1) )
-
-              CASE DEFAULT
-                 message_string = 'more than 10 multigrid levels'
-                 CALL message( 'init_pegrid', 'PAC0246', 1, 2, 0, 6, 0 )
-
-          END SELECT
-
-       ENDDO
-
     ENDIF
 
 #if defined( __parallel )

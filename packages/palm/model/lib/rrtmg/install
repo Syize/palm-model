@@ -17,6 +17,7 @@
 #--------------------------------------------------------------------------------#
 # project install script
 #--------------------------------------------------------------------------------#
+set -eo pipefail
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
    DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
@@ -41,6 +42,7 @@ prog="librrtmg"
 version="1.0"
 
 compiler_name="$(nf-config --fc)"
+cpp_options="-cpp"
 compiler_options="-O3 $(nf-config --fflags)"
 linker_options="$(nf-config --flibs)"
 
@@ -52,7 +54,7 @@ install_function() {
    mkdir -p ${build_prefix}
    cp -p ${project_src_dir}/*  ${build_prefix}/
    cd ${build_prefix}
-   make -j PROG=${prog} F90="${compiler_name}" F90FLAGS="${compiler_options}" LDFLAGS="${linker_options}"
+   make -j PROG=${prog} F90="${compiler_name}" F90FLAGS="${compiler_options}" COPT="${cpp_options}" LDFLAGS="${linker_options}"
    mkdir -p ${install_prefix}/lib
    mkdir -p ${install_prefix}/include
    cp -p ${build_prefix}/${prog}.so ${install_prefix}/lib/${prog}.so.$version
@@ -66,7 +68,7 @@ install_function() {
 }
 
 show_usage() {
-   echo "Usage: $0 [-h] [-b <build_prefix>] [-p <install_prefix>] [-c <compiler>] [-o <compiler_options>] [-l <linker_options>] [-x]"
+   echo "Usage: $0 [-h] [-b <build_prefix>] [-p <install_prefix>] [-c <compiler>] [-d <cpp_options>] [-o <compiler_options>] [-l <linker_options>] [-x]"
 }
 
 show_help() {
@@ -75,12 +77,13 @@ show_help() {
    echo "      -b <build_prefix>      set build directory"
    echo "      -p <install_prefix>    set installation directory"
    echo "      -c <compiler>          set custom compiler executable"
+   echo "      -d <cpp_options>       set custom preprocessor options"
    echo "      -o <compiler_options>  set custom compiler options"
    echo "      -l <linker_options>    set custom linker options"
    echo "      -x                     clean already existing build files"
 }
 
-while getopts ":b:p:c:o:l:hx" o; do
+while getopts ":b:p:c:d:o:l:hx" o; do
    case "${o}" in
       b)
          build_prefix="$(readlink -m "${OPTARG}")"
@@ -90,6 +93,9 @@ while getopts ":b:p:c:o:l:hx" o; do
          ;;
       c)
          compiler_name="${OPTARG}"
+         ;;
+      d)
+         cpp_options="${OPTARG}"
          ;;
       o)
          compiler_options="${OPTARG}"

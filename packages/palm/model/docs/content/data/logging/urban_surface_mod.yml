@@ -102,7 +102,7 @@ USM0015:
   message: |
     building_pars from the static input file is deprecated
   description: |
-    Input of `building_pars` from the static input file is deprecated and will be removed in future releases. Please take the chance to switch to the newly available input variables `building_hcap`, `building_hcond`, `building_general`, `building_fracs`, `building_rad`, etc. (see [static driver description](../Iofiles/PIDS_STATIC)).
+    Input of `building_pars` from the static input file is deprecated and will be removed in future releases. Please take the chance to switch to the newly available input variables `building_hcap`, `building_hcond`, `building_general_pars`, `building_fracs`, `building_rad`, etc. (see [static driver description](../Iofiles/PIDS_STATIC)).
 
 USM0016:
   loglevel: ERROR

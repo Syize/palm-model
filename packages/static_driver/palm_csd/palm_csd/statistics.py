@@ -11,12 +11,13 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Show statistics and produce plots of a static driver netCDF file."""
 
 import logging
+import re
 from enum import IntEnum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict, Union, cast
@@ -28,6 +29,16 @@ from matplotlib import colors
 from netCDF4 import Dataset
 
 from palm_csd import StatusLogger
+from palm_csd.constants import (
+    COLORS,
+    VT_NO_PLANTS,
+    IndexBuildingType,
+    IndexPavementType,
+    IndexVegetationType,
+    IndexWaterType,
+    ValuePlot,
+)
+from palm_csd.tools import ma_isin
 
 logger = cast(StatusLogger, logging.getLogger(__name__))
 
@@ -35,10 +46,12 @@ logger = cast(StatusLogger, logging.getLogger(__name__))
 def plot_static(
     nc_static: Dataset,
     show: bool = False,
+    detailed: bool = False,
     output: Optional[Path] = None,
     title: Optional[str] = None,
     width: Optional[float] = None,
     height: Optional[float] = None,
+    geo_referenced: bool = False,
 ) -> None:
     """Create a basic summary plot of a static driver showing surface types and buildings.
 
@@ -48,10 +61,12 @@ def plot_static(
     Args:
         nc_static: Static driver netCDF file.
         show: Show the plot on screen. Defaults to False.
+        detailed: If True, show detailed surface types instead of basic categories.
         output: Plot output path. Defaults to None.
         title: Plot title. Defaults to None.
         width: Plot width. Defaults to None.
         height: Plot height. Defaults to None.
+        geo_referenced: If True, use georeferenced UTM coordinates.
     """
     # Get dimensions from the NetCDF file.
     n_x = len(nc_static.dimensions["x"])
@@ -67,9 +82,38 @@ def plot_static(
     if width is None:
         width = aspect_ratio * height + 2.0
 
-    # Extract coordinate variables to compute grid spacing.
-    x_dim = nc_static.variables["x"][:] if "x" in nc_static.variables else None
-    y_dim = nc_static.variables["y"][:] if "y" in nc_static.variables else None
+    if geo_referenced:
+        if "N_UTM" not in nc_static.variables or "E_UTM" not in nc_static.variables:
+            logger.critical_raise(
+                "Georeferenced UTM coordinates not found. Use pixel coordinates instead."
+            )
+        e_utm = nc_static.variables["E_UTM"][:]
+        n_utm = nc_static.variables["N_UTM"][:]
+
+        # Assume e_utm is constant along the y-axis and n_utm is constant along the x-axis.
+        x_dim = e_utm[0, :]
+        y_dim = n_utm[:, 0]
+        x_label = "Easting (m)"
+        y_label = "Northing (m)"
+        if not np.all(e_utm == x_dim[np.newaxis, :]) or not np.all(n_utm == y_dim[:, np.newaxis]):
+            # Try rotated coordinates.
+            x_dim = n_utm[0, :]
+            y_dim = e_utm[:, 0]
+            x_label = "Northing (m)"
+            y_label = "Easting (m)"
+            if not np.all(n_utm == x_dim[np.newaxis, :]) or not np.all(
+                e_utm == y_dim[:, np.newaxis]
+            ):
+                logger.critical_raise(
+                    "UTM coordinates are not consistent along one dimension. "
+                    + "Use pixel coordinates instead."
+                )
+    else:
+        # Extract coordinate variables to compute grid spacing.
+        x_dim = nc_static.variables["x"][:] if "x" in nc_static.variables else None
+        y_dim = nc_static.variables["y"][:] if "y" in nc_static.variables else None
+        x_label = "x (m)"
+        y_label = "y (m)"
 
     if x_dim is None or y_dim is None:
         logger.warning(
@@ -77,7 +121,8 @@ def plot_static(
             + "Using pixels as plot units."
         )
         extent: Optional[Tuple[float, float, float, float]] = None
-        unit_axes = ""
+        x_label = "x"
+        y_label = "y"
     else:
         # Calculate horizontal grid spacing if the coordinates exist.
         dx = np.diff(x_dim).mean()
@@ -88,64 +133,103 @@ def plot_static(
             y_dim[0] - dy / 2,
             y_dim[-1] + dy / 2,
         )
-        unit_axes = "(m)"
 
-    class IndexPlot(IntEnum):
-        """Indices for the plot."""
-
-        WATER = 0
-        VEGETATION_RESOLVED = 1
-        VEGETATION_FLAT = 2
-        PAVEMENT = 3
-        BUILDINGS = 4
-        NONE = 5
-
-    # Original color dictionary.
-    dict_plot = {
-        IndexPlot.NONE: {"color": "black", "label": "None"},
-        IndexPlot.BUILDINGS: {"color": "#B24D4D", "label": "Buildings"},
-        IndexPlot.PAVEMENT: {"color": "#808080", "label": "Pavement"},
-        IndexPlot.VEGETATION_FLAT: {"color": "#7AB890", "label": "Vegetation (flat)"},
-        IndexPlot.VEGETATION_RESOLVED: {"color": "#47855D", "label": "Vegetation (resolved)"},
-        IndexPlot.WATER: {"color": "#66A7CC", "label": "Water"},
+    # Mapping from indices to variable type
+    map_type = {
+        IndexWaterType: "water_type",
+        IndexVegetationType: "vegetation_type",
+        IndexPavementType: "pavement_type",
+        IndexBuildingType: "building_type",
+        ValuePlot: "none",
     }
 
-    # Create an empty raster with the same dimensions.
-    raster = np.full((n_y, n_x), IndexPlot.NONE, dtype=np.uint8)
+    # Helper functions to map types to unique ranges
+    def map_variable(data, name: Optional[str] = None, subtypes: bool = False):
+        """Map variable to unique range.
 
-    # Process building_type variable.
-    if "building_type" in nc_static.variables:
-        building_data = nc_static.variables["building_type"][:]
-        if building_data is not None:
-            raster = np.where(
-                (building_data[:] >= 0) & (building_data[:] <= 6), IndexPlot.BUILDINGS, raster
-            )
-    else:
-        logger.debug("building_type does not exist in data.variables.")
+        This function maps the given data to a unique range based on the type of the variable. For
+        example, a IndexWaterType.lake with value 1 would be mapped to 101 if detailed is True and
+        to 100 if False. This ensures that all classes have unique values if detailed is True or
+        have the same base value if False. Only the vegetation types that are not considered
+        vegetation are always separated.
 
-    # Process pavement_type variable.
-    if "pavement_type" in nc_static.variables:
-        pavement_data = nc_static.variables["pavement_type"][:]
-        if pavement_data is not None:
-            raster = np.where(
-                (pavement_data[:] >= 0) & (pavement_data[:] <= 15), IndexPlot.PAVEMENT, raster
-            )
-    else:
-        logger.debug("pavement_type does not exist in data.variables.")
+        Args:
+            data: Values to map.
+            name: Variable type name. Defaults to None.
+            subtypes: Whether to include subtypes in the mapping. Defaults to False.
 
-    # Process vegetation_type variable.
-    if "vegetation_type" in nc_static.variables:
-        vegetation_data = nc_static.variables["vegetation_type"][:]
-        if vegetation_data is not None:
-            raster = np.where(
-                (vegetation_data[:] >= 0) & (vegetation_data[:] <= 18),
-                IndexPlot.VEGETATION_FLAT,
-                raster,
-            )
-    else:
-        logger.debug("vegetation_type does not exist in data.variables.")
+        Raises:
+            ValueError: If name is not given for mapping variable.
 
-    # Process LAD/BAD variables for resolved vegetation.
+        Returns:
+            Mapped values.
+        """
+        # Try to get the variable name from the map_type when supplying an IntEnum
+        # (e.g. IndexWaterType.lake).
+        if isinstance(data, IntEnum):
+            name = map_type[type(data)]
+
+        if name is None:
+            raise ValueError("name not given for mapping variable.")
+
+        if subtypes:
+            # Each surface type is mapped to a unique value.
+            return getattr(ValuePlot, name).value + data
+        else:
+            # Each surface type is mapped to the same base value except for the non-vegetation
+            # vegetation types.
+            if name == "vegetation_type":
+                if isinstance(data, ma.MaskedArray):
+                    return ma.where(
+                        ma_isin(data, VT_NO_PLANTS),
+                        getattr(ValuePlot, name).value + data,
+                        getattr(ValuePlot, name).value,
+                    )
+                elif data in VT_NO_PLANTS:
+                    return getattr(ValuePlot, name).value + data
+            return getattr(ValuePlot, name).value
+
+    # Colors and labels dictionary. The keys are the mapped values, the values are dictionary of
+    # color and label.
+    dict_plot = {}
+    for surface_colors in COLORS.values():
+        for surface_type, color in surface_colors.items():
+            mapped_value = map_variable(surface_type, subtypes=True)
+
+            # Generate nice labels.
+            label = surface_type.name.capitalize()
+            # Replace underscores between numbers (e.g., 1951_2000 -> 1951-2000)
+            label = re.sub(r"(?<=\d)_(?=\d)", "-", label)
+            # Replace remaining underscores with spaces
+            label = label.replace("_", " ")
+
+            dict_plot[mapped_value] = {
+                "color": color,
+                "label": label,
+            }
+
+    # Update the base labels, which are not covered by the above rule.
+    dict_plot[ValuePlot.vegetation_resolved]["label"] = "Vegetation (resolved)"
+    dict_plot[ValuePlot.building_type]["label"] = "Buildings"
+    dict_plot[ValuePlot.pavement_type]["label"] = "Pavement"
+    dict_plot[ValuePlot.vegetation_type]["label"] = "Vegetation (flat)"
+    dict_plot[ValuePlot.water_type]["label"] = "Water"
+    if detailed:
+        dict_plot[ValuePlot.vegetation_resolved]["color"] = "#21522F"
+
+    # Create raster of surface types with their mapped values.
+    raster = np.full((n_y, n_x), ValuePlot.none, dtype=np.uint16)
+    for variable in ["building_type", "pavement_type", "vegetation_type", "water_type"]:
+        if variable in nc_static.variables:
+            data = nc_static.variables[variable][:]
+            if data is not None:
+                raster = np.where(
+                    ma.getmaskarray(data), raster, map_variable(data, variable, subtypes=detailed)
+                )
+        else:
+            logger.debug(f"{variable} does not exist in data.variables.")
+
+    # Overwrite the raster where resolved vegetation is.
     resolved_vegetation_present = np.full_like(raster, False)
     for variable_tree in ["lad", "bad"]:
         if variable_tree in nc_static.variables:
@@ -156,45 +240,43 @@ def plot_static(
             )
         else:
             logger.debug(f"{variable_tree} does not exist in data.variables.")
-    raster = np.where(resolved_vegetation_present, IndexPlot.VEGETATION_RESOLVED, raster)
-
-    # Process water_type variable.
-    if "water_type" in nc_static.variables:
-        water_data = nc_static.variables["water_type"][:]
-        if water_data is not None:
-            raster = np.where((water_data[:] >= 0) & (water_data[:] <= 6), IndexPlot.WATER, raster)
-    else:
-        logger.debug("water_type does not exist in data.variables.")
-
-    # Get the unique values from the raster.
-    unique_values = np.unique(raster)
+    raster = np.where(resolved_vegetation_present, ValuePlot.vegetation_resolved, raster)
 
     # Create a colormap and labels based on the combined dictionary.
+    unique_values = np.unique(raster)
     existing_colors = [dict_plot[val]["color"] for val in unique_values]
     existing_labels = [dict_plot[val]["label"] for val in unique_values]
-
-    # Create a colormap from the dictionary.
     cmap = colors.ListedColormap(existing_colors)
 
-    # Define the tick positions and labels dynamically.
-    tick_positions = unique_values
+    # Define the boundaries, tick positions and labels dynamically. Note that unique_values might
+    # not be continuous.
+    if len(unique_values) == 1:
+        boundaries = np.array([unique_values[0] - 0.5, unique_values[0] + 0.5])
+        tick_positions = unique_values
+    else:
+        boundaries = np.append(unique_values - 0.5, unique_values[-1] + 0.5)
+        tick_positions = 0.5 * (boundaries[1:] + boundaries[:-1])
+    norm = colors.BoundaryNorm(boundaries, cmap.N)
     tick_labels = existing_labels
-
-    # Define boundaries for the colorbar.
-    boundaries = np.arange(min(unique_values) - 0.5, max(unique_values) + 1.5, 1)
 
     # Plot the raster with dynamic settings.
     plt.figure(figsize=(width, height))
     if extent is None:
-        plt.imshow(raster, cmap=cmap, origin="lower")
+        plt.imshow(raster, cmap=cmap, norm=norm, origin="lower", interpolation="nearest")
     else:
-        plt.imshow(raster, cmap=cmap, origin="lower", extent=extent)
+        plt.imshow(
+            raster, cmap=cmap, norm=norm, origin="lower", extent=extent, interpolation="nearest"
+        )
+
+    # Ticks need to be set for the range of the colors but are visually removed.
     cbar = plt.colorbar(ticks=tick_positions, label="Surface types", boundaries=boundaries)
     cbar.set_ticklabels(tick_labels)
+    cbar.ax.tick_params(axis="y", which="both", length=0)
+
     if title is not None:
         plt.title(title)
-    plt.xlabel(f"x {unit_axes}")
-    plt.ylabel(f"y {unit_axes}")
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
     if output:
         plt.savefig(output, dpi=300, bbox_inches="tight")
         logger.info(f"Plot saved to {output}.")
@@ -210,6 +292,8 @@ def static_driver_statistics(
     plot_title: Optional[str] = None,
     plot_width: Optional[float] = None,
     plot_height: Optional[float] = None,
+    detailed_plot: bool = False,
+    geo_referenced: bool = False,
 ) -> None:
     """Calculate and print statistics of a static driver netCDF file.
 
@@ -220,6 +304,8 @@ def static_driver_statistics(
         plot_title: Plot title. Defaults to None.
         plot_width: Plot width. Defaults to None.
         plot_height: Plot height. Defaults to None.
+        detailed_plot: If True, show detailed surface types instead of basic categories.
+        geo_referenced: If True, use georeferenced UTM coordinates.
     """
     nc_static = Dataset(nc_file, mode="r")
 
@@ -482,7 +568,7 @@ def static_driver_statistics(
             )
         if result_tree["bad"] is not None:
             logger.info_indent(
-                f"Total basel area: {result_tree['bad']['sum'].sum():{len_max_total_sum}.0f} m²",
+                f"Total basal area: {result_tree['bad']['sum'].sum():{len_max_total_sum}.0f} m²",
             )
 
         def tree_variable_table_str(dict_tree: TreeStats) -> List[List[str]]:
@@ -525,7 +611,7 @@ def static_driver_statistics(
             i += 3
         if result_tree["lad"] is not None:
             len_columns = max_lengths[i] + max_lengths[i + 1] + max_lengths[i + 2] + 6
-            header += f" | {'Basel area density (BAD)':^{len_columns}}"
+            header += f" | {'Basal area density (BAD)':^{len_columns}}"
 
         # Calculate the number of rows, assuming all columns have the same number of rows.
         num_rows = len(table[0])
@@ -549,10 +635,12 @@ def static_driver_statistics(
         plot_static(
             nc_static,
             show=show_plot,
+            detailed=detailed_plot,
             output=Path(plot_file) if plot_file else None,
             title=plot_title,
             width=plot_width,
             height=plot_height,
+            geo_referenced=geo_referenced,
         )
 
     # Close the NetCDF file.

@@ -30,7 +30,8 @@
                                     1.0, ! piecewise temp gradients
     pt_vertical_gradient_level =    0.0,
                                   800.0, ! height level of temp gradients
-    psolver		       = 'multigrid',
+    psolver                    = 'multigrid',
+    masking_method             = .F.,
 
 
 !
@@ -60,8 +61,6 @@
     disturbance_energy_limit   = 0.01,   ! upper limit for perturbation energy
 
     data_output_2d_on_each_pe  = .FALSE., ! don't do 2D output on each MPI rank
-    enable_openacc             = .FALSE., ! don't do 2D output on each MPI rank
-    enable_multigrid_openacc   = .TRUE., ! don't do 2D output on each MPI rank
 
 !
 !-- data output

@@ -12,12 +12,10 @@ environments:
     include:
       netcdf: "-I /usr/include"
       fftw: "-I /usr/include"
-      rrtmg: "-I ${HOME}/opt/rrtmg/gnu/include"
       tenstream: "TENSTREAM_CFLAGS_FROM_PKGCONFIG"
     lib:
       netcdf: "/usr/lib/x86_64-linux-gnu/libnetcdff.so"
       fftw: "/usr/lib/x86_64-linux-gnu/libfftw3.so"
-      rrtmg: "${HOME}/opt/rrtmg/gnu/lib/librrtmg.so"
       tenstream: "TENSTREAM_LDFLAGS_FROM_PKGCONFIG"
 
   NVIDIA:

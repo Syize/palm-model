@@ -100,7 +100,7 @@
 
 #if defined( _OPENACC )
     USE control_parameters,                                                                        &
-        ONLY: enable_lsm_openacc
+        ONLY: enable_openacc
 #endif
 
     USE cpulog,                                                                                    &
@@ -620,6 +620,7 @@
 !
 !-- Public prognostic variables
     PUBLIC m_soil,                                                                                 &
+           m_soil_p,                                                                               &
            t_soil
 
 !
@@ -732,10 +733,8 @@
     INTEGER(iwp) :: koff   !< offset index x-direction indicating location of soil grid point
     INTEGER(iwp) :: m      !< running index surface elements
 
-    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-    !$ACC COPY(surf_lsm, surf_lsm%ns, surf_lsm%i, surf_lsm%j, surf_lsm%k) &
-    !$ACC COPY(surf_lsm%ioff, surf_lsm%joff, surf_lsm%koff, pt) &
-    !$ACC PRIVATE(i, j, k, ioff, joff, koff) IF(enable_lsm_openacc)
+    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) &
+    !$ACC PRIVATE(i, j, k, ioff, joff, koff) IF(enable_openacc)
     DO  m = 1, surf_lsm%ns
        ioff = surf_lsm%ioff(m)
        joff = surf_lsm%joff(m)
@@ -749,10 +748,8 @@
 !
 !-- In case of humidity, set boundary conditions also for q and vpt.
     IF ( humidity )  THEN
-       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-       !$ACC COPY(surf_lsm, surf_lsm%ns, surf_lsm%i, surf_lsm%j, surf_lsm%k) &
-       !$ACC COPY(surf_lsm%ioff, surf_lsm%joff, surf_lsm%koff, q, vpt) &
-       !$ACC PRIVATE(i, j, k, ioff, joff, koff) IF(enable_lsm_openacc)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) &
+       !$ACC PRIVATE(i, j, k, ioff, joff, koff) IF(enable_openacc)
        DO  m = 1, surf_lsm%ns
           ioff = surf_lsm%ioff(m)
           joff = surf_lsm%joff(m)
@@ -763,7 +760,7 @@
           q(k+koff,j+joff,i+ioff)   = q(k,j,i)
           vpt(k+koff,j+joff,i+ioff) = vpt(k,j,i)
        ENDDO
-    !$ACC END PARALLEL LOOP
+       !$ACC END PARALLEL LOOP
     ENDIF
 
  END SUBROUTINE lsm_boundary_condition
@@ -1581,22 +1578,17 @@
     REAL(wp) ::  tend            !< tendency
     REAL(wp) ::  ueff            !< limited near-surface wind speed - used for calculation of resistance
 
-    REAL(wp), DIMENSION(1:surf_lsm%ns) ::  e_s !< water vapour saturation pressure
-    REAL(wp), DIMENSION(1:surf_lsm%ns) ::  f1  !< resistance correction term 1
-    REAL(wp), DIMENSION(1:surf_lsm%ns) ::  f2  !< resistance correction term 2
-    REAL(wp), DIMENSION(1:surf_lsm%ns) ::  f3  !< resistance correction term 3
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  e_s  !< water vapour saturation pressure
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  f1   !< resistance correction term 1
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  f2   !< resistance correction term 2
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  f3   !< resistance correction term 3
 
-    TYPE(surf_type_lsm), POINTER ::  surf_m_liq
-    TYPE(surf_type_lsm), POINTER ::  surf_m_liq_p
-    TYPE(surf_type_lsm), POINTER ::  surf_t_surface
-    TYPE(surf_type_lsm), POINTER ::  surf_t_surface_p
-    TYPE(surf_type_lsm), POINTER ::  surf_tm_liq_m
-    TYPE(surf_type_lsm), POINTER ::  surf_tt_surface_m
 
-    TYPE(surf_type_lsm), POINTER ::  surf_m_soil
-    TYPE(surf_type_lsm), POINTER ::  surf_t_soil
-
-    TYPE(surf_type), POINTER  ::  surf  !< surface-date type variable
+    ALLOCATE( e_s(1:surf_lsm%ns),                                                                  &
+              f1(1:surf_lsm%ns),                                                                   &
+              f2(1:surf_lsm%ns),                                                                   &
+              f3(1:surf_lsm%ns) )
+    !$ACC DATA CREATE(e_s,f1,f2,f3) IF(enable_openacc)
 
     force_radiation_call_l_v = .FALSE.
 
@@ -1607,36 +1599,23 @@
 
     runge_l = ( timestep_scheme(1:5) == 'runge' )
     rrtmg_l = ( radiation_scheme == 'rrtmg' )
-
-    surf              => surf_lsm
-    surf_t_surface    => t_surface
-    surf_t_surface_p  => t_surface_p
-    surf_tt_surface_m => tt_surface_m
-    surf_m_liq        => m_liq
-    surf_m_liq_p      => m_liq_p
-    surf_tm_liq_m     => tm_liq_m
-    surf_m_soil       => m_soil
-    surf_t_soil       => t_soil
 !
 !-- Compute aerodynamic resistance.
     !$OMP PARALLEL DO PRIVATE (m, i, j, k, ueff ) SCHEDULE (STATIC)
-    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-    !$ACC COPY(u, v, w, surf, surf%i, surf%j, surf%k) &
-    !$ACC COPY(surf%upward, surf%r_a, surf%pt1, surf%pt_surface) &
-    !$ACC COPY(surf%ns, surf%ts, surf%us, surf%z0) IF(enable_lsm_openacc)
-    DO  m = 1, surf%ns
+    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+    DO  m = 1, surf_lsm%ns
 
-       i = surf%i(m)
-       j = surf%j(m)
-       k = surf%k(m)
+       i = surf_lsm%i(m)
+       j = surf_lsm%j(m)
+       k = surf_lsm%k(m)
 !
 !--    Calculate aerodyamic resistance. At upward facing surfaces, use MOST and the vertical
 !--    temperature gradient.
-       IF ( surf%upward(m)  .OR.  .NOT. aero_resist_kray )  THEN
+       IF ( surf_lsm%upward(m)  .OR.  .NOT. aero_resist_kray )  THEN
 !
 !--       Dimension of r_a is s/m: K / ( K * m / s )
-          surf%r_a(m) = ABS( ( surf%pt1(m) - surf%pt_surface(m) ) /                                &
-                             ( surf%ts(m) * surf%us(m) + 1.0E-20_wp ) )
+          surf_lsm%r_a(m) = ABS( ( surf_lsm%pt1(m) - surf_lsm%pt_surface(m) ) /                    &
+                                 ( surf_lsm%ts(m) * surf_lsm%us(m) + 1.0E-20_wp ) )
 !
 !--    At surfaces with other orientation, use the formulation used in the TUF3d model.
 !--    (Krayenhoff & Voogt, 2006). Note that this formulation is the equivalent to the
@@ -1649,53 +1628,49 @@
           ueff = MAX( SQRT(  ( ( u(k,j,i) + u(k,j,i+1) ) * 0.5_wp )**2 +                           &
                              ( ( v(k,j,i) + v(k,j+1,i) ) * 0.5_wp )**2 +                           &
                              ( ( w(k,j,i) + w(k-1,j,i) ) * 0.5_wp )**2 ),                          &
-                      1.0_wp / 4.2_wp * ( 4.0_wp / ( surf%z0(m) * 1000.0_wp ) - 11.8_wp ), 0.1_wp )
+                   1.0_wp / 4.2_wp * ( 4.0_wp / ( surf_lsm%z0(m) * 1000.0_wp ) - 11.8_wp ), 0.1_wp )
 !
 !--       Dimension of r_a is s/m with denominator in W / ( m2 K )
-          surf%r_a(m) = rho_cp / ( surf%z0(m) * 1000.0_wp * ( 11.8_wp + 4.2_wp * ueff ) - 4.0_wp )
+          surf_lsm%r_a(m) = rho_cp /                                                               &
+                            ( surf_lsm%z0(m) * 1000.0_wp * ( 11.8_wp + 4.2_wp * ueff ) - 4.0_wp )
        ENDIF
 
 !
 !--    Make sure that the resistance does not drop to zero for neutral stratification. Also, set a
 !--    maximum resistance to avoid the breakdown of MOST for locations with zero wind speed.
-       IF ( surf%r_a(m) <   1.0_wp )  surf%r_a(m) =   1.0_wp
-       IF ( surf%r_a(m) > 300.0_wp )  surf%r_a(m) = 300.0_wp
+       IF ( surf_lsm%r_a(m) <   1.0_wp )  surf_lsm%r_a(m) =   1.0_wp
+       IF ( surf_lsm%r_a(m) > 300.0_wp )  surf_lsm%r_a(m) = 300.0_wp
     ENDDO
     !$ACC END PARALLEL LOOP
 
 !
 !-- Compute canopy and soil resistance including corresponding correction terms.
     !$OMP PARALLEL DO PRIVATE (e, m, m_min, m_total) SCHEDULE (STATIC)
-    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-    !$ACC COPY(surf, surf%ns, surf%rad_sw_in, surf%root_fr, surf%m_wilt) &
-    !$ACC COPY(surf%m_fc, surf%g_d, surf%qv1, surf%r_canopy, surf%r_canopy_min, surf%lai) &
-    !$ACC COPY(surf%c_veg, surf%m_res, surf%r_soil, surf%r_soil_min) &
-    !$ACC COPY(surf_t_surface, surf_t_surface%var_1d) &
-    !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-    !$ACC COPY(f1, f2, f3, e_s) IF(enable_lsm_openacc)
-    DO  m = 1, surf%ns
+    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+    DO  m = 1, surf_lsm%ns
 !
 !--    Calculate canopy resistance r_canopy f1-f3 here are defined as 1/f1-f3 as in
 !--    ECMWF documentation.
 !--    f1: correction for incoming shortwave radiation (stomata close at night).
-       f1(m) = MIN( 1.0_wp, ( 0.004_wp * surf%rad_sw_in(m) + 0.05_wp ) /                           &
-                                 ( 0.81_wp * ( 0.004_wp * surf%rad_sw_in(m) + 1.0_wp) ) )
+       f1(m) = MIN( 1.0_wp, ( 0.004_wp * surf_lsm%rad_sw_in(m) + 0.05_wp ) /                       &
+                            ( 0.81_wp * ( 0.004_wp * surf_lsm%rad_sw_in(m) + 1.0_wp) ) )
 
 !
 !--    f2: correction for soil moisture availability to plants (the integrated soil moisture must
 !--        thus be considered here)
        m_total = 0.0_wp
        DO  ks = nzb_soil, nzt_soil
-           m_total = m_total + surf%root_fr(ks,m) *                                                &
-                     MAX( surf_m_soil%var_2d(ks,m), surf%m_wilt(ks,m) )
+           m_total = m_total + surf_lsm%root_fr(ks,m) *                                            &
+                               MAX( m_soil%var_2d(ks,m), surf_lsm%m_wilt(ks,m) )
        ENDDO
 !
 !--    The calculation of f2 is based on only one wilting point value for all soil layers. The value
 !--    at k=nzb_soil is used here as a proxy but might need refinement in the future.
-       IF ( m_total > surf%m_wilt(nzb_soil,m)  .AND.  m_total < surf%m_fc(nzb_soil,m) )  THEN
-          f2(m) = ( m_total - surf%m_wilt(nzb_soil,m) ) /                                          &
-                  ( surf%m_fc(nzb_soil,m) - surf%m_wilt(nzb_soil,m) )
-       ELSEIF ( m_total >= surf%m_fc(nzb_soil,m) )  THEN
+       IF ( m_total > surf_lsm%m_wilt(nzb_soil,m)  .AND.  m_total < surf_lsm%m_fc(nzb_soil,m) )    &
+       THEN
+          f2(m) = ( m_total - surf_lsm%m_wilt(nzb_soil,m) ) /                                      &
+                  ( surf_lsm%m_fc(nzb_soil,m) - surf_lsm%m_wilt(nzb_soil,m) )
+       ELSEIF ( m_total >= surf_lsm%m_fc(nzb_soil,m) )  THEN
           f2(m) = 1.0_wp
 !
 !--    f2 = 0 for very dry soils.
@@ -1705,14 +1680,14 @@
 !
 !--    Calculate water vapour pressure at saturation and convert to hPa.
 !--    The magnus formula is limited to temperatures up to 333.15 K to avoid negative values of q_s.
-       e_s(m) = 0.01_wp * magnus( MIN( surf_t_surface%var_1d(m), 333.15_wp ) )
+       e_s(m) = 0.01_wp * magnus( MIN( t_surface%var_1d(m), 333.15_wp ) )
 !
 !--    f3: correction for vapour pressure deficit.
-       IF ( surf%g_d(m) /= 0.0_wp )  THEN
+       IF ( surf_lsm%g_d(m) /= 0.0_wp )  THEN
 !
 !--       Calculate vapour pressure
-          e  = surf%qv1(m) * surface_pressure / ( surf%qv1(m) + rd_d_rv )
-          f3(m) = EXP ( - surf%g_d(m) * ( e_s(m) - e ) )
+          e  = surf_lsm%qv1(m) * surface_pressure / ( surf_lsm%qv1(m) + rd_d_rv )
+          f3(m) = EXP ( -surf_lsm%g_d(m) * ( e_s(m) - e ) )
        ELSE
           f3(m) = 1.0_wp
        ENDIF
@@ -1720,29 +1695,28 @@
 !--    Calculate canopy resistance. In case that c_veg is 0 (bare soils),
 !--    this calculation is obsolete, as r_canopy is not used below.
 !--    To do: check for very dry soil -> r_canopy goes to infinity.
-       surf%r_canopy(m) = surf%r_canopy_min(m) /                                                   &
-                          ( surf%lai(m) * f1(m) * f2(m) * f3(m) + 1.0E-20_wp )
+       surf_lsm%r_canopy(m) = surf_lsm%r_canopy_min(m) /                                           &
+                              ( surf_lsm%lai(m) * f1(m) * f2(m) * f3(m) + 1.0E-20_wp )
 
 !
 !--    Calculate bare soil resistance r_soil.
-       m_min = surf%c_veg(m) * surf%m_wilt(nzb_soil,m) +                                           &
-               ( 1.0_wp - surf%c_veg(m) ) * surf%m_res(nzb_soil,m)
+       m_min = surf_lsm%c_veg(m) * surf_lsm%m_wilt(nzb_soil,m) +                                   &
+               ( 1.0_wp - surf_lsm%c_veg(m) ) * surf_lsm%m_res(nzb_soil,m)
 !
 !--    Compute soil resistance.
-       f2(m) = ( surf_m_soil%var_2d(nzb_soil,m) - m_min ) / ( surf%m_fc(nzb_soil,m) - m_min )
+       f2(m) = ( m_soil%var_2d(nzb_soil,m) - m_min ) / ( surf_lsm%m_fc(nzb_soil,m) - m_min )
        f2(m) = MAX( f2(m), 1.0E-20_wp )
        f2(m) = MIN( f2(m), 1.0_wp     )
 
-       surf%r_soil(m) = surf%r_soil_min(m) / f2(m)
+       surf_lsm%r_soil(m) = surf_lsm%r_soil_min(m) / f2(m)
     ENDDO
     !$ACC END PARALLEL LOOP
 
 !
 !-- Calculate net radiation radiation without longwave outgoing flux because it has a dependency
 !-- on surface temperature and thus enters the prognostic equations directly.
-    !$ACC KERNELS DEFAULT(NONE) &
-    !$ACC COPY(surf, surf%rad_net_l, surf%rad_sw_in, surf%rad_sw_out, surf%rad_lw_in) IF(enable_lsm_openacc)
-    surf%rad_net_l = surf%rad_sw_in - surf%rad_sw_out + surf%rad_lw_in
+    !$ACC KERNELS DEFAULT(PRESENT)  IF(enable_openacc)
+    surf_lsm%rad_net_l = surf_lsm%rad_sw_in - surf_lsm%rad_sw_out + surf_lsm%rad_lw_in
     !$ACC END KERNELS
 
     !$OMP PARALLEL DO PRIVATE (m, i, j, k, lambda_h_sat, ke, lambda_soil, lambda_surface,          &
@@ -1750,35 +1724,21 @@
     !$OMP&                     f_shf, f_qsws, e_s_dt, dq_s_dt, coef_1, coef_2, tend,               &
     !$OMP&                     i_off, j_off, k_off ) SCHEDULE (STATIC)
 
-    !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-    !$ACC COPY(surf, surf%koff, surf%joff, surf%ioff, surf%i, surf%j, surf%k, surf%upward, surf%downward) &
-    !$ACC COPY(surf%vegetation_surface, surf%m_sat, surf%lambda_surface_s, surf%lambda_surface_u) &
-    !$ACC COPY(surf%c_surface, surf%pavement_surface, surf%c_liq, surf%c_veg, surf%lai, surf%qv1) &
-    !$ACC COPY(surf%r_canopy, surf%r_soil, surf%water_surface, surf%r_a, surf%rad_net_l, surf%rad_lw_out_change_0) &
-    !$ACC COPY(surf%rad_lw_out, surf%pt1, surf%qsws, surf%qsws_veg, surf%qsws_soil, surf%qsws_liq, surf%qsws_agg) &
-    !$ACC COPY(surf%r_s, surf%pt_surface, surf%rad_net, surf%ghf, surf%shf, surf%shf_agg) &
-    !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-    !$ACC COPY(surf_m_liq, surf_m_liq%var_1d) &
-    !$ACC COPY(surf_m_liq_p, surf_m_liq_p%var_1d) &
-    !$ACC COPY(surf_t_surface, surf_t_surface%var_1d) &
-    !$ACC COPY(surf_t_surface_p, surf_t_surface_p%var_1d) &
-    !$ACC COPY(surf_t_soil, surf_t_soil%var_2d) &
-    !$ACC COPY(surf_tt_surface_m, surf_tt_surface_m%var_1d) &
-    !$ACC COPY(surf_tm_liq_m, surf_tm_liq_m%var_1d) &
-    !$ACC COPY(ddz_soil, e_s, tsc(2:3), exner, fr_urb, rad_lw_out) &
-    !$ACC COPY(dz_soil, prr, hyrho, force_radiation_call_l_v) IF(enable_lsm_openacc)
-    DO  m = 1, surf%ns
+    !$ACC PARALLEL LOOP GANG VECTOR &
+    !$ACC COPYIN(fr_urb,hyrho,prr) COPY(force_radiation_call_l_v,rad_lw_out) &
+    !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+    DO  m = 1, surf_lsm%ns
 !
 !--    Index offset of surface element point with respect to adjoining atmospheric grid point
-       k_off = surf%koff(m)
-       j_off = surf%joff(m)
-       i_off = surf%ioff(m)
+       k_off = surf_lsm%koff(m)
+       j_off = surf_lsm%joff(m)
+       i_off = surf_lsm%ioff(m)
 
-       i = surf%i(m)
-       j = surf%j(m)
-       k = surf%k(m)
+       i = surf_lsm%i(m)
+       j = surf_lsm%j(m)
+       k = surf_lsm%k(m)
 
-       horizontal = ( surf%upward(m)  .OR.  surf%downward(m) )
+       horizontal = ( surf_lsm%upward(m)  .OR.  surf_lsm%downward(m) )
 !
 !--    Define heat conductivity between surface and soil depending on surface type. For vegetation,
 !--    a skin layer parameterization is used. The new parameterization uses a combination of two
@@ -1790,13 +1750,13 @@
 !--    Moreover, the heat capacity is set. For bare soil the heat capacity is the capacity of the
 !--    uppermost soil layer, for pavement it is that of the material involved.
 !--    For vegetation type surfaces, the thermal conductivity of the soil is needed.
-       IF ( surf%vegetation_surface(m) )  THEN
+       IF ( surf_lsm%vegetation_surface(m) )  THEN
 
-          lambda_h_sat = lambda_h_sm**( 1.0_wp - surf%m_sat(nzb_soil,m) ) *                        &
-                         lambda_h_water**surf_m_soil%var_2d(nzb_soil,m)
+          lambda_h_sat = lambda_h_sm**( 1.0_wp - surf_lsm%m_sat(nzb_soil,m) ) *                    &
+                         lambda_h_water**m_soil%var_2d(nzb_soil,m)
 
-          ke = 1.0_wp + LOG10( MAX( 0.1_wp, surf_m_soil%var_2d(nzb_soil,m) /                       &
-                                            surf%m_sat(nzb_soil,m) ) )
+          ke = 1.0_wp + LOG10( MAX( 0.1_wp, m_soil%var_2d(nzb_soil,m) /                            &
+                                            surf_lsm%m_sat(nzb_soil,m) ) )
 
           lambda_soil = ( ke * ( lambda_h_sat - lambda_h_dry ) + lambda_h_dry ) *                  &
                         ddz_soil(nzb_soil) * 2.0_wp
@@ -1805,41 +1765,40 @@
 !--       When bare soil is set without a thermal conductivity (no skin layer), the heat capacity is
 !--       that of the soil layer, otherwise it is a combination of the conductivities from the skin
 !--       and the soil layer.
-          IF ( surf%lambda_surface_s(m) == 0.0_wp )  THEN
-            surf%c_surface(m) = ( rho_c_soil * ( 1.0_wp - surf%m_sat(nzb_soil,m) ) +               &
-                                  rho_c_water * surf_m_soil%var_2d(nzb_soil,m) ) *                 &
-                                  dz_soil(nzb_soil) * 0.5_wp
+          IF ( surf_lsm%lambda_surface_s(m) == 0.0_wp )  THEN
+            surf_lsm%c_surface(m) = ( rho_c_soil * ( 1.0_wp - surf_lsm%m_sat(nzb_soil,m) ) +       &
+                                      rho_c_water * m_soil%var_2d(nzb_soil,m) ) *                  &
+                                    dz_soil(nzb_soil) * 0.5_wp
             lambda_surface = lambda_soil
 
-          ELSEIF ( surf_t_surface%var_1d(m) >= surf_t_soil%var_2d(nzb_soil,m) )                    &
-          THEN
-             lambda_surface = surf%lambda_surface_s(m) * lambda_soil /                             &
-                              ( surf%lambda_surface_s(m) + lambda_soil )
+          ELSEIF ( t_surface%var_1d(m) >= t_soil%var_2d(nzb_soil,m) )  THEN
+             lambda_surface = surf_lsm%lambda_surface_s(m) * lambda_soil /                         &
+                              ( surf_lsm%lambda_surface_s(m) + lambda_soil )
           ELSE
-             lambda_surface = surf%lambda_surface_u(m) * lambda_soil /                             &
-                              ( surf%lambda_surface_u(m) + lambda_soil )
+             lambda_surface = surf_lsm%lambda_surface_u(m) * lambda_soil /                         &
+                              ( surf_lsm%lambda_surface_u(m) + lambda_soil )
           ENDIF
        ELSE
-          lambda_surface = surf%lambda_surface_s(m)
+          lambda_surface = surf_lsm%lambda_surface_s(m)
        ENDIF
 
 !
 !--    Set heat capacity of the skin/surface. It is ususally zero when a skin layer is used, and
 !--    non-zero otherwise.
-       c_surface_tmp = surf%c_surface(m)
+       c_surface_tmp = surf_lsm%c_surface(m)
 !
 !--    Calculate the maximum possible liquid water amount on plants and bare surface. For vegetated
 !--    surfaces, a maximum depth of 0.2 mm is assumed, while paved surfaces might hold up 1 mm of
 !--    water. The liquid water fraction for paved surfaces is calculated after Masson (2000)
 !--    (TEB model) and originates from Noilhan & Planton (1989), while the ECMWF formulation is
 !--    used for vegetated surfaces and bare soils.
-       IF ( surf%pavement_surface(m) )  THEN
+       IF ( surf_lsm%pavement_surface(m) )  THEN
           m_liq_max = m_max_depth * 5.0_wp
-          surf%c_liq(m) = MIN( 1.0_wp, ( surf_m_liq%var_1d(m) / m_liq_max )**0.67 )
+          surf_lsm%c_liq(m) = MIN( 1.0_wp, ( m_liq%var_1d(m) / m_liq_max )**0.67 )
        ELSE
-          m_liq_max = m_max_depth * ( surf%c_veg(m) * surf%lai(m) +                                &
-                      ( 1.0_wp - surf%c_veg(m) ) )
-          surf%c_liq(m) = MIN( 1.0_wp, surf_m_liq%var_1d(m) / m_liq_max )
+          m_liq_max = m_max_depth * ( surf_lsm%c_veg(m) * surf_lsm%lai(m) +                        &
+                                                          ( 1.0_wp - surf_lsm%c_veg(m) ) )
+          surf_lsm%c_liq(m) = MIN( 1.0_wp, m_liq%var_1d(m) / m_liq_max )
        ENDIF
 !
 !--    Calculate saturation water vapor mixing ratio.
@@ -1847,39 +1806,37 @@
 !
 !--    In case of dewfall, set evapotranspiration to zero.
 !--    All super-saturated water is then removed from the air.
-       IF ( humidity  .AND.  q_s <= surf%qv1(m) )  THEN
-          surf%r_canopy(m) = 0.0_wp
-          surf%r_soil(m)   = 0.0_wp
+       IF ( humidity  .AND.  q_s <= surf_lsm%qv1(m) )  THEN
+          surf_lsm%r_canopy(m) = 0.0_wp
+          surf_lsm%r_soil(m)   = 0.0_wp
        ENDIF
 !
 !--    Calculate coefficients for the total evapotranspiration.
 !--    In case of water surface, set vegetation and soil fluxes to zero.
 !--    For pavements, only evaporation of liquid water is possible.
-       IF ( surf%water_surface(m) )  THEN
+       IF ( surf_lsm%water_surface(m) )  THEN
           f_qsws_veg  = 0.0_wp
           f_qsws_soil = 0.0_wp
-          f_qsws_liq  = rho_lv / surf%r_a(m)
-       ELSEIF ( surf%pavement_surface(m) )  THEN
+          f_qsws_liq  = rho_lv / surf_lsm%r_a(m)
+       ELSEIF ( surf_lsm%pavement_surface(m) )  THEN
           f_qsws_veg  = 0.0_wp
           f_qsws_soil = 0.0_wp
-          f_qsws_liq  = rho_lv * surf%c_liq(m) / surf%r_a(m)
+          f_qsws_liq  = rho_lv * surf_lsm%c_liq(m) / surf_lsm%r_a(m)
        ELSE
-          f_qsws_veg  = rho_lv * surf%c_veg(m) *                                                   &
-                            ( 1.0_wp        - surf%c_liq(m)  ) /                                   &
-                            ( surf%r_a(m) + surf%r_canopy(m) )
-          f_qsws_soil = rho_lv * (1.0_wp    - surf%c_veg(m)  )                                     &
-                               * (1.0_wp    - surf%c_liq(m)  ) /                                   &
-                            ( surf%r_a(m) + surf%r_soil(m)   )
-          f_qsws_liq  = rho_lv * surf%c_liq(m) / surf%r_a(m)
+          f_qsws_veg  = rho_lv * surf_lsm%c_veg(m) * ( 1.0_wp          - surf_lsm%c_liq(m)    ) /  &
+                                                     ( surf_lsm%r_a(m) + surf_lsm%r_canopy(m) )
+          f_qsws_soil = rho_lv * ( 1.0_wp - surf_lsm%c_veg(m) ) * ( 1.0_wp - surf_lsm%c_liq(m) ) / &
+                                 ( surf_lsm%r_a(m) + surf_lsm%r_soil(m) )
+          f_qsws_liq  = rho_lv * surf_lsm%c_liq(m) / surf_lsm%r_a(m)
        ENDIF
 
-       f_shf  = rho_cp / surf%r_a(m)
+       f_shf  = rho_cp / surf_lsm%r_a(m)
        f_qsws = f_qsws_veg + f_qsws_soil + f_qsws_liq
 !
 !--    Calculate derivative of q_s for Taylor series expansion
-       e_s_dt = e_s(m) * ( 17.62_wp / ( surf_t_surface%var_1d(m) -  29.65_wp ) -                   &
-                           17.62_wp * ( surf_t_surface%var_1d(m) - 273.15_wp ) /                   &
-                           ( surf_t_surface%var_1d(m) - 29.65_wp)**2 )
+       e_s_dt = e_s(m) * ( 17.62_wp / ( t_surface%var_1d(m) -  29.65_wp ) -                        &
+                           17.62_wp * ( t_surface%var_1d(m) - 273.15_wp ) /                        &
+                           ( t_surface%var_1d(m) - 29.65_wp )**2 )
 
        dq_s_dt = rd_d_rv * e_s_dt / ( surface_pressure - e_s_dt )
 
@@ -1888,52 +1845,51 @@
        IF ( humidity )  THEN
 !
 !--       Numerator of the prognostic equation
-          coef_1 = surf%rad_net_l(m) + surf%rad_lw_out_change_0(m) * surf_t_surface%var_1d(m)      &
-                   - surf%rad_lw_out(m) + f_shf * surf%pt1(m)                                      &
-                   + f_qsws * ( surf%qv1(m) - q_s + dq_s_dt * surf_t_surface%var_1d(m) )           &
-                   + lambda_surface * surf_t_soil%var_2d(nzb_soil,m)
+          coef_1 = surf_lsm%rad_net_l(m) +                                                         &
+                   surf_lsm%rad_lw_out_change_0(m) * t_surface%var_1d(m) -                         &
+                   surf_lsm%rad_lw_out(m) + f_shf * surf_lsm%pt1(m) +                              &
+                   f_qsws * ( surf_lsm%qv1(m) - q_s + dq_s_dt * t_surface%var_1d(m) ) +            &
+                   lambda_surface * t_soil%var_2d(nzb_soil,m)
 
 !
 !--       Denominator of the prognostic equation
-          coef_2 = surf%rad_lw_out_change_0(m) + f_qsws * dq_s_dt + lambda_surface                 &
-                   + f_shf / exner(nzb)
+          coef_2 = surf_lsm%rad_lw_out_change_0(m) + f_qsws * dq_s_dt + lambda_surface +           &
+                   f_shf / exner(nzb)
        ELSE
 !
 !--       Numerator of the prognostic equation
-          coef_1 = surf%rad_net_l(m) + surf%rad_lw_out_change_0(m) * surf_t_surface%var_1d(m)      &
-                   - surf%rad_lw_out(m) + f_shf * surf%pt1(m)                                      &
-                   + lambda_surface * surf_t_soil%var_2d(nzb_soil,m)
+          coef_1 = surf_lsm%rad_net_l(m) +                                                         &
+                   surf_lsm%rad_lw_out_change_0(m) * t_surface%var_1d(m) -                         &
+                   surf_lsm%rad_lw_out(m) + f_shf * surf_lsm%pt1(m) +                              &
+                   lambda_surface * t_soil%var_2d(nzb_soil,m)
 !
 !--       Denominator of the prognostic equation
-          coef_2 = surf%rad_lw_out_change_0(m) + lambda_surface + f_shf / exner(nzb)
+          coef_2 = surf_lsm%rad_lw_out_change_0(m) + lambda_surface + f_shf / exner(nzb)
 
        ENDIF
 
        tend = 0.0_wp
 !
 !--    Implicit solution when the surface layer has no heat capacity, otherwise use RK3 scheme.
-       surf_t_surface_p%var_1d(m) = ( coef_1 * dt_3d * tsc(2) + c_surface_tmp *                    &
-                                      surf_t_surface%var_1d(m) ) / ( c_surface_tmp + coef_2 *      &
-                                                                     dt_3d * tsc(2) )
+       t_surface_p%var_1d(m) = ( coef_1 * dt_3d * tsc(2) + c_surface_tmp * t_surface%var_1d(m) ) / &
+                               ( c_surface_tmp + coef_2 * dt_3d * tsc(2) )
 !
 !--    Add RK3 term
        IF ( c_surface_tmp /= 0.0_wp )  THEN
 
-          surf_t_surface_p%var_1d(m) = surf_t_surface_p%var_1d(m) + dt_3d * tsc(3) *               &
-                                                                    surf_tt_surface_m%var_1d(m)
+          t_surface_p%var_1d(m) = t_surface_p%var_1d(m) + dt_3d * tsc(3) * tt_surface_m%var_1d(m)
 
 !
 !--       Calculate true tendency
-          tend = ( surf_t_surface_p%var_1d(m) - surf_t_surface%var_1d(m) -                         &
-                   dt_3d * tsc(3) * surf_tt_surface_m%var_1d(m) ) / ( dt_3d  * tsc(2) )
+          tend = ( t_surface_p%var_1d(m) - t_surface%var_1d(m) -                                   &
+                   dt_3d * tsc(3) * tt_surface_m%var_1d(m) ) / ( dt_3d  * tsc(2) )
 !
 !--       Calculate t_surface tendencies for the next Runge-Kutta step
           IF ( runge_l )  THEN
              IF ( intermediate_timestep_count == 1 )  THEN
-                surf_tt_surface_m%var_1d(m) = tend
+                tt_surface_m%var_1d(m) = tend
              ELSEIF ( intermediate_timestep_count < intermediate_timestep_count_max )  THEN
-                surf_tt_surface_m%var_1d(m) = -9.5625_wp * tend +                                  &
-                                               5.3125_wp * surf_tt_surface_m%var_1d(m)
+                tt_surface_m%var_1d(m) = -9.5625_wp * tend + 5.3125_wp * tt_surface_m%var_1d(m)
              ENDIF
           ENDIF
        ENDIF
@@ -1945,27 +1901,26 @@
 !--    used here is just a first guess. This method should be revised in the future as tests have
 !--    shown that the threshold is often reached, when no oscillations would occur (causes immense
 !--    computing time for the radiation code).
-       IF ( ABS( surf_t_surface_p%var_1d(m) - surf_t_surface%var_1d(m) ) > 0.2_wp  .AND.           &
+       IF ( ABS( t_surface_p%var_1d(m) - t_surface%var_1d(m) ) > 0.2_wp  .AND.                     &
             unscheduled_radiation_calls )  THEN
           force_radiation_call_l_v(m) = .TRUE.
        ENDIF
 
-       surf%pt_surface(m) = surf_t_surface_p%var_1d(m) / exner(nzb)
+       surf_lsm%pt_surface(m) = t_surface_p%var_1d(m) / exner(nzb)
 !
 !--    Calculate fluxes
-       surf%rad_net_l(m) = surf%rad_net_l(m)                                                       &
-                           + surf%rad_lw_out_change_0(m) * surf_t_surface%var_1d(m)                &
-                           - surf%rad_lw_out(m)                                                    &
-                           - surf%rad_lw_out_change_0(m) * surf_t_surface_p%var_1d(m)
+       surf_lsm%rad_net_l(m) = surf_lsm%rad_net_l(m) +                                             &
+                               surf_lsm%rad_lw_out_change_0(m) * t_surface%var_1d(m) -             &
+                               surf_lsm%rad_lw_out(m) -                                            &
+                               surf_lsm%rad_lw_out_change_0(m) * t_surface_p%var_1d(m)
 
-       surf%rad_net(m) = surf%rad_net_l(m)
-       surf%rad_lw_out(m) = surf%rad_lw_out(m) + surf%rad_lw_out_change_0(m) *                     &
-                            ( surf_t_surface_p%var_1d(m) - surf_t_surface%var_1d(m) )
+       surf_lsm%rad_net(m) = surf_lsm%rad_net_l(m)
+       surf_lsm%rad_lw_out(m) = surf_lsm%rad_lw_out(m) + surf_lsm%rad_lw_out_change_0(m) *         &
+                                ( t_surface_p%var_1d(m) - t_surface%var_1d(m) )
 
-       surf%ghf(m) = lambda_surface * ( surf_t_surface_p%var_1d(m)                                 &
-                                        - surf_t_soil%var_2d(nzb_soil,m) )
+       surf_lsm%ghf(m) = lambda_surface * ( t_surface_p%var_1d(m) - t_soil%var_2d(nzb_soil,m) )
 
-       surf%shf(m) = - f_shf * ( surf%pt1(m) - surf%pt_surface(m) ) / c_p
+       surf_lsm%shf(m) = -f_shf * ( surf_lsm%pt1(m) - surf_lsm%pt_surface(m) ) / c_p
 
 !
 !--    Following line is necessary to remove the density from the flux. For horizontal surfaces
@@ -1973,53 +1928,54 @@
 !--    diffusion_s.f90. However, for vertical surfaces the density would still be included in the
 !--    diffusion terms, meaning that the heat-fluxes at the walls would be overestimated by about
 !--    15-20%.
-       IF ( .NOT. horizontal )  surf%shf(m) = surf%shf(m) / rho_surface
+       IF ( .NOT. horizontal )  surf_lsm%shf(m) = surf_lsm%shf(m) / rho_surface
 
 !
 !--    Update aggregated flux.
-       surf%shf_agg(m) = surf%shf(m)
+       surf_lsm%shf_agg(m) = surf_lsm%shf(m)
 
 !
 !--    If applicable, Update fluxes based on DCEP
 !--    ToDo: save shf and ghf befor editing for output
        IF ( dcep ) THEN
-          surf%shf_agg(m) = surf%shf_agg(m) * ( 1.0_wp - fr_urb(j,i) )
-          surf%ghf(m)     = surf%ghf(m)     * ( 1.0_wp - fr_urb(j,i) )
+          surf_lsm%shf_agg(m) = surf_lsm%shf_agg(m) * ( 1.0_wp - fr_urb(j,i) )
+          surf_lsm%ghf(m)     = surf_lsm%ghf(m)     * ( 1.0_wp - fr_urb(j,i) )
        ENDIF
 !
 !--    Update the 3d field of rad_lw_out array to have consistent output
-       IF ( surf%upward(m) )  THEN
+       IF ( surf_lsm%upward(m) )  THEN
           IF ( rrtmg_l )  THEN
-             rad_lw_out(k+k_off,j+j_off,i+i_off) = surf%rad_lw_out(m)
+             rad_lw_out(k+k_off,j+j_off,i+i_off) = surf_lsm%rad_lw_out(m)
           ELSE
-             rad_lw_out(0,j+j_off,i+i_off) = surf%rad_lw_out(m)
+             rad_lw_out(0,j+j_off,i+i_off) = surf_lsm%rad_lw_out(m)
           ENDIF
        ENDIF
 
        IF ( humidity )  THEN
-          surf%qsws(m) = - f_qsws * ( surf%qv1(m) - q_s + dq_s_dt * surf_t_surface%var_1d(m)       &
-                                      - dq_s_dt * surf_t_surface_p%var_1d(m) )
+          surf_lsm%qsws(m)     = -f_qsws       * ( surf_lsm%qv1(m) - q_s +                         &
+                                                   dq_s_dt * t_surface%var_1d(m) -                 &
+                                                   dq_s_dt * t_surface_p%var_1d(m) )
 
-          surf%qsws_veg(m) = - f_qsws_veg  * ( surf%qv1(m) - q_s                                   &
-                             + dq_s_dt * surf_t_surface%var_1d(m) - dq_s_dt                        &
-                             * surf_t_surface_p%var_1d(m) )
+          surf_lsm%qsws_veg(m) = -f_qsws_veg   * ( surf_lsm%qv1(m) - q_s +                         &
+                                                   dq_s_dt * t_surface%var_1d(m) -                 &
+                                                   dq_s_dt * t_surface_p%var_1d(m) )
 
-          surf%qsws_soil(m) = - f_qsws_soil * ( surf%qv1(m) - q_s                                  &
-                              + dq_s_dt * surf_t_surface%var_1d(m) - dq_s_dt                       &
-                              * surf_t_surface_p%var_1d(m) )
+          surf_lsm%qsws_soil(m) = -f_qsws_soil * ( surf_lsm%qv1(m) - q_s +                         &
+                                                   dq_s_dt * t_surface%var_1d(m) -                 &
+                                                   dq_s_dt * t_surface_p%var_1d(m) )
 
-          surf%qsws_liq(m) = - f_qsws_liq  * ( surf%qv1(m) - q_s                                   &
-                             + dq_s_dt * surf_t_surface%var_1d(m) - dq_s_dt                        &
-                             * surf_t_surface_p%var_1d(m) )
+          surf_lsm%qsws_liq(m) = -f_qsws_liq   * ( surf_lsm%qv1(m) - q_s +                         &
+                                                   dq_s_dt * t_surface%var_1d(m) -                 &
+                                                   dq_s_dt * t_surface_p%var_1d(m) )
        ENDIF
 
 !
 !--    Calculate the true surface resistance. ABS is used here to avoid negative values that can
 !--    occur for very small fluxes due to the artifical addition of 1.0E-20.
        IF ( .NOT.  humidity )  THEN
-          surf%r_s(m) = 1.0E10_wp
+          surf_lsm%r_s(m) = 1.0E10_wp
        ELSE
-          surf%r_s(m) = ABS( rho_lv / ( f_qsws + 1.0E-20_wp ) - surf%r_a(m) )
+          surf_lsm%r_s(m) = ABS( rho_lv / ( f_qsws + 1.0E-20_wp ) - surf_lsm%r_a(m) )
        ENDIF
 !
 !--    Calculate change in liquid water reservoir due to dew fall or evaporation of liquid water.
@@ -2034,30 +1990,27 @@
 !--          Add precipitation to liquid water reservoir, if possible.
 !--          Otherwise, add the water to soil. In case of pavements, the exceeding water amount is
 !--          explicitly removed (as fictive runoff by drainage systems).
-             IF ( surf%pavement_surface(m) )  THEN
-                IF ( surf_m_liq%var_1d(m) < m_liq_max )  THEN
-                   surf%qsws_liq(m) = surf%qsws_liq(m)                                             &
-                                      + prr(k+k_off,j+j_off,i+i_off)                               &
-                                      * hyrho(k+k_off)                                             &
-                                      * 0.001_wp * rho_l * l_v
+             IF ( surf_lsm%pavement_surface(m) )  THEN
+                IF ( m_liq%var_1d(m) < m_liq_max )  THEN
+                   surf_lsm%qsws_liq(m) = surf_lsm%qsws_liq(m) +                                   &
+                                          prr(k+k_off,j+j_off,i+i_off) *                           &
+                                          hyrho(k+k_off) *0.001_wp * rho_l * l_v
                 ENDIF
              ELSE
-                IF ( surf_m_liq%var_1d(m) < m_liq_max )  THEN
-                   surf%qsws_liq(m) = surf%qsws_liq(m)                                             &
-                                      + surf%c_veg(m) * prr(k+k_off,j+j_off,i+i_off)               &
-                                      * hyrho(k+k_off)                                             &
-                                      * 0.001_wp * rho_l * l_v
-                   surf%qsws_soil(m) = surf%qsws_soil(m)                                           &
-                                       + ( 1.0_wp - surf%c_veg(m) ) * prr(k+k_off,j+j_off,i+i_off) &
-                                       * hyrho(k+k_off)                                            &
-                                       * 0.001_wp * rho_l * l_v
+                IF ( m_liq%var_1d(m) < m_liq_max )  THEN
+                   surf_lsm%qsws_liq(m) = surf_lsm%qsws_liq(m) +                                   &
+                                          surf_lsm%c_veg(m) * prr(k+k_off,j+j_off,i+i_off) *       &
+                                          hyrho(k+k_off) * 0.001_wp * rho_l * l_v
+                   surf_lsm%qsws_soil(m) = surf_lsm%qsws_soil(m) +                                 &
+                                           ( 1.0_wp - surf_lsm%c_veg(m) ) *                        &
+                                           prr(k+k_off,j+j_off,i+i_off) *                          &
+                                           hyrho(k+k_off) * 0.001_wp * rho_l * l_v
                 ELSE
 
 !--                Add precipitation to bare soil according to the bare soil coverage.
-                   surf%qsws_soil(m) = surf%qsws_soil(m)                                           &
-                                       + surf%c_veg(m) * prr(k+k_off,j+j_off,i+i_off)              &
-                                       * hyrho(k+k_off)                                            &
-                                       * 0.001_wp * rho_l * l_v
+                   surf_lsm%qsws_soil(m) = surf_lsm%qsws_soil(m) +                                 &
+                                           surf_lsm%c_veg(m) * prr(k+k_off,j+j_off,i+i_off) *      &
+                                           hyrho(k+k_off) * 0.001_wp * rho_l * l_v
 
                 ENDIF
              ENDIF
@@ -2066,54 +2019,54 @@
 
 !
 !--       If the air is saturated, check the reservoir water level.
-          IF ( surf%qsws(m) < 0.0_wp )  THEN
+          IF ( surf_lsm%qsws(m) < 0.0_wp )  THEN
 !
 !--          Check if reservoir is full (avoid values > m_liq_max).
 !--          In that case, qsws_liq goes to qsws_soil for pervious surfaces. In this case qsws_veg
 !--          is zero anyway (because c_liq = 1), so that tend is zero and no further check is
 !--          needed.
-             IF ( surf_m_liq%var_1d(m) == m_liq_max )  THEN
-                IF ( .NOT. surf%pavement_surface(m))  THEN
-                   surf%qsws_soil(m) = surf%qsws_soil(m) + surf%qsws_liq(m)
+             IF ( m_liq%var_1d(m) == m_liq_max )  THEN
+                IF ( .NOT. surf_lsm%pavement_surface(m) )  THEN
+                   surf_lsm%qsws_soil(m) = surf_lsm%qsws_soil(m) + surf_lsm%qsws_liq(m)
                 ENDIF
-                surf%qsws_liq(m)  = 0.0_wp
+                surf_lsm%qsws_liq(m) = 0.0_wp
              ENDIF
 
 !
 !--          In case qsws_veg becomes negative (unphysical behavior), let the water enter the liquid
 !--          water reservoir as dew on the plant.
-             IF ( surf%qsws_veg(m) < 0.0_wp )  THEN
-                surf%qsws_liq(m) = surf%qsws_liq(m) + surf%qsws_veg(m)
-                surf%qsws_veg(m) = 0.0_wp
+             IF ( surf_lsm%qsws_veg(m) < 0.0_wp )  THEN
+                surf_lsm%qsws_liq(m) = surf_lsm%qsws_liq(m) + surf_lsm%qsws_veg(m)
+                surf_lsm%qsws_veg(m) = 0.0_wp
              ENDIF
           ENDIF
 
-          surf%qsws(m) = surf%qsws(m) / l_v
+          surf_lsm%qsws(m) = surf_lsm%qsws(m) / l_v
 !
 !--       For explanation please see calculation of shf.
-          IF ( .NOT. horizontal )  surf%qsws(m) = surf%qsws(m) / rho_surface
+          IF ( .NOT. horizontal )  surf_lsm%qsws(m) = surf_lsm%qsws(m) / rho_surface
 !
 !--       Store qsws for aggregation.
-          surf%qsws_agg(m) = surf%qsws(m)
+          surf_lsm%qsws_agg(m) = surf_lsm%qsws(m)
 
-          tend = - surf%qsws_liq(m) * drho_l_lv
-          surf_m_liq_p%var_1d(m) = surf_m_liq%var_1d(m) + dt_3d *                                  &
-                                      ( tsc(2) * tend + tsc(3) * surf_tm_liq_m%var_1d(m) )
+          tend = -surf_lsm%qsws_liq(m) * drho_l_lv
+          m_liq_p%var_1d(m) = m_liq%var_1d(m) + dt_3d *                                            &
+                                                ( tsc(2) * tend + tsc(3) * tm_liq_m%var_1d(m) )
 !
 !--       Check if reservoir is overfull -> reduce to maximum (conservation of water is violated
 !--       here).
-          surf_m_liq_p%var_1d(m) = MIN( surf_m_liq_p%var_1d(m),m_liq_max )
+          m_liq_p%var_1d(m) = MIN( m_liq_p%var_1d(m), m_liq_max )
 
 !
 !--       Check if reservoir is empty (avoid values < 0.0) (conservation of water is violated here).
-          surf_m_liq_p%var_1d(m) = MAX( surf_m_liq_p%var_1d(m), 0.0_wp )
+          m_liq_p%var_1d(m) = MAX( m_liq_p%var_1d(m), 0.0_wp )
 !
 !--       Calculate m_liq tendencies for the next Runge-Kutta step
           IF ( runge_l )  THEN
              IF ( intermediate_timestep_count == 1 )  THEN
-                surf_tm_liq_m%var_1d(m) = tend
+                tm_liq_m%var_1d(m) = tend
              ELSEIF ( intermediate_timestep_count < intermediate_timestep_count_max )  THEN
-                surf_tm_liq_m%var_1d(m) = -9.5625_wp * tend + 5.3125_wp * surf_tm_liq_m%var_1d(m)
+                tm_liq_m%var_1d(m) = -9.5625_wp * tend + 5.3125_wp * tm_liq_m%var_1d(m)
              ENDIF
           ENDIF
 
@@ -2149,6 +2102,9 @@
 !-- Calculate new roughness lengths (for water surfaces only)
     IF ( .NOT. constant_roughness )  CALL calc_z0_water_surface
 
+    DEALLOCATE( e_s, f1, f2, f3 )
+    !$ACC END DATA
+
     IF ( debug_output_timestep )  THEN
        WRITE( debug_string, * ) 'lsm_surface_energy_balance'
        CALL debug_message( debug_string, 'end' )
@@ -2171,29 +2127,24 @@
 
 
        !$OMP PARALLEL DO PRIVATE (m, i, j, k, i_off, j_off, k_off, e_s, q_s, resistance) SCHEDULE (STATIC)
-       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-       !$ACC COPY(surf, surf%ns, surf%i, surf%j, surf%k) &
-       !$ACC COPY(surf%ioff, surf%joff, surf%koff, surf%r_a, surf%r_s) &
-       !$ACC COPY(surf_t_surface_p, surf_t_surface_p%var_1d) &
-       !$ACC COPY(surf%q_surface, surf%vpt_surface, surf%pt_surface) &
-       !$ACC COPY(q, ql) IF(enable_lsm_openacc)
-       DO  m = 1, surf%ns
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  m = 1, surf_lsm%ns
 
-          i = surf%i(m)
-          j = surf%j(m)
-          k = surf%k(m)
-          i_off = surf%ioff(m)
-          j_off = surf%joff(m)
-          k_off = surf%koff(m)
+          i = surf_lsm%i(m)
+          j = surf_lsm%j(m)
+          k = surf_lsm%k(m)
+          i_off = surf_lsm%ioff(m)
+          j_off = surf_lsm%joff(m)
+          k_off = surf_lsm%koff(m)
 !
 !--       Calculate water vapour pressure at saturation and convert to hPa
-          e_s = 0.01_wp * magnus( MIN( surf_t_surface_p%var_1d(m), 333.15_wp ) )
+          e_s = 0.01_wp * magnus( MIN( t_surface_p%var_1d(m), 333.15_wp ) )
 
 !
 !--       Calculate mixing ratio at saturation
           q_s = rd_d_rv * e_s / ( surface_pressure - e_s )
 
-          resistance = surf%r_a(m) / ( surf%r_a(m) + surf%r_s(m) + 1E-5_wp )
+          resistance = surf_lsm%r_a(m) / ( surf_lsm%r_a(m) + surf_lsm%r_s(m) + 1.0E-5_wp )
 
 !
 !--       Calculate mixing ratio at surface
@@ -2205,10 +2156,11 @@
                                           ( 1.0_wp - resistance ) * q(k,j,i)
           ENDIF
 
-          surf%q_surface(m) = q(k+k_off,j+j_off,i+i_off)
+          surf_lsm%q_surface(m) = q(k+k_off,j+j_off,i+i_off)
 !
 !--       Update virtual potential temperature
-          surf%vpt_surface(m) = surf%pt_surface(m) * ( 1.0_wp + 0.61_wp * surf%q_surface(m) )
+          surf_lsm%vpt_surface(m) = surf_lsm%pt_surface(m) *                                       &
+                                    ( 1.0_wp + 0.61_wp * surf_lsm%q_surface(m) )
 
        ENDDO
        !$ACC END PARALLEL LOOP
@@ -2370,8 +2322,6 @@
 #endif
 
     REAL(wp), DIMENSION(1:surf_lsm%ns,nzb_soil:nzt_soil) ::  lambda_temp  !< temp. lambda
-
-    TYPE(surf_type_lsm), POINTER ::  surf_m_soil
 
 
     IF ( debug_output )  CALL debug_message( 'lsm_init', 'start' )
@@ -3605,7 +3555,7 @@
                    CALL interpolate_soil_profile( m_soil%var_2d(nzb_soil:nzt_soil,m),              &
                                                   init_3d%msoil_1d(:),                             &
                                                   zs(nzb_soil:nzt_soil), init_3d%z_soil,           &
-                                                  nzb_soil, nzt_soil, nzb_soil, init_3d%nzs-1 )
+                                                  nzb_soil, nzt_soil, 1, init_3d%nzs )
                 ENDIF
              ENDDO
           ELSE
@@ -3618,7 +3568,7 @@
                       CALL interpolate_soil_profile( m_soil%var_2d(nzb_soil:nzt_soil,m),           &
                                                      init_3d%msoil_3d(:,j,i),                      &
                                                      zs(nzb_soil:nzt_soil), init_3d%z_soil,        &
-                                                     nzb_soil, nzt_soil, nzb_soil, init_3d%nzs-1 )
+                                                     nzb_soil, nzt_soil, 1, init_3d%nzs )
                 ENDIF
              ENDDO
           ENDIF
@@ -3633,7 +3583,7 @@
                    CALL interpolate_soil_profile( t_soil%var_2d(nzb_soil:nzt_soil,m),              &
                                                   init_3d%tsoil_1d(:),                             &
                                                   zs(nzb_soil:nzt_soil), init_3d%z_soil,           &
-                                                  nzb_soil, nzt_soil, nzb_soil, init_3d%nzs-1 )
+                                                  nzb_soil, nzt_soil, 1, init_3d%nzs )
 !
 !--                Set boundary condition, i.e. deep soil temperature
                    t_soil%var_2d(nzt_soil+1,m) = t_soil%var_2d(nzt_soil,m)
@@ -3649,7 +3599,7 @@
                       CALL interpolate_soil_profile( t_soil%var_2d(nzb_soil:nzt_soil,m),           &
                                                      init_3d%tsoil_3d(:,j,i),                      &
                                                      zs(nzb_soil:nzt_soil), init_3d%z_soil,        &
-                                                     nzb_soil, nzt_soil, nzb_soil, init_3d%nzs-1 )
+                                                     nzb_soil, nzt_soil, 1, init_3d%nzs )
 !
 !--                Set boundary condition, i.e. deep soil temperature
                    t_soil%var_2d(nzt_soil+1,m) = t_soil%var_2d(nzt_soil,m)
@@ -3823,7 +3773,6 @@
 !
 !-- Following initialitzations are required to calculate dt_lsm for the first time, later on,
 !-- which requies lambda_h.
-    surf_m_soil => m_soil
     !$OMP PARALLEL DO PRIVATE (m, k, lambda_h_sat, ke) SCHEDULE (STATIC)
     DO  k = nzb_soil, nzt_soil
 
@@ -3837,13 +3786,13 @@
 !
 !--             Calculate volumetric heat capacity of the soil, taking into account water content.
                 surf_lsm%rho_c_total(k,m) = ( rho_c_soil * ( 1.0_wp - surf_lsm%m_sat(k,m) ) +      &
-                                              rho_c_water * surf_m_soil%var_2d(k,m) )
+                                              rho_c_water * m_soil%var_2d(k,m) )
 !
 !--             Calculate soil heat conductivity at the center of the soil layers.
                 lambda_h_sat = lambda_h_sm**( 1.0_wp - surf_lsm%m_sat(k,m) ) *                     &
-                               lambda_h_water**surf_m_soil%var_2d(k,m)
+                               lambda_h_water**m_soil%var_2d(k,m)
 
-                ke = 1.0_wp + LOG10( MAX( 0.1_wp, surf_m_soil%var_2d(k,m) / surf_lsm%m_sat(k,m) ) )
+                ke = 1.0_wp + LOG10( MAX( 0.1_wp, m_soil%var_2d(k,m) / surf_lsm%m_sat(k,m) ) )
 
                 lambda_temp(m,k) = ke * ( lambda_h_sat - lambda_h_dry ) + lambda_h_dry
              ENDIF
@@ -4003,6 +3952,38 @@
                                   ' and is limited to that height'
        CALL message( 'lsm_init', 'LSM0049', 0, 0, 0, 6, 0 )
     ENDIF
+
+!
+!-- Copy LSM data.
+!$ACC ENTER DATA &
+!$ACC COPYIN(ddz_soil(nzb_soil:nzt_soil+1)) &
+!$ACC COPYIN(ddz_soil_center(nzb_soil:nzt_soil)) &
+!$ACC COPYIN(dz_soil(nzb_soil:nzt_soil)) &
+!$ACC COPYIN(m_liq) &
+!$ACC COPYIN(m_liq%var_1d(1:surf_lsm%ns)) &
+!$ACC COPYIN(m_liq_p) &
+!$ACC COPYIN(m_liq_p%var_1d(1:surf_lsm%ns)) &
+!$ACC COPYIN(m_soil) &
+!$ACC COPYIN(m_soil%var_2d(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+!$ACC COPYIN(m_soil_p) &
+!$ACC COPYIN(m_soil_p%var_2d(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+!$ACC COPYIN(root_extr(nzb_soil:nzt_soil)) &
+!$ACC COPYIN(tm_liq_m) &
+!$ACC COPYIN(tm_liq_m%var_1d(1:surf_lsm%ns)) &
+!$ACC COPYIN(tm_soil_m) &
+!$ACC COPYIN(tm_soil_m%var_2d(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+!$ACC COPYIN(tt_soil_m) &
+!$ACC COPYIN(tt_soil_m%var_2d(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+!$ACC COPYIN(tt_surface_m) &
+!$ACC COPYIN(tt_surface_m%var_1d(1:surf_lsm%ns)) &
+!$ACC COPYIN(t_soil) &
+!$ACC COPYIN(t_soil%var_2d(nzb_soil:nzt_soil+1,1:surf_lsm%ns)) &
+!$ACC COPYIN(t_soil_p) &
+!$ACC COPYIN(t_soil_p%var_2d(nzb_soil:nzt_soil+1,1:surf_lsm%ns)) &
+!$ACC COPYIN(t_surface) &
+!$ACC COPYIN(t_surface%var_1d(1:surf_lsm%ns)) &
+!$ACC COPYIN(t_surface_p) &
+!$ACC COPYIN(t_surface_p%var_1d(1:surf_lsm%ns)) IF(enable_openacc)
 
     IF ( debug_output )  CALL debug_message( 'lsm_init', 'end' )
 
@@ -4244,21 +4225,11 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 
     REAL(wp) ::  h_vg !< Van Genuchten coef. h
 
-    REAL(wp), DIMENSION(1:surf_lsm%ns) ::  m_total !< total soil water content
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  m_total !< total soil water content
 
-    REAL(wp), DIMENSION(1:surf_lsm%ns,nzb_soil:nzt_soil) ::  gamma_temp   !< temp. gamma
-    REAL(wp), DIMENSION(1:surf_lsm%ns,nzb_soil:nzt_soil) ::  lambda_temp  !< temp. lambda
-    REAL(wp), DIMENSION(1:surf_lsm%ns,nzb_soil:nzt_soil) ::  tend         !< tendency
-
-
-    TYPE(surf_type_lsm), POINTER ::  surf_m_soil
-    TYPE(surf_type_lsm), POINTER ::  surf_m_soil_p
-    TYPE(surf_type_lsm), POINTER ::  surf_t_soil
-    TYPE(surf_type_lsm), POINTER ::  surf_t_soil_p
-    TYPE(surf_type_lsm), POINTER ::  surf_tm_soil_m
-    TYPE(surf_type_lsm), POINTER ::  surf_tt_soil_m
-
-    TYPE(surf_type), POINTER  ::  surf  !< surface-date type variable
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  gamma_temp   !< temp. gamma
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  lambda_temp  !< temp. lambda
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  tend         !< tendency
 
 
     IF ( debug_output_timestep )  THEN
@@ -4266,44 +4237,37 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
        CALL debug_message( debug_string, 'start' )
     ENDIF
 
-    surf           => surf_lsm
-    surf_m_soil    => m_soil
-    surf_m_soil_p  => m_soil_p
-    surf_t_soil    => t_soil
-    surf_t_soil_p  => t_soil_p
-    surf_tm_soil_m => tm_soil_m
-    surf_tt_soil_m => tt_soil_m
+    ALLOCATE( m_total(1:surf_lsm%ns) )
+    ALLOCATE( gamma_temp(1:surf_lsm%ns,nzb_soil:nzt_soil),                                         &
+              lambda_temp(1:surf_lsm%ns,nzb_soil:nzt_soil),                                        &
+              tend(1:surf_lsm%ns,nzb_soil:nzt_soil) )
+    !$ACC DATA CREATE(m_total,gamma_temp,lambda_temp,tend) IF(enable_openacc)
+
 
 !
 !-- In order to allow for vectorization on machines, the m loop is the inner loop, because the
 !-- k loop has too few elements (insufficient vector length).
     !$OMP PARALLEL DO PRIVATE (m, k, lambda_h_sat, ke) SCHEDULE (STATIC)
-    !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-    !$ACC COPY(surf, surf%ns, surf%water_surface, surf%pavement_surface) &
-    !$ACC COPY(surf%rho_c_total, surf%rho_c_total_def, surf%lambda_h_def) &
-    !$ACC COPY(surf%m_sat) &
-    !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-    !$ACC COPY(lambda_temp) IF(enable_lsm_openacc)
+    !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
     DO  k = nzb_soil, nzt_soil
 
-       DO  m = 1, surf%ns
+       DO  m = 1, surf_lsm%ns
 
-          IF (  .NOT.  surf%water_surface(m) )  THEN
-             IF ( surf%pavement_surface(m)  .AND.  k <= surf%nzt_pavement(m) )  THEN
-                surf%rho_c_total(k,m) = surf%rho_c_total_def(k,m)
-                lambda_temp(m,k) = surf%lambda_h_def(k,m)
+          IF (  .NOT.  surf_lsm%water_surface(m) )  THEN
+             IF ( surf_lsm%pavement_surface(m)  .AND.  k <= surf_lsm%nzt_pavement(m) )  THEN
+                surf_lsm%rho_c_total(k,m) = surf_lsm%rho_c_total_def(k,m)
+                lambda_temp(m,k) = surf_lsm%lambda_h_def(k,m)
              ELSE
 !
 !--             Calculate volumetric heat capacity of the soil, taking into account water content.
-                surf%rho_c_total(k,m) = ( rho_c_soil * ( 1.0_wp - surf%m_sat(k,m) ) +              &
-                                          rho_c_water * surf_m_soil%var_2d(k,m) )
-
+                surf_lsm%rho_c_total(k,m) = ( rho_c_soil * ( 1.0_wp - surf_lsm%m_sat(k,m) ) +      &
+                                              rho_c_water * m_soil%var_2d(k,m) )
 !
 !--             Calculate soil heat conductivity at the center of the soil layers.
-                lambda_h_sat = lambda_h_sm**( 1.0_wp - surf%m_sat(k,m) ) *                         &
-                               lambda_h_water**surf_m_soil%var_2d(k,m)
+                lambda_h_sat = lambda_h_sm**( 1.0_wp - surf_lsm%m_sat(k,m) ) *                     &
+                               lambda_h_water**m_soil%var_2d(k,m)
 
-                ke = 1.0_wp + LOG10( MAX( 0.1_wp, surf_m_soil%var_2d(k,m) / surf%m_sat(k,m) ) )
+                ke = 1.0_wp + LOG10( MAX( 0.1_wp, m_soil%var_2d(k,m) / surf_lsm%m_sat(k,m) ) )
 
                 lambda_temp(m,k) = ke * ( lambda_h_sat - lambda_h_dry ) + lambda_h_dry
              ENDIF
@@ -4314,70 +4278,58 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
     ENDDO
     !$ACC END PARALLEL LOOP
 
-    IF ( surf%ns > 0 )  THEN
+    IF ( surf_lsm%ns > 0 )  THEN
 !
 !--    Calculate soil heat conductivity (lambda_h) at the top layer level using the weighted
 !--    average. For pavement surface, the true pavement depth is considered.
        !$OMP PARALLEL DO PRIVATE (k) SCHEDULE (STATIC)
-       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-       !$ACC COPY(surf, surf%ns, surf%lambda_h) &
-       !$ACC COPY(lambda_temp, dz_soil, ddz_soil_center) IF(enable_lsm_openacc)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
        DO  k = nzb_soil, nzt_soil-1
-          surf%lambda_h(k,1:surf%ns) = ( lambda_temp(1:surf%ns,k)   * dz_soil(k) +                 &
-                                         lambda_temp(1:surf%ns,k+1) * dz_soil(k+1) ) *             &
-                                       0.5_wp * ddz_soil_center(k)
+          surf_lsm%lambda_h(k,1:surf_lsm%ns) = ( lambda_temp(1:surf_lsm%ns,k)   * dz_soil(k) +     &
+                                                 lambda_temp(1:surf_lsm%ns,k+1) * dz_soil(k+1) ) * &
+                                               0.5_wp * ddz_soil_center(k)
 
        ENDDO
        !$ACC END PARALLEL LOOP
 
-       !$ACC KERNELS DEFAULT(NONE) &
-       !$ACC COPY(surf, surf%ns, surf%lambda_h, lambda_temp) IF(enable_lsm_openacc)
-       surf%lambda_h(nzt_soil,1:surf%ns) = lambda_temp(1:surf%ns,nzt_soil)
+       !$ACC KERNELS &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+       surf_lsm%lambda_h(nzt_soil,1:surf_lsm%ns) = lambda_temp(1:surf_lsm%ns,nzt_soil)
        !$ACC END KERNELS
 
 !
 !--    Prognostic equation for soil temperature t_soil
-       !$ACC KERNELS DEFAULT(NONE) &
-       !$ACC COPYOUT(tend) IF(enable_lsm_openacc)
+       !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
        tend = 0.0_wp
        !$ACC END KERNELS
 
 
-       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-       !$ACC COPY(surf, surf%ns, surf%water_surface, surf%rho_c_total) &
-       !$ACC COPY(surf%lambda_h, surf%ghf) &
-       !$ACC COPY(surf_t_soil, surf_t_soil%var_2d) &
-       !$ACC COPY(ddz_soil, ddz_soil_center, tend) IF(enable_lsm_openacc)
-       DO k = 1, surf%ns
-          IF (.NOT.  surf%water_surface(k)) THEN
-              tend(k, nzb_soil) = ( 1.0_wp / surf%rho_c_total(nzb_soil,k) ) *                   &
-                                 ( surf%lambda_h(nzb_soil,k) *                                 &
-                                   ( surf_t_soil%var_2d(nzb_soil+1,k) -                        &
-                                     surf_t_soil%var_2d(nzb_soil,k) ) *                        &
-                                   ddz_soil_center(nzb_soil) + surf%ghf(k) ) *                 &
-                                   ddz_soil(nzb_soil)
-          END IF
-       END DO
+       !$ACC PARALLEL LOOP GANG VECTOR &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+       DO k = 1, surf_lsm%ns
+          IF ( .NOT.  surf_lsm%water_surface(k) )  THEN
+             tend(k, nzb_soil) = ( 1.0_wp / surf_lsm%rho_c_total(nzb_soil,k) ) *                   &
+                                 ( surf_lsm%lambda_h(nzb_soil,k) *                                 &
+                                   ( t_soil%var_2d(nzb_soil+1,k) - t_soil%var_2d(nzb_soil,k) ) *   &
+                                   ddz_soil_center(nzb_soil) + surf_lsm%ghf(k)                     &
+                                 ) * ddz_soil(nzb_soil)
+          ENDIF
+       ENDDO
        !$ACC END PARALLEL LOOP
 
     ENDIF
 
     !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-    !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-    !$ACC COPY(surf, surf%ns, surf%water_surface, surf%rho_c_total, surf%lambda_h) &
-    !$ACC COPY(surf_t_soil, surf_t_soil%var_2d) &
-    !$ACC COPY(ddz_soil, ddz_soil_center, tend) IF(enable_lsm_openacc)
+    !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
     DO  k = nzb_soil+1, nzt_soil
-       DO  m = 1, surf%ns
-          IF ( .NOT. surf%water_surface(m) )  THEN
-             tend(m,k) = ( 1.0_wp / surf%rho_c_total(k,m) ) *                                      &
-                         (   surf%lambda_h(k,m) *                                                  &
-                             ( surf_t_soil%var_2d(k+1,m) - surf_t_soil%var_2d(k,m) ) *             &
-                             ddz_soil_center(k) -                                                  &
-                             surf%lambda_h(k-1,m) *                                                &
-                             ( surf_t_soil%var_2d(k,m) - surf_t_soil%var_2d(k-1,m) ) *             &
-                             ddz_soil_center(k-1)                                                  &
+       DO  m = 1, surf_lsm%ns
+          IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+             tend(m,k) = ( 1.0_wp / surf_lsm%rho_c_total(k,m) ) *                                  &
+                         ( surf_lsm%lambda_h(k,m) *                                                &
+                           ( t_soil%var_2d(k+1,m) - t_soil%var_2d(k,m) ) * ddz_soil_center(k) -    &
+                           surf_lsm%lambda_h(k-1,m) *                                              &
+                           ( t_soil%var_2d(k,m) - t_soil%var_2d(k-1,m) ) * ddz_soil_center(k-1)    &
                          ) * ddz_soil(k)
           ENDIF
        ENDDO
@@ -4386,18 +4338,12 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 
     !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-    !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-    !$ACC COPY(surf, surf%ns, surf%water_surface) &
-    !$ACC COPY(surf_t_soil, surf_t_soil%var_2d) &
-    !$ACC COPY(surf_t_soil_p, surf_t_soil_p%var_2d) &
-    !$ACC COPY(surf_tt_soil_m, surf_tt_soil_m%var_2d) &
-    !$ACC COPY(tend, tsc(2:3)) IF(enable_lsm_openacc)
+    !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
     DO  k = nzb_soil, nzt_soil
-       DO  m = 1, surf%ns
-          IF ( .NOT. surf%water_surface(m) )  THEN
-             surf_t_soil_p%var_2d(k,m) = surf_t_soil%var_2d(k,m) + dt_3d *                         &
-                                         ( tsc(2) * tend(m,k) +                                    &
-                                           tsc(3) * surf_tt_soil_m%var_2d(k,m) )
+       DO  m = 1, surf_lsm%ns
+          IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+             t_soil_p%var_2d(k,m) = t_soil%var_2d(k,m) + dt_3d * ( tsc(2) * tend(m,k) +            &
+                                                                   tsc(3) * tt_soil_m%var_2d(k,m) )
           ENDIF
        ENDDO
     ENDDO
@@ -4409,27 +4355,23 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
        IF ( intermediate_timestep_count == 1 )  THEN
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%ns, surf%water_surface) &
-          !$ACC COPY(surf_tt_soil_m, surf_tt_soil_m%var_2d, tend) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   surf_tt_soil_m%var_2d(k,m) = tend(m,k)
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   tt_soil_m%var_2d(k,m) = tend(m,k)
                 ENDIF
              ENDDO
           ENDDO
           !$ACC END PARALLEL LOOP
        ELSEIF ( intermediate_timestep_count < intermediate_timestep_count_max )  THEN
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%ns, surf%water_surface) &
-          !$ACC COPY(surf_tt_soil_m, surf_tt_soil_m%var_2d, tend) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   surf_tt_soil_m%var_2d(k,m) = -9.5625_wp * tend(m,k) +                           &
-                                                 5.3125_wp * surf_tt_soil_m%var_2d(k,m)
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   tt_soil_m%var_2d(k,m) = -9.5625_wp * tend(m,k) +                                &
+                                            5.3125_wp * tt_soil_m%var_2d(k,m)
                 ENDIF
              ENDDO
           ENDDO
@@ -4441,49 +4383,45 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 
        !$OMP PARALLEL DO PRIVATE (m, k, h_vg ) SCHEDULE (STATIC)
  !NEC$ nointerchange
-       !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-       !$ACC COPY(surf, surf%water_surface, surf%pavement_surface, surf%nzt_pavement) &
-       !$ACC COPY(surf%gamma_w_sat, surf%m_sat, surf_m_soil%var_2d, surf%m_wilt) &
-       !$ACC COPY(surf%m_res, surf%n_vg, surf%alpha_vg, surf%l_vg) &
-       !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-       !$ACC COPY(lambda_temp, gamma_temp) IF(enable_lsm_openacc)
+       !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
        DO  k = nzb_soil, nzt_soil
-          DO  m = 1, surf%ns
-             IF ( .NOT. surf%water_surface(m) )  THEN
+          DO  m = 1, surf_lsm%ns
+             IF ( .NOT. surf_lsm%water_surface(m) )  THEN
  !
  !--            In order to prevent water tranport through paved surfaces, conductivity and
  !--            diffusivity are set to zero.
-                IF ( surf%pavement_surface(m)  .AND.  k <= surf%nzt_pavement(m) )  THEN
+                IF ( surf_lsm%pavement_surface(m)  .AND.  k <= surf_lsm%nzt_pavement(m) )  THEN
                    lambda_temp(m,k) = 0.0_wp
                    gamma_temp(m,k)  = 0.0_wp
                 ELSE
 !
 !--                Calculate soil diffusivity at the center of the soil layers.
-                   lambda_temp(m,k) = ( -b_ch * surf%gamma_w_sat(k,m) *                            &
-                                        psi_sat / surf%m_sat(k,m) ) *                              &
-                                      ( MAX( surf_m_soil%var_2d(k,m), surf%m_wilt(k,m) ) /         &
-                                        surf%m_sat(k,m) )**( b_ch + 2.0_wp )
+                   lambda_temp(m,k) = ( -b_ch * surf_lsm%gamma_w_sat(k,m) *                        &
+                                        psi_sat / surf_lsm%m_sat(k,m) ) *                          &
+                                      ( MAX( m_soil%var_2d(k,m), surf_lsm%m_wilt(k,m) ) /          &
+                                        surf_lsm%m_sat(k,m) )**( b_ch + 2.0_wp )
 
 !
 !--                Parametrization of Van Genuchten.
 !--                Calculate the hydraulic conductivity after Van Genuchten (1980).
-                   h_vg = ( ( ( surf%m_res(k,m) - surf%m_sat(k,m) ) /                              &
-                              ( surf%m_res(k,m) - MAX( surf_m_soil%var_2d(k,m), surf%m_wilt(k,m) ) &
+                   h_vg = ( ( ( surf_lsm%m_res(k,m) - surf_lsm%m_sat(k,m) ) /                      &
+                              ( surf_lsm%m_res(k,m) -                                              &
+                                MAX( m_soil%var_2d(k,m), surf_lsm%m_wilt(k,m) )                    &
                               )                                                                    &
-                            )**( surf%n_vg(k,m) / ( surf%n_vg(k,m) - 1.0_wp ) ) - 1.0_wp           &
-                          )**( 1.0_wp / surf%n_vg(k,m) ) / surf%alpha_vg(k,m)
+                            )**( surf_lsm%n_vg(k,m) / ( surf_lsm%n_vg(k,m) - 1.0_wp ) ) - 1.0_wp   &
+                          )**( 1.0_wp / surf_lsm%n_vg(k,m) ) / surf_lsm%alpha_vg(k,m)
 
-                   gamma_temp(m,k) = surf%gamma_w_sat(k,m) * ( (                                   &
-                                     ( 1.0_wp + ( surf%alpha_vg(k,m) * h_vg )**surf%n_vg(k,m)      &
-                                     )**( 1.0_wp - 1.0_wp / surf%n_vg(k,m) ) -                     &
-                                     ( surf%alpha_vg(k,m) * h_vg )**( surf%n_vg(k,m) - 1.0_wp )    &
-                                                               )**2                                &
-                                                             ) /                                   &
-                                                               (                                   &
-                                     ( 1.0_wp + ( surf%alpha_vg(k,m) * h_vg )**surf%n_vg(k,m)      &
-                                     )**( ( 1.0_wp  - 1.0_wp / surf%n_vg(k,m) ) *                  &
-                                     ( surf%l_vg(k,m) + 2.0_wp ) )                                 &
-                                                               )
+                   gamma_temp(m,k) = surf_lsm%gamma_w_sat(k,m) * ( (                               &
+                                ( 1.0_wp + ( surf_lsm%alpha_vg(k,m) * h_vg )**surf_lsm%n_vg(k,m)   &
+                                )**( 1.0_wp - 1.0_wp / surf_lsm%n_vg(k,m) ) -                      &
+                                ( surf_lsm%alpha_vg(k,m) * h_vg )**( surf_lsm%n_vg(k,m) - 1.0_wp ) &
+                                                                   )**2                            &
+                                                                 ) /                               &
+                                                                 (                                 &
+                                ( 1.0_wp + ( surf_lsm%alpha_vg(k,m) * h_vg )**surf_lsm%n_vg(k,m)   &
+                                )**( ( 1.0_wp  - 1.0_wp / surf_lsm%n_vg(k,m) ) *                   &
+                                     ( surf_lsm%l_vg(k,m) + 2.0_wp )                               &
+                                   )                             )
 
                 ENDIF
              ENDIF
@@ -4503,18 +4441,16 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
 
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%lambda_w, surf%gamma_w) &
-          !$ACC COPY(lambda_temp, dz_soil, ddz_soil_center, gamma_temp) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil-1
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   surf%lambda_w(k,m) = ( lambda_temp(m,k)   * dz_soil(k) +                        &
-                                          lambda_temp(m,k+1) * dz_soil(k+1) ) *                    &
-                                        0.5_wp * ddz_soil_center(k)
-                   surf%gamma_w(k,m) = ( gamma_temp(m,k)   * dz_soil(k) +                          &
-                                         gamma_temp(m,k+1) * dz_soil(k+1) ) *                      &
-                                       0.5_wp * ddz_soil_center(k)
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   surf_lsm%lambda_w(k,m) = ( lambda_temp(m,k)   * dz_soil(k) +                    &
+                                              lambda_temp(m,k+1) * dz_soil(k+1)                    &
+                                            ) * 0.5_wp * ddz_soil_center(k)
+                   surf_lsm%gamma_w(k,m)  = ( gamma_temp(m,k)    * dz_soil(k) +                    &
+                                              gamma_temp(m,k+1)  * dz_soil(k+1)                    &
+                                            ) * 0.5_wp * ddz_soil_center(k)
                 ENDIF
              ENDDO
           ENDDO
@@ -4525,38 +4461,32 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 !--       is always a positive value, it cannot be set to zero in case of purely dry soil
 !--       since this would cause accumulation of (non-existing) water in the lowest soil layer.
           !$OMP PARALLEL DO PRIVATE (m) SCHEDULE (STATIC)
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%gamma_w) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(conserve_water_content, gamma_temp) IF(enable_lsm_openacc)
-          DO  m = 1, surf%ns
-             IF ( .NOT. surf%water_surface(m) )  THEN
-                IF ( conserve_water_content  .AND.  surf_m_soil%var_2d(nzt_soil,m) /= 0.0_wp )  THEN
-                   surf%gamma_w(nzt_soil,m) = 0.0_wp
+          !$ACC PARALLEL LOOP GANG VECTOR &
+          !$ACC COPYIN(conserve_water_content) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  m = 1, surf_lsm%ns
+             IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                IF ( conserve_water_content  .AND.  m_soil%var_2d(nzt_soil,m) /= 0.0_wp )  THEN
+                   surf_lsm%gamma_w(nzt_soil,m) = 0.0_wp
                 ELSE
-                   surf%gamma_w(nzt_soil,m) = gamma_temp(m,nzt_soil)
+                   surf_lsm%gamma_w(nzt_soil,m) = gamma_temp(m,nzt_soil)
                 ENDIF
              ENDIF
           ENDDO
           !$ACC END PARALLEL LOOP
 
-          !$ACC KERNELS DEFAULT(NONE) &
-          !$ACC COPY(m_total) IF(enable_lsm_openacc)
+          !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
           m_total = 0.0_wp
           !$ACC END KERNELS
 
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%m_wilt, surf%root_fr) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(m_total) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   IF ( surf_m_soil%var_2d(k,m) > surf%m_wilt(k,m) )  THEN
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   IF ( m_soil%var_2d(k,m) > surf_lsm%m_wilt(k,m) )  THEN
                       !$ACC ATOMIC UPDATE
-                      m_total(m) = m_total(m) + surf%root_fr(k,m) * surf_m_soil%var_2d(k,m)
+                      m_total(m) = m_total(m) + surf_lsm%root_fr(k,m) * m_soil%var_2d(k,m)
                    ENDIF
                 ENDIF
              ENDDO
@@ -4574,17 +4504,14 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 !--       additional check.
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%m_wilt, surf%root_fr) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(m_total, root_extr) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
                    IF ( m_total(m) > 0.0_wp )  THEN
-                      IF ( surf_m_soil%var_2d(k,m) > surf%m_wilt(k,m) )  THEN
+                      IF ( m_soil%var_2d(k,m) > surf_lsm%m_wilt(k,m) )  THEN
                          !$ACC ATOMIC WRITE
-                         root_extr(k) = surf%root_fr(k,m) * surf_m_soil%var_2d(k,m) / m_total(m)
+                         root_extr(k) = surf_lsm%root_fr(k,m) * m_soil%var_2d(k,m) / m_total(m)
                       ELSE
                          !$ACC ATOMIC WRITE
                          root_extr(k) = 0.0_wp
@@ -4596,26 +4523,20 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
           !$ACC END PARALLEL LOOP
 !
 !--       Prognostic term for soil water content m_soil.
-          !$ACC KERNELS DEFAULT(NONE) &
-          !$ACC COPY(tend) IF(enable_lsm_openacc)
+          !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
           tend = 0.0_wp
           !$ACC END KERNELS
 
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%lambda_w) &
-          !$ACC COPY(surf%gamma_w, surf%qsws_veg, surf%qsws_soil) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(tend, ddz_soil_center, root_extr, drho_l_lv, ddz_soil) IF(enable_lsm_openacc)
-          DO  m = 1, surf%ns
-             IF ( .NOT. surf%water_surface(m) )  THEN
-                tend(m,nzb_soil) = ( surf%lambda_w(nzb_soil,m) *                                   &
-                                     ( surf_m_soil%var_2d(nzb_soil+1,m) -                          &
-                                       surf_m_soil%var_2d(nzb_soil,m)                              &
-                                     ) * ddz_soil_center(nzb_soil) -                               &
-                                     surf%gamma_w(nzb_soil,m) -                                    &
-                                     ( root_extr(nzb_soil) * surf%qsws_veg(m) +                    &
-                                       surf%qsws_soil(m) ) * drho_l_lv                             &
+          !$ACC PARALLEL LOOP GANG VECTOR &
+          !$ACC COPYIN(drho_l_lv) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  m = 1, surf_lsm%ns
+             IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                tend(m,nzb_soil) = ( surf_lsm%lambda_w(nzb_soil,m) *                               &
+                                     ( m_soil%var_2d(nzb_soil+1,m) - m_soil%var_2d(nzb_soil,m) ) * &
+                                     ddz_soil_center(nzb_soil) - surf_lsm%gamma_w(nzb_soil,m) -    &
+                                     ( root_extr(nzb_soil) * surf_lsm%qsws_veg(m) +                &
+                                       surf_lsm%qsws_soil(m) ) * drho_l_lv                         &
                                    ) * ddz_soil(nzb_soil)
              ENDIF
           ENDDO
@@ -4623,20 +4544,20 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%lambda_w, surf%gamma_w, surf%qsws_veg) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(tend, ddz_soil_center, root_extr, drho_l_lv, ddz_soil) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) &
+          !$ACC COPYIN(drho_l_lv) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil+1, nzt_soil-1
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   tend(m,k) = ( surf%lambda_w(k,m)   * ( surf_m_soil%var_2d(k+1,m) -              &
-                                                          surf_m_soil%var_2d(k,m) )                &
-                                                      * ddz_soil_center(k) - surf%gamma_w(k,m) -   &
-                                 surf%lambda_w(k-1,m) * ( surf_m_soil%var_2d(k,m) -                &
-                                                          surf_m_soil%var_2d(k-1,m) )              &
-                                                      * ddz_soil_center(k-1) + surf%gamma_w(k-1,m) &
-                               - ( root_extr(k) * surf%qsws_veg(m) * drho_l_lv )                   &
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   tend(m,k) = ( surf_lsm%lambda_w(k,m)   * ( m_soil%var_2d(k+1,m) -               &
+                                                              m_soil%var_2d(k,m)                   &
+                                                            ) * ddz_soil_center(k) -               &
+                                 surf_lsm%gamma_w(k,m) -                                           &
+                                 surf_lsm%lambda_w(k-1,m) * ( m_soil%var_2d(k,m) -                 &
+                                                              m_soil%var_2d(k-1,m)                 &
+                                                            ) * ddz_soil_center(k-1) +             &
+                                 surf_lsm%gamma_w(k-1,m)                                           &
+                               - ( root_extr(k) * surf_lsm%qsws_veg(m) * drho_l_lv )               &
                                ) * ddz_soil(k)
                 ENDIF
              ENDDO
@@ -4644,17 +4565,16 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
           !$ACC END PARALLEL LOOP
 
           !$OMP PARALLEL DO PRIVATE (m) SCHEDULE (STATIC)
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%water_surface, surf%lambda_w, surf%gamma_w, surf%qsws_veg) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(tend, ddz_soil_center, root_extr, drho_l_lv, ddz_soil) IF(enable_lsm_openacc)
-          DO  m = 1, surf%ns
-             IF ( .NOT. surf%water_surface(m) )  THEN
-                tend(m,nzt_soil) = ( -surf%gamma_w(nzt_soil,m) - surf%lambda_w(nzt_soil-1,m) *    &
-                                      ( surf_m_soil%var_2d(nzt_soil,m) -                          &
-                                        surf_m_soil%var_2d(nzt_soil-1,m) ) *                      &
-                                      ddz_soil_center(nzt_soil-1) + surf%gamma_w(nzt_soil-1,m) -  &
-                                      ( root_extr(nzt_soil) * surf%qsws_veg(m) * drho_l_lv )      &
+          !$ACC PARALLEL LOOP GANG VECTOR &
+          !$ACC COPYIN(drho_l_lv) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  m = 1, surf_lsm%ns
+             IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                tend(m,nzt_soil) = ( -surf_lsm%gamma_w(nzt_soil,m) -                               &
+                                      surf_lsm%lambda_w(nzt_soil-1,m) *                            &
+                                      ( m_soil%var_2d(nzt_soil,m) - m_soil%var_2d(nzt_soil-1,m) ) *&
+                                      ddz_soil_center(nzt_soil-1) +                                &
+                                      surf_lsm%gamma_w(nzt_soil-1,m) -                             &
+                                      ( root_extr(nzt_soil) * surf_lsm%qsws_veg(m) * drho_l_lv )   &
                                    ) * ddz_soil(nzt_soil)
 
              ENDIF
@@ -4664,17 +4584,13 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 !--       Actual time integration.
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%ns, surf%water_surface) &
-          !$ACC COPY(surf_m_soil_p, surf_m_soil_p%var_2d) &
-          !$ACC COPY(surf_m_soil, surf_m_soil%var_2d) &
-          !$ACC COPY(surf_tm_soil_m, surf_tm_soil_m%var_2d, tend, tsc(2:3)) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   surf_m_soil_p%var_2d(k,m) = surf_m_soil%var_2d(k,m) + dt_3d *                   &
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   m_soil_p%var_2d(k,m) = m_soil%var_2d(k,m) + dt_3d *                             &
                                               ( tsc(2) * tend(m,k) +                               &
-                                                tsc(3) * surf_tm_soil_m%var_2d(k,m) )
+                                                tsc(3) * tm_soil_m%var_2d(k,m) )
                 ENDIF
              ENDDO
           ENDDO
@@ -4684,14 +4600,12 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 !--       here).
           !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(surf, surf%ns, surf%water_surface, surf%m_sat) &
-          !$ACC COPY(surf_m_soil_p, surf_m_soil_p%var_2d) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  k = nzb_soil, nzt_soil
-             DO  m = 1, surf%ns
-                IF ( .NOT. surf%water_surface(m) )  THEN
-                   surf_m_soil_p%var_2d(k,m) = MIN( surf_m_soil_p%var_2d(k,m), surf%m_sat(k,m) )
-                   surf_m_soil_p%var_2d(k,m) = MAX( surf_m_soil_p%var_2d(k,m), 0.0_wp )
+             DO  m = 1, surf_lsm%ns
+                IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                   m_soil_p%var_2d(k,m) = MIN( m_soil_p%var_2d(k,m), surf_lsm%m_sat(k,m) )
+                   m_soil_p%var_2d(k,m) = MAX( m_soil_p%var_2d(k,m), 0.0_wp )
                 ENDIF
              ENDDO
           ENDDO
@@ -4702,13 +4616,11 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
              IF ( intermediate_timestep_count == 1 )  THEN
                 !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
 !NEC$ nointerchange
-                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-                !$ACC COPY(surf, surf%ns, surf%water_surface) &
-                !$ACC COPY(surf_tm_soil_m, surf_tm_soil_m%var_2d, tend) IF(enable_lsm_openacc)
+                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
                 DO  k = nzb_soil, nzt_soil
-                   DO  m = 1, surf%ns
-                      IF ( .NOT. surf%water_surface(m) )  THEN
-                         surf_tm_soil_m%var_2d(k,m) = tend(m,k)
+                   DO  m = 1, surf_lsm%ns
+                      IF ( .NOT. surf_lsm%water_surface(m) )  THEN
+                         tm_soil_m%var_2d(k,m) = tend(m,k)
                       ENDIF
                    ENDDO
                 ENDDO
@@ -4716,14 +4628,12 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
              ELSEIF ( intermediate_timestep_count < intermediate_timestep_count_max )  THEN
                 !$OMP PARALLEL DO PRIVATE (m, k) SCHEDULE (STATIC)
  !NEC$ nointerchange
-                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-                !$ACC COPY(surf, surf%ns, surf%water_surface) &
-                !$ACC COPY(surf_tm_soil_m, surf_tm_soil_m%var_2d, tend) IF(enable_lsm_openacc)
+                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(PRESENT) IF(enable_openacc)
                 DO  k = nzb_soil, nzt_soil
-                   DO  m = 1, surf%ns
-                      IF (  .NOT.  surf%water_surface(m) )  THEN
-                         surf_tm_soil_m%var_2d(k,m) = -9.5625_wp * tend(m,k) +                     &
-                                                       5.3125_wp * surf_tm_soil_m%var_2d(k,m)
+                   DO  m = 1, surf_lsm%ns
+                      IF ( .NOT.  surf_lsm%water_surface(m) )  THEN
+                         tm_soil_m%var_2d(k,m) = -9.5625_wp * tend(m,k) +                          &
+                                                  5.3125_wp * tm_soil_m%var_2d(k,m)
                       ENDIF
                    ENDDO
                 ENDDO
@@ -4733,6 +4643,9 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
        ENDIF ! humidity
     ENDIF ! calc_soil_moisture
 
+    !$ACC END DATA
+
+    DEALLOCATE( m_total, gamma_temp, lambda_temp, tend )
 !
 !-- Debug location message
     IF ( debug_output_timestep )  THEN
@@ -6368,7 +6281,6 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
 
     INTEGER(iwp) ::  k        !< running index z-direction file
     INTEGER(iwp) ::  kk       !< running index z-direction stretched model grid
-    INTEGER(iwp) ::  ku       !< upper index bound along z-direction for varialbe from file
     INTEGER(iwp) ::  nzb_var  !< lower bound of final array
     INTEGER(iwp) ::  nzt_var  !< upper bound of final array
     INTEGER(iwp) ::  nzb_file !< lower bound of file array
@@ -6379,32 +6291,38 @@ END SUBROUTINE lsm_recompute_outgoing_radiation
     REAL(wp), DIMENSION(nzb_file:nzt_file) ::  z_file   !< grid levels on file grid
     REAL(wp), DIMENSION(nzb_var:nzt_var)   ::  z_grid   !< grid levels on numeric grid
 
-
-    ku = nzt_file
+    REAL(wp) :: z  !< target grid level for interpolation
+    REAL(wp) :: z1 !< lower grid level for interpolation
+    REAL(wp) :: z2 !< upper grid level for interpolation
+    REAL(wp) :: v1 !< variable value at lower grid level for interpolation
+    REAL(wp) :: v2 !< variable value at upper grid level for interpolation
+    REAL(wp) :: w  !< weighting factor for interpolation
 
     DO  k = nzb_var, nzt_var
+       z = z_grid(k)
+       IF ( z <= z_file(nzb_file) )  THEN
 !
-!--    Determine index on dynamic file grid which is closest to the actual height.
-       kk = MINLOC( ABS( z_file - z_grid(k) ), DIM = 1 )
+!--       Below nzb_file, use nearest neighbour.
+          var(k) = var_file(nzb_file)
+       ELSEIF ( z >= z_file(nzt_file) )  THEN
 !
-!--    If closest index on dynamic file grid is smaller than top index, interpolate the data.
-       IF ( kk < nzt_file )  THEN
-          IF ( z_file(kk) - z_grid(k) <= 0.0_wp )  THEN
-             var(k) = var_file(kk) + ( var_file(kk+1) - var_file(kk) ) /                           &
-                                     ( z_file(kk+1)   - z_file(kk)   ) *                           &
-                                     ( z_grid(k)      - z_file(kk)   )
-
-          ELSEIF ( z_file(kk) - z_grid(k) > 0.0_wp )  THEN
-             var(k) = var_file(kk-1) + ( var_file(kk) - var_file(kk-1) ) /                         &
-                                       ( z_file(kk)   - z_file(kk-1)   ) *                         &
-                                       ( z_grid(k)    - z_file(kk-1)   )
-          ENDIF
-!
-!--    Extrapolate if actual height is above the highest dynamic file grid level by the last value.
+!--       Above nzt_file, use nearest neighbour.
+          var(k) = var_file(nzt_file)
        ELSE
-          var(k) = var_file(ku)
+!
+!--       Between nzb_file and nzt_file, use linear interpolation.
+          DO  kk = nzb_file, nzt_file - 1
+             IF ( z_file(kk) <= z  .AND.  z < z_file(kk+1) )  THEN
+                z1 = z_file(kk)
+                z2 = z_file(kk+1)
+                v1 = var_file(kk)
+                v2 = var_file(kk+1)
+                w = ( z - z1 ) / ( z2 - z1 )
+                var(k) = ( 1.0_wp - w ) * v1 + w * v2
+                EXIT
+             ENDIF
+          ENDDO
        ENDIF
-
     ENDDO
 
  END SUBROUTINE interpolate_soil_profile

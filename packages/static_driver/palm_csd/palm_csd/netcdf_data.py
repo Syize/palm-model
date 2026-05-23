@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Module with objects that could be read or written to netCDF."""
 
@@ -25,8 +25,7 @@ import numpy as np
 import numpy.typing as npt
 from netCDF4 import Dataset
 from numpy import ma
-from pydantic import BaseModel, GetPydanticSchema, field_validator
-from typing_extensions import Annotated
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class NCDFDimension(BaseModel, arbitrary_types_allowed=True, validate_assignment
 
     name: str
     """Name."""
-    datatype: Union[str, type]
+    data_type: Union[str, type]
     """Data type."""
 
     long_name: Optional[str] = None
@@ -48,19 +47,16 @@ class NCDFDimension(BaseModel, arbitrary_types_allowed=True, validate_assignment
     """Units."""
     standard_name: Optional[str] = None
     """Standard name."""
-    # values is a numpy array, but the type is not recognized by pydantic for Python < 3.9. Use a
-    # workaround.
-    # TODO: Remove the workaround when Python 3.8 is no longer supported.
-    values: Optional[Annotated[npt.NDArray, GetPydanticSchema(lambda _s, h: h(np.ndarray))]] = None
+    values: Optional[npt.NDArray] = None
     """Values."""
 
     _metadata: ClassVar[List[str]] = ["long_name", "units", "standard_name"]
     """Metadata attributes."""
 
-    @field_validator("datatype")
+    @field_validator("data_type")
     @classmethod
-    def _check_datatype(cls, v: Union[str, type]) -> Union[str, type]:
-        """Check if the datatype is a string or a type.
+    def _check_data_type(cls, v: Union[str, type]) -> Union[str, type]:
+        """Check if the data type is a string or a type.
 
         Args:
             v: Data type.
@@ -72,7 +68,7 @@ class NCDFDimension(BaseModel, arbitrary_types_allowed=True, validate_assignment
             Validated data type.
         """
         if not (v is str or isinstance(v, str)):
-            raise ValueError("Datatype must be a string or str.")
+            raise ValueError("Data type must be a string or str.")
         return v
 
     @property
@@ -124,7 +120,7 @@ class NCDFDimension(BaseModel, arbitrary_types_allowed=True, validate_assignment
 
             nc_data.createDimension(self.name, len(to_write))
 
-            nc_var = nc_data.createVariable(self.name, self.datatype, self.name)
+            nc_var = nc_data.createVariable(self.name, self.data_type, self.name)
             nc_var[:] = to_write
 
             for attr in self._metadata:
@@ -144,9 +140,9 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
     """Name."""
     dimensions: Tuple[NCDFDimension, ...]
     """Dimensions."""
-    datatype: str
+    data_type: str
     """Data type."""
-    fillvalue: float
+    fill_value: float
     """Fill value."""
     long_name: str
     """Long name."""
@@ -162,10 +158,11 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
     """Grid mapping."""
     lod: Optional[int] = None
     """Level of detail."""
-    res_orig: Optional[float] = None
-    """Original resolution of the input data."""
     standard_name: Optional[str] = None
     """Standard name."""
+
+    mandatory: bool = True
+    """Whether the variable is mandatory in the static driver."""
 
     file: Optional[Path] = None
     """Default file for input/output."""
@@ -174,7 +171,6 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
         "long_name",
         "units",
         "standard_name",
-        "res_orig",
         "lod",
         "coordinates",
         "grid_mapping",
@@ -189,12 +185,17 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
         """
         return ma.masked_all([len(dim) for dim in self.dimensions])
 
-    def to_nc(self, values: Optional[npt.ArrayLike] = None, file: Optional[Path] = None) -> None:
+    def to_nc(
+        self,
+        values: Optional[npt.ArrayLike] = None,
+        file: Optional[Path] = None,
+    ) -> None:
         """Write variable to a netCDF file.
 
         The netCDF file is openend and closed. The file is either specified in the function call or
-        taken from the default file. If the variable was not yet added, it is added with its
-        dimensions, otherwise its values are overwritten. The values are either supplied in the
+        taken from the default file. If the variable is not mandatory and the values are all masked,
+        the variable is not written. Otherwise, if the variable was not yet added, it is added with
+        its dimensions, otherwise its values are overwritten. The values are either supplied in the
         function call or taken from the values attribute.
 
         Args:
@@ -212,6 +213,11 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
             to_write = self.values
         else:
             raise ValueError(f"Values of variable {self.name} not defined.")
+
+        if not self.mandatory:
+            if isinstance(to_write, ma.MaskedArray) and to_write.mask.all():
+                logger.debug(f"All values of variable {self.name} are masked. Skipping write.")
+                return
 
         if file is not None:
             to_file = file
@@ -233,9 +239,9 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
 
             nc_var = nc_data.createVariable(
                 self.name,
-                self.datatype,
+                self.data_type,
                 (o.name for o in self.dimensions),
-                fill_value=self.fillvalue,
+                fill_value=self.fill_value,
             )
 
             for attr in self._metadata:
@@ -246,18 +252,18 @@ class NCDFVariable(BaseModel, arbitrary_types_allowed=True, validate_assignment=
         else:
             nc_var = nc_data.variables[self.name]
 
-        # When writing, the data type of to_write will be automatically adjusted to self.datatype as
-        # defined above. For masked arrays, this includes also masked data and the fill value. If
+        # When writing, the data type of to_write will be automatically adjusted to self.data_type
+        # as defined above. For masked arrays, this includes also masked data and the fill value. If
         # these for the static driver irrelevant values are outside of the target data type, a
         # warning will be raised, e.g. "RuntimeWarning: invalid value encountered in cast" or
         # "RuntimeWarning: overflow encountered in cast". In order to avoid this, data that is
-        # masked and the fill value are set to the fill value of the variable.
-        # TODO: Check if this is still necessary.
+        # masked and the fill value are set to the fill value of the variable. TODO: Check if this
+        # is still necessary.
         if isinstance(to_write, ma.MaskedArray):
             to_write = ma.MaskedArray(
-                np.where(to_write.mask, self.fillvalue, to_write.data),
+                np.where(to_write.mask, self.fill_value, to_write.data),
                 mask=to_write.mask,
-                fill_value=self.fillvalue,
+                fill_value=self.fill_value,
             )
 
         if len(self.dimensions) == 1:

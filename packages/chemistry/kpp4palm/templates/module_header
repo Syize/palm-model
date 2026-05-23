@@ -49,7 +49,7 @@
 
 ! Set kpp Double Precision to PALM Default Precision
 
-  USE kinds,            ONLY: dp=>wp
+  USE kinds,            ONLY: wp
 
   USE pegrid,           ONLY: myid, threads_per_task
 

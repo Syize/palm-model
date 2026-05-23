@@ -1,0 +1,31 @@
+---
+attributes:
+  author: Sebastian Schubert, schubert.2@tu-berlin.de
+
+settings:
+  epsg: 25833
+  use_lai_for_trees: False
+
+input_01:
+  path: tests/05_geo_converter/input
+  files:
+    trees: trees.shp
+  columns:
+    Kronend: tree_crown_diameter
+    Hoehe: tree_height
+    Form: tree_shape
+    Typ: tree_type
+    Spezies: tree_type_name
+
+
+output:
+  path: tests/95_single_trees/
+  file_out: single_trees
+
+domain_root:
+  pixel_size: 1.0
+  origin_x: 400000.0
+  origin_y: 5800000.0
+  nx: 54
+  ny: 19
+  dz: 1.0

@@ -70,32 +70,17 @@
     dt_run_control             = 0.0,    ! output interval for run control
     dt_data_output             = 400.0,  ! output interval for general data
     dt_dopr                    = 400.0,  ! output interval for profile data
-
-    data_output                = 'w_xy', 
-                                 'w_xz', 
-                                 'theta_xy', 
-                                 'theta_xz', 
-                                 'ql_yz', 
-                                 'w_yz', 
-                                 'u_yz', 
-                                 'v_yz', 
-                                 'theta_yz',
                    
     data_output_pr             = 'u', 
                                  'v', 
-                                 'w', 
-                                 'ql', 
+                                 'ql',
                                  '#theta', 
                                  'w"theta"', 
                                  'w*theta*', 
                                  'wtheta', 
                                  'w*2', 
-                                 'theta*2', 
-              
-    section_xy                 = 2, 10,  ! grid index for 2D XY cross sections
-    section_xz                 = 20,     ! grid index for 2D XZ cross sections
-    section_yz                 = -1, 5,  ! grid index for 2D YZ cross sections
-     
+
+             
     averaging_interval_pr      = 100.0,  ! averaging interval profile data
     dt_averaging_input_pr      = 10.0,   ! averaging profile data sampling rate
 
@@ -141,9 +126,11 @@
 !-- particle output 
 !-------------------------------------------------------------------------------                
     dt_dopts                   = 60.0,      ! time interval for particle timeseries
-    write_particle_statistics  = .FALSE.,   ! write particle statistics in file
-    dt_write_particle_data     = 10000.0,   ! interval for particle output (Binary Files)
-                                            ! Attention: they might be very huge, so here
                                             ! particles are only implicitly outputted
+                                            
+   data_output_pts             = 'tnpt',
+                                 'radius_', 
+                                 'r_min',
+                                 'r_max',                                          
 / ! end of particle parameter namelist
 

@@ -33,16 +33,15 @@
 
     IMPLICIT NONE
 
-    PRIVATE
-    PUBLIC exchange_horiz,                                                                         &
-           exchange_horiz_int,                                                                     &
-           exchange_horiz_2d,                                                                      &
-           exchange_horiz_2d_byte,                                                                 &
-           exchange_horiz_2d_int
-
     INTERFACE exchange_horiz
        MODULE PROCEDURE exchange_horiz
     END INTERFACE exchange_horiz
+
+#if defined( __parallel )
+    INTERFACE exchange_horiz_rb
+       MODULE PROCEDURE exchange_horiz_rb
+    END INTERFACE exchange_horiz_rb
+#endif
 
     INTERFACE exchange_horiz_int
        MODULE PROCEDURE exchange_horiz_int
@@ -60,6 +59,18 @@
        MODULE PROCEDURE exchange_horiz_2d_int
     END INTERFACE exchange_horiz_2d_int
 
+    PRIVATE
+
+    PUBLIC exchange_horiz,                                                                         &
+           exchange_horiz_int,                                                                     &
+           exchange_horiz_2d,                                                                      &
+           exchange_horiz_2d_byte,                                                                 &
+           exchange_horiz_2d_int
+
+#if defined( __parallel )
+    PUBLIC exchange_horiz_rb
+#endif
+
 
  CONTAINS
 
@@ -71,7 +82,7 @@
 !> boundary conditions for the total domain.
 !> This routine is for REAL 3d-arrays.
 !--------------------------------------------------------------------------------------------------!
- SUBROUTINE exchange_horiz( ar, nbgp_local, alternative_communicator )
+ SUBROUTINE exchange_horiz( ar, nbgp_local, alternative_communicator, grid_level, mg_switch_to_pe0 )
 
     USE control_parameters,                                                                        &
         ONLY:  bc_lr_cyc,                                                                          &
@@ -79,9 +90,7 @@
 
 #if defined( __parallel )
     USE control_parameters,                                                                        &
-        ONLY:  grid_level,                                                                         &
-               mg_switch_to_pe0,                                                                   &
-               synchronous_exchange,                                                               &
+        ONLY:  synchronous_exchange,                                                               &
                use_contiguous_buffer
 #endif
 
@@ -106,7 +115,8 @@
         ONLY:  acc_is_present
 #endif
 
-    INTEGER(iwp), OPTIONAL ::  alternative_communicator  !< alternative MPI communicator to be used
+    INTEGER(iwp), OPTIONAL, INTENT(IN) ::  alternative_communicator  !< alternative MPI communicator to be used
+    INTEGER(iwp), OPTIONAL, INTENT(IN) ::  grid_level                !< multigrid grid level to be used
 
 #if defined( __parallel )
     INTEGER(iwp) ::  bufsize       !< size of buffer for sending/receiving contiguous data
@@ -115,11 +125,17 @@
     INTEGER(iwp) ::  i             !< loop index
     INTEGER(iwp) ::  j             !< loop index
     INTEGER(iwp) ::  k             !< loop index
+    INTEGER(iwp) ::  l             !< grid level to choose the dreived datatypes
     INTEGER(iwp) ::  left_pe       !< id of left pe that is used as argument in MPI calls
     INTEGER(iwp) ::  nbgp_local    !< number of ghost point layers
     INTEGER(iwp) ::  north_pe      !< id of north pe that is used as argument in MPI calls
     INTEGER(iwp) ::  right_pe      !< id of right pe that is used as argument in MPI calls
     INTEGER(iwp) ::  south_pe      !< id of south pe that is used as argument in MPI calls
+
+    LOGICAL, OPTIONAL, INTENT(IN) ::  mg_switch_to_pe0
+
+    LOGICAL ::  switch_to_pe0  !< local switch telling if total domain is gathered on one PE
+
 
     REAL(wp), DIMENSION(nzb:nzt+1,nys-nbgp_local:nyn+nbgp_local,                                   &
                         nxl-nbgp_local:nxr+nbgp_local) ::  ar !< 3d-array for which exchange is done
@@ -165,11 +181,27 @@
 
     ENDIF
 
+!
+!-- Set the grid level.
+    IF ( PRESENT( grid_level ) )  THEN
+       l = grid_level
+    ELSE
+       l = 0
+    ENDIF
+
+!
+!-- Set the switch that tells if data of the toal domain is gathered on the PE
+    IF ( PRESENT( mg_switch_to_pe0 ) )  THEN
+       switch_to_pe0 = mg_switch_to_pe0
+    ELSE
+       switch_to_pe0 = .FALSE.
+    ENDIF
+
 #if defined( __parallel )
 !
 !-- Exchange in y-direction of lateral boundaries. Must be done before exchange in x, because
 !-- in case of buffering, only computational grid points (nxl:nxr) will be exchanged.
-    IF ( npey == 1  .OR.  mg_switch_to_pe0 )  THEN
+    IF ( npey == 1  .OR.  switch_to_pe0 )  THEN
 !
 !--    One-dimensional decomposition along x, boundary values can be exchanged within the PE memory
        IF ( PRESENT( alternative_communicator ) )  THEN
@@ -222,17 +254,15 @@
 !
 !--       Send front boundary, receive rear one (synchronous)
           !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-          CALL MPI_SENDRECV( ar(nzb,nys,nxl-nbgp_local),   1, type_xz(grid_level), south_pe, 0,    &
-                             ar(nzb,nyn+1,nxl-nbgp_local), 1, type_xz(grid_level), north_pe, 0,    &
+          CALL MPI_SENDRECV( ar(nzb,nys,nxl-nbgp_local),   1, type_xz(l), south_pe, 0,             &
+                             ar(nzb,nyn+1,nxl-nbgp_local), 1, type_xz(l), north_pe, 0,             &
                              communicator, status, ierr )
           !$ACC END HOST_DATA
 !
 !--       Send rear boundary, receive front one (synchronous)
           !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-          CALL MPI_SENDRECV( ar(nzb,nyn-nbgp_local+1,nxl-nbgp_local), 1,                           &
-                             type_xz(grid_level), north_pe, 1,                                     &
-                             ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1,                           &
-                             type_xz(grid_level), south_pe, 1,                                     &
+          CALL MPI_SENDRECV( ar(nzb,nyn-nbgp_local+1,nxl-nbgp_local), 1, type_xz(l), north_pe, 1,  &
+                             ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1, type_xz(l), south_pe, 1,  &
                              communicator, status, ierr )
           !$ACC END HOST_DATA
 
@@ -240,129 +270,127 @@
 
 !
 !--       Asynchroneous exchange
-          IF ( send_receive == 'ns'  .OR.  send_receive == 'al' )  THEN
+          req(1:4)  = 0
+          req_count = 0
 
-             req(1:4)  = 0
-             req_count = 0
-
-             IF ( use_contiguous_buffer )  THEN
-!
-!--             Allocate buffers for sending / receiving ghost layer data
-                ALLOCATE( recvbuf1(nzb:nzt+1,nxl:nxr,nbgp_local) )
-                ALLOCATE( recvbuf2(nzb:nzt+1,nxl:nxr,nbgp_local) )
-                ALLOCATE( sendbuf1(nzb:nzt+1,nxl:nxr,nbgp_local) )
-                ALLOCATE( sendbuf2(nzb:nzt+1,nxl:nxr,nbgp_local) )
-                !$ACC DATA CREATE(recvbuf1,recvbuf2,sendbuf1,sendbuf2) IF(enable_openacc)
-                bufsize = ( nzt - nzb + 2 ) * ( nxr - nxl + 1 ) * nbgp_local
+          IF ( use_contiguous_buffer )  THEN
 
 !
-!--             Pack data for sending south boundary.
-                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
-                DO  i = nxl, nxr
-                   DO  j = 1, nbgp_local
-                      DO  k = nzb, nzt+1
-                         sendbuf1(k,i,j) = ar(k,nys+j-1,i)
-                      ENDDO
+!--          Allocate buffers for sending / receiving ghost layer data
+             ALLOCATE( recvbuf1(nzb:nzt+1,nxl:nxr,nbgp_local) )
+             ALLOCATE( recvbuf2(nzb:nzt+1,nxl:nxr,nbgp_local) )
+             ALLOCATE( sendbuf1(nzb:nzt+1,nxl:nxr,nbgp_local) )
+             ALLOCATE( sendbuf2(nzb:nzt+1,nxl:nxr,nbgp_local) )
+             !$ACC DATA CREATE(recvbuf1,recvbuf2,sendbuf1,sendbuf2) IF(enable_openacc)
+
+             bufsize = ( nzt - nzb + 2 ) * ( nxr - nxl + 1 ) * nbgp_local
+
+!
+!--          Pack data for sending south boundary.
+             !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+             DO  i = nxl, nxr
+                DO  j = 1, nbgp_local
+                   DO  k = nzb, nzt+1
+                      sendbuf1(k,i,j) = ar(k,nys+j-1,i)
                    ENDDO
                 ENDDO
-                !$ACC END PARALLEL LOOP
+             ENDDO
+             !$ACC END PARALLEL LOOP
 !
-!--             Pack data for sending north boundary.
-                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
-                DO  i = nxl, nxr
-                   DO  j = 1, nbgp_local
-                      DO  k = nzb, nzt+1
-                         sendbuf2(k,i,j) = ar(k,nyn-nbgp_local+j,i)
-                      ENDDO
+!--          Pack data for sending north boundary.
+             !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+             DO  i = nxl, nxr
+                DO  j = 1, nbgp_local
+                   DO  k = nzb, nzt+1
+                      sendbuf2(k,i,j) = ar(k,nyn-nbgp_local+j,i)
                    ENDDO
                 ENDDO
-                !$ACC END PARALLEL LOOP
+             ENDDO
+             !$ACC END PARALLEL LOOP
 !
-!--             Send south boundary, receive north one (asynchronous)
-                !$ACC HOST_DATA USE_DEVICE(sendbuf1) IF(enable_openacc)
-                CALL MPI_ISEND( sendbuf1(nzb,nxl,1), bufsize, MPI_REAL, south_pe,                  &
-                                req_count, communicator, req(req_count+1), ierr )
-                !$ACC END HOST_DATA
+!--          Send south boundary, receive north one (asynchronous)
+             !$ACC HOST_DATA USE_DEVICE(sendbuf1) IF(enable_openacc)
+             CALL MPI_ISEND( sendbuf1(nzb,nxl,1), bufsize, MPI_REAL, south_pe, req_count,          &
+                             communicator, req(req_count+1), ierr )
+             !$ACC END HOST_DATA
 
-                !$ACC HOST_DATA USE_DEVICE(recvbuf1) IF(enable_openacc)
-                CALL MPI_IRECV( recvbuf1(nzb,nxl,1), bufsize, MPI_REAL, north_pe,                  &
-                                req_count, communicator, req(req_count+2), ierr )
-                !$ACC END HOST_DATA
+             !$ACC HOST_DATA USE_DEVICE(recvbuf1) IF(enable_openacc)
+             CALL MPI_IRECV( recvbuf1(nzb,nxl,1), bufsize, MPI_REAL, north_pe, req_count,          &
+                             communicator, req(req_count+2), ierr )
+             !$ACC END HOST_DATA
 !
-!--             Send north boundary, receive south one (asynchronous)
-                !$ACC HOST_DATA USE_DEVICE(sendbuf2) IF(enable_openacc)
-                CALL MPI_ISEND( sendbuf2(nzb,nxl,1), bufsize, MPI_REAL, north_pe,                  &
-                                req_count+1, communicator, req(req_count+3), ierr )
-                !$ACC END HOST_DATA
+!--          Send north boundary, receive south one (asynchronous)
+             !$ACC HOST_DATA USE_DEVICE(sendbuf2) IF(enable_openacc)
+             CALL MPI_ISEND( sendbuf2(nzb,nxl,1), bufsize, MPI_REAL, north_pe, req_count+1,        &
+                             communicator, req(req_count+3), ierr )
+             !$ACC END HOST_DATA
 
-                !$ACC HOST_DATA USE_DEVICE(recvbuf2) IF(enable_openacc)
-                CALL MPI_IRECV( recvbuf2(nzb,nxl,1), bufsize, MPI_REAL, south_pe,                  &
-                                req_count+1, communicator, req(req_count+4), ierr )
-                !$ACC END HOST_DATA
+             !$ACC HOST_DATA USE_DEVICE(recvbuf2) IF(enable_openacc)
+             CALL MPI_IRECV( recvbuf2(nzb,nxl,1), bufsize, MPI_REAL, south_pe, req_count+1,        &
+                             communicator, req(req_count+4), ierr )
+             !$ACC END HOST_DATA
 
-                CALL MPI_WAITALL( 4, req, wait_stat, ierr )
+             CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 !
-!--             Unpack received north boundary data
-                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
-                DO  i = nxl, nxr
-                   DO  j = 1, nbgp_local
-                      DO  k = nzb, nzt+1
-                         ar(k,nyn+j,i) = recvbuf1(k,i,j)
-                      ENDDO
+!--          Unpack received north boundary data
+             !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+             DO  i = nxl, nxr
+                DO  j = 1, nbgp_local
+                   DO  k = nzb, nzt+1
+                      ar(k,nyn+j,i) = recvbuf1(k,i,j)
                    ENDDO
                 ENDDO
-               !$ACC END PARALLEL LOOP
+             ENDDO
+             !$ACC END PARALLEL LOOP
 !
-!--             Unpack received south boundary data
-                !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
-                DO  i = nxl, nxr
-                   DO  j = 1, nbgp_local
-                      DO  k = nzb, nzt+1
-                         ar(k,nys-nbgp_local-1+j,i) = recvbuf2(k,i,j)
-                      ENDDO
+!--          Unpack received south boundary data
+             !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+             DO  i = nxl, nxr
+                DO  j = 1, nbgp_local
+                   DO  k = nzb, nzt+1
+                      ar(k,nys-nbgp_local-1+j,i) = recvbuf2(k,i,j)
                    ENDDO
                 ENDDO
-                !$ACC END PARALLEL LOOP
+             ENDDO
+             !$ACC END PARALLEL LOOP
 
-                !$ACC END DATA
-                DEALLOCATE( recvbuf1, recvbuf2, sendbuf1, sendbuf2 )
+             !$ACC END DATA
+             DEALLOCATE( recvbuf1, recvbuf2, sendbuf1, sendbuf2 )
 
-             ELSE
+          ELSE
 !
-!--             Send front boundary, receive rear one (asynchronous)
-                !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-                CALL MPI_ISEND( ar(nzb,nys,nxl-nbgp_local),   1, type_xz(grid_level), south_pe,    &
-                                req_count, communicator, req(req_count+1), ierr )
-                !$ACC END HOST_DATA
-                !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-                CALL MPI_IRECV( ar(nzb,nyn+1,nxl-nbgp_local), 1, type_xz(grid_level), north_pe,    &
-                                req_count, communicator, req(req_count+2), ierr )
-                !$ACC END HOST_DATA
+!--          Send front boundary, receive rear one (asynchronous)
+             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+             CALL MPI_ISEND( ar(nzb,nys,nxl-nbgp_local),   1, type_xz(l), south_pe,                &
+                             req_count, communicator, req(req_count+1), ierr )
+             !$ACC END HOST_DATA
+             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+             CALL MPI_IRECV( ar(nzb,nyn+1,nxl-nbgp_local), 1, type_xz(l), north_pe,                &
+                             req_count, communicator, req(req_count+2), ierr )
+             !$ACC END HOST_DATA
 !
-!--             Send rear boundary, receive front one (asynchronous)
-                !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-                CALL MPI_ISEND( ar(nzb,nyn-nbgp_local+1,nxl-nbgp_local), 1, type_xz(grid_level),   &
-                                north_pe, req_count+1, communicator, req(req_count+3), ierr )
-                !$ACC END HOST_DATA
-                !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-                CALL MPI_IRECV( ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1, type_xz(grid_level),   &
-                                south_pe, req_count+1, communicator, req(req_count+4), ierr )
-                !$ACC END HOST_DATA
+!--          Send rear boundary, receive front one (asynchronous)
+             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+             CALL MPI_ISEND( ar(nzb,nyn-nbgp_local+1,nxl-nbgp_local), 1, type_xz(l), north_pe,     &
+                             req_count+1, communicator, req(req_count+3), ierr )
+             !$ACC END HOST_DATA
+             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+             CALL MPI_IRECV( ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1, type_xz(l), south_pe,     &
+                             req_count+1, communicator, req(req_count+4), ierr )
+             !$ACC END HOST_DATA
 
-                CALL MPI_WAITALL( 4, req, wait_stat, ierr )
+             CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
-             ENDIF
+          ENDIF   ! contiguous buffer or MPI derived type
 
-          ENDIF
+       ENDIF   ! synchronous or asynchronous
 
-       ENDIF
-
-    ENDIF
+    ENDIF   ! npey == 1  / switch_to_pe0 or not
 
 !
 !-- Exchange in x-direction of lateral boundaries. All grid points including ghost points
 !-- (nys-nbgp_local:nyn+nbgp_local) are exchanged.
-    IF ( npex == 1  .OR.  mg_switch_to_pe0 )  THEN
+    IF ( npex == 1  .OR.  switch_to_pe0 )  THEN
 !
 !--    One-dimensional decomposition along y, boundary values can be exchanged within the PE memory.
        IF ( PRESENT( alternative_communicator ) )  THEN
@@ -415,17 +443,15 @@
 !
 !--       Send left boundary, receive right one (synchronous)
           !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-          CALL MPI_SENDRECV( ar(nzb,nys-nbgp_local,nxl),   1, type_yz(grid_level), left_pe,  0,    &
-                             ar(nzb,nys-nbgp_local,nxr+1), 1, type_yz(grid_level), right_pe, 0,    &
+          CALL MPI_SENDRECV( ar(nzb,nys-nbgp_local,nxl),   1, type_yz(l), left_pe,  0,             &
+                             ar(nzb,nys-nbgp_local,nxr+1), 1, type_yz(l), right_pe, 0,             &
                              communicator, status, ierr )
           !$ACC END HOST_DATA
 !
 !--       Send right boundary, receive left one (synchronous)
           !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-          CALL MPI_SENDRECV( ar(nzb,nys-nbgp_local,nxr+1-nbgp_local), 1,                           &
-                             type_yz(grid_level), right_pe, 1,                                     &
-                             ar(nzb,nys-nbgp_local,nxl-nbgp_local), 1,                             &
-                             type_yz(grid_level), left_pe,  1,                                     &
+          CALL MPI_SENDRECV( ar(nzb,nys-nbgp_local,nxr+1-nbgp_local), 1, type_yz(l), right_pe, 1,  &
+                             ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1, type_yz(l), left_pe,  1,  &
                              communicator, status, ierr )
           !$ACC END HOST_DATA
 
@@ -433,38 +459,35 @@
 
 !
 !--       Asynchroneous exchange
-          IF ( send_receive == 'lr'  .OR.  send_receive == 'al' )  THEN
+          req(1:4)  = 0
+          req_count = 0
 
-             req(1:4)  = 0
-             req_count = 0
 !
-!--          Send left boundary, receive right one (asynchronous)
-             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-             CALL MPI_ISEND( ar(nzb,nys-nbgp_local,nxl),   1, type_yz(grid_level), left_pe,        &
-                             req_count, communicator, req(req_count+1), ierr )
-             !$ACC END HOST_DATA
-             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-             CALL MPI_IRECV( ar(nzb,nys-nbgp_local,nxr+1), 1, type_yz(grid_level), right_pe,       &
-                             req_count, communicator, req(req_count+2), ierr )
-             !$ACC END HOST_DATA
+!--       Send left boundary, receive right one (asynchronous)
+          !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+          CALL MPI_ISEND( ar(nzb,nys-nbgp_local,nxl),   1, type_yz(l), left_pe,                    &
+                          req_count, communicator, req(req_count+1), ierr )
+          !$ACC END HOST_DATA
+          !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+          CALL MPI_IRECV( ar(nzb,nys-nbgp_local,nxr+1), 1, type_yz(l), right_pe,                   &
+                          req_count, communicator, req(req_count+2), ierr )
+          !$ACC END HOST_DATA
 !
-!--          Send right boundary, receive left one (asynchronous)
-             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-             CALL MPI_ISEND( ar(nzb,nys-nbgp_local,nxr+1-nbgp_local), 1, type_yz(grid_level),      &
-                             right_pe, req_count+1, communicator, req(req_count+3), ierr )
-             !$ACC END HOST_DATA
-             !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
-             CALL MPI_IRECV( ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1, type_yz(grid_level),      &
-                             left_pe,  req_count+1, communicator, req(req_count+4), ierr )
-             !$ACC END HOST_DATA
+!--       Send right boundary, receive left one (asynchronous)
+          !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+          CALL MPI_ISEND( ar(nzb,nys-nbgp_local,nxr+1-nbgp_local), 1, type_yz(l), right_pe,        &
+                          req_count+1, communicator, req(req_count+3), ierr )
+          !$ACC END HOST_DATA
+          !$ACC HOST_DATA USE_DEVICE(ar) IF(enable_openacc)
+          CALL MPI_IRECV( ar(nzb,nys-nbgp_local,nxl-nbgp_local),   1, type_yz(l), left_pe,         &
+                          req_count+1, communicator, req(req_count+4), ierr )
+          !$ACC END HOST_DATA
 
-             CALL MPI_WAITALL( 4, req, wait_stat, ierr )
+          CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
-          ENDIF
+       ENDIF   ! synchronous or asynchronous
 
-       ENDIF
-
-    ENDIF
+    ENDIF   ! npex == 1  / switch_to_pe0 or not
 
 
 #else
@@ -572,6 +595,531 @@
 !--------------------------------------------------------------------------------------------------!
 ! Description:
 ! ------------
+!> Exchange of ghost point layers for subdomains (in parallel mode) and setting of cyclic lateral
+!> boundary conditions for the total domain.
+!> This routine for the special exchange of red/black grid points used in the multigrid solver.
+!> Only the respective red or black points will be exchanged. For the exchange, data is always
+!> stored in contiguous buffer arrays.
+!> This routine can be (and is) used in parallel mode only.
+!--------------------------------------------------------------------------------------------------!
+#if defined( __parallel )
+ SUBROUTINE exchange_horiz_rb( ar, nbgp_local, color, kinc, ileft_for_nys_send,                    &
+                               ileft_for_nys_recv, ileft_for_nyn_send, ileft_for_nyn_recv,         &
+                               jsouth_for_nxl_send, jsouth_for_nxl_recv, jsouth_for_nxr_send,      &
+                               jsouth_for_nxr_recv, kbottom_for_nys_send, kbottom_for_nys_recv,    &
+                               kbottom_for_nyn_send, kbottom_for_nyn_recv, kbottom_for_nxl_send,   &
+                               kbottom_for_nxl_recv, kbottom_for_nxr_send, kbottom_for_nxr_recv,   &
+                               ktop_for_nys_send, ktop_for_nys_recv, ktop_for_nyn_send,            &
+                               ktop_for_nyn_recv, ktop_for_nxl_send, ktop_for_nxl_recv,            &
+                               ktop_for_nxr_send, ktop_for_nxr_recv )
+
+    USE control_parameters,                                                                        &
+        ONLY:  bc_lr_cyc,                                                                          &
+               bc_ns_cyc
+
+    USE cpulog,                                                                                    &
+        ONLY:  cpu_log,                                                                            &
+               log_point_s
+
+    USE indices,                                                                                   &
+        ONLY:  nxl,                                                                                &
+               nxr,                                                                                &
+               nyn,                                                                                &
+               nys,                                                                                &
+               nzb,                                                                                &
+               nzt
+
+    USE control_parameters,                                                                        &
+        ONLY:  bc_dirichlet_l,                                                                     &
+               bc_dirichlet_n,                                                                     &
+               bc_dirichlet_r,                                                                     &
+               bc_dirichlet_s,                                                                     &
+               bc_radiation_l,                                                                     &
+               bc_radiation_n,                                                                     &
+               bc_radiation_r,                                                                     &
+               bc_radiation_s
+
+#if defined( _OPENACC )
+    USE control_parameters,                                                                        &
+        ONLY:  enable_openacc,                                                                     &
+               message_string
+
+    USE openacc,                                                                                   &
+        ONLY:  acc_is_present
+#endif
+
+    INTEGER(iwp) ::  color  !< red or black colored pressure points in multigrid solver
+    INTEGER(iwp) ::  kinc   !< increment of k loop (= 2, for even/odd sorting = 1)
+
+    INTEGER(iwp), DIMENSION(2,2) ::  ileft_for_nyn_recv    !< lower loop index for i loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ileft_for_nyn_send    !< lower loop index for i loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ileft_for_nys_recv    !< lower loop index for i loop (ghost point exchange of right boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ileft_for_nys_send    !< lower loop index for i loop (ghost point exchange of right boundary)
+
+    INTEGER(iwp), DIMENSION(2,2) ::  jsouth_for_nxl_recv   !< lower loop index for j loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  jsouth_for_nxl_send   !< lower loop index for j loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  jsouth_for_nxr_recv   !< lower loop index for j loop (ghost point exchange of right boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  jsouth_for_nxr_send   !< lower loop index for j loop (ghost point exchange of right boundary)
+
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nxl_recv  !< lower loop index for k loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nxl_send  !< lower loop index for k loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nxr_recv  !< lower loop index for k loop (ghost point exchange of right boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nxr_send  !< lower loop index for k loop (ghost point exchange of right boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nyn_recv  !< lower loop index for k loop (ghost point exchange of north boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nyn_send  !< lower loop index for k loop (ghost point exchange of north boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nys_recv  !< lower loop index for k loop (ghost point exchange of south boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  kbottom_for_nys_send  !< lower loop index for k loop (ghost point exchange of south boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nxl_recv     !< upper loop index for k loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nxl_send     !< upper loop index for k loop (ghost point exchange of left boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nxr_recv     !< upper loop index for k loop (ghost point exchange of right boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nxr_send     !< upper loop index for k loop (ghost point exchange of right boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nyn_recv     !< upper loop index for k loop (ghost point exchange of north boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nyn_send     !< upper loop index for k loop (ghost point exchange of north boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nys_recv     !< upper loop index for k loop (ghost point exchange of south boundary)
+    INTEGER(iwp), DIMENSION(2,2) ::  ktop_for_nys_send     !< upper loop index for k loop (ghost point exchange of south boundary)
+
+    INTEGER(iwp) ::  bufsize       !< size of buffer for sending/receiving contiguous data
+    INTEGER(iwp) ::  communicator  !< communicator that is used as argument in MPI calls
+    INTEGER(iwp) ::  i             !< loop index
+    INTEGER(iwp) ::  ii            !< loop index
+    INTEGER(iwp) ::  il            !< loop index
+    INTEGER(iwp) ::  j             !< loop index
+    INTEGER(iwp) ::  jj            !< loop index
+    INTEGER(iwp) ::  js            !< loop index
+    INTEGER(iwp) ::  k             !< loop index
+    INTEGER(iwp) ::  kb            !< bottom loop index
+    INTEGER(iwp) ::  ki            !< local increment of k loop
+    INTEGER(iwp) ::  kt            !< top loop index
+    INTEGER(iwp) ::  nxr_rb        !< upper index for red/black decomposition (pressure)
+    INTEGER(iwp) ::  nyn_rb        !< upper index for red/black decomposition (pressure)
+    INTEGER(iwp) ::  left_pe       !< id of left pe that is used as argument in MPI calls
+    INTEGER(iwp) ::  nbgp_local    !< number of ghost point layers
+    INTEGER(iwp) ::  north_pe      !< id of north pe that is used as argument in MPI calls
+    INTEGER(iwp) ::  right_pe      !< id of right pe that is used as argument in MPI calls
+    INTEGER(iwp) ::  south_pe      !< id of south pe that is used as argument in MPI calls
+
+    REAL(wp), DIMENSION(nzb:nzt+1,nys-nbgp_local:nyn+nbgp_local,                                   &
+                        nxl-nbgp_local:nxr+nbgp_local) ::  ar !< 3d-array for which exchange is done
+
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  recvbuf1  !< buffer for sending contiguous ghost layer data
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  recvbuf2  !< buffer for sending contiguous ghost layer data
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  sendbuf1  !< buffer for sending contiguous ghost layer data
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  sendbuf2  !< buffer for sending contiguous ghost layer data
+
+
+    CALL cpu_log( log_point_s(47), 'exchange_horiz_rb', 'start' )
+
+#if defined( _OPENACC )
+!
+!-- Security check for arrays from modules that are still not ported.
+    IF ( enable_openacc  .AND.  .NOT. acc_is_present( ar ) )  THEN
+       message_string = 'array not on device'
+       CALL message( 'exchange_horiz_rb', 'PAC0358', 1, 2, 0, 6, 0 )
+    ENDIF
+#endif
+
+!
+!-- Main communicator is to be used.
+    communicator = comm2d
+    left_pe  = pleft
+    right_pe = pright
+    south_pe = psouth
+    north_pe = pnorth
+
+!
+!-- Exchange in y-direction of lateral boundaries. Must be done before exchange in x, because
+!-- in case of buffering, only computational grid points (nxl:nxr) will be exchanged.
+    IF ( npey == 1 )  THEN
+
+       IF ( bc_ns_cyc )  THEN
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  k = nzb, nzt+1
+             DO  j = 1, nbgp_local
+                DO  i = nxl-nbgp_local, nxr+nbgp_local
+                   ar(k,nys-nbgp_local-1+j,i) = ar(k,nyn-nbgp_local+j,i)
+                ENDDO
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  k = nzb, nzt+1
+             DO  j = 1, nbgp_local
+                DO  i = nxl-nbgp_local, nxr+nbgp_local
+                   ar(k,nyn+j,i) = ar(k,nys+j-1,i)
+                ENDDO
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+       ENDIF
+
+    ELSE
+
+       req(1:4)  = 0
+       req_count = 0
+
+       ki = kinc
+!
+!--    Special case for exchanging only red/black colored pressure points.
+!--    Allocate buffers for sending / receiving ghost layer data.
+!--    Only 2d-arrays are required since number of ghost layers is limited to one.
+!--    Third index is used here, since the arrays are declared as 3d.
+       nxr_rb = ( nxr - nxl ) / 2
+
+       ALLOCATE( recvbuf1(nzb+1:nzt,0:nxr_rb) )
+       ALLOCATE( recvbuf2(nzb+1:nzt,0:nxr_rb) )
+       ALLOCATE( sendbuf1(nzb+1:nzt,0:nxr_rb) )
+       ALLOCATE( sendbuf2(nzb+1:nzt,0:nxr_rb) )
+       !$ACC DATA CREATE(recvbuf1,recvbuf2,sendbuf1,sendbuf2) IF(enable_openacc)
+
+       bufsize = ( nzt - nzb ) * ( nxr_rb + 1 )
+
+!
+!--    Pack data for sending south/north boundary.
+       ii = -1
+       il = ileft_for_nys_send(1,color)
+       kb = kbottom_for_nys_send(1,color)
+       kt = ktop_for_nys_send(1,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  i = il, nxr, 2
+          ii = ii + 1
+          DO  k = kb, kt, ki
+             sendbuf1(k,ii) = ar(k,nys,i)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+       ii = -1
+       il = ileft_for_nyn_send(1,color)
+       kb = kbottom_for_nyn_send(1,color)
+       kt = ktop_for_nyn_send(1,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  i = il, nxr, 2
+          ii = ii + 1
+          DO  k = kb, kt, ki
+             sendbuf2(k,ii) = ar(k,nyn,i)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+       ii = -1
+       il = ileft_for_nys_send(2,color)
+       kb = kbottom_for_nys_send(2,color)
+       kt = ktop_for_nys_send(2,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  i = il, nxr, 2
+          ii = ii + 1
+          DO  k = kb, kt, ki
+             sendbuf1(k,ii) = ar(k,nys,i)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+       ii = -1
+       il = ileft_for_nyn_send(2,color)
+       kb = kbottom_for_nyn_send(2,color)
+       kt = ktop_for_nyn_send(2,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  i = il, nxr, 2
+          ii = ii + 1
+          DO  k = kb, kt, ki
+             sendbuf2(k,ii) = ar(k,nyn,i)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+!
+!--    Send south boundary, receive north one (asynchronous), only red or black points.
+       !$ACC HOST_DATA USE_DEVICE(sendbuf1) IF(enable_openacc)
+       CALL MPI_ISEND( sendbuf1(nzb+1,0), bufsize, MPI_REAL, south_pe, req_count, communicator,    &
+                       req(req_count+1), ierr )
+       !$ACC END HOST_DATA
+
+       !$ACC HOST_DATA USE_DEVICE(recvbuf1) IF(enable_openacc)
+       CALL MPI_IRECV( recvbuf1(nzb+1,0), bufsize, MPI_REAL, north_pe, req_count, communicator,    &
+                       req(req_count+2), ierr )
+       !$ACC END HOST_DATA
+!
+!--    Send north boundary, receive south one (asynchronous)
+       !$ACC HOST_DATA USE_DEVICE(sendbuf2) IF(enable_openacc)
+       CALL MPI_ISEND( sendbuf2(nzb+1,0), bufsize, MPI_REAL, north_pe, req_count+1, communicator,  &
+                       req(req_count+3), ierr )
+       !$ACC END HOST_DATA
+
+       !$ACC HOST_DATA USE_DEVICE(recvbuf2) IF(enable_openacc)
+       CALL MPI_IRECV( recvbuf2(nzb+1,0), bufsize, MPI_REAL, south_pe, req_count+1, communicator,  &
+                       req(req_count+4), ierr )
+       !$ACC END HOST_DATA
+
+       CALL MPI_WAITALL( 4, req, wait_stat, ierr )
+
+!
+!--    Unpack received south/north boundary data.
+       IF ( .NOT. bc_dirichlet_n  .AND.  .NOT. bc_radiation_n )  THEN
+
+          ii = -1
+          il = ileft_for_nyn_recv(1,color)
+          kb = kbottom_for_nyn_recv(1,color)
+          kt = ktop_for_nyn_recv(1,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  i = il, nxr, 2
+             ii = ii + 1
+             DO  k = kb, kt, ki
+                ar(k,nyn+1,i) = recvbuf1(k,ii)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+          ii = -1
+          il = ileft_for_nyn_recv(2,color)
+          kb = kbottom_for_nyn_recv(2,color)
+          kt = ktop_for_nyn_recv(2,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  i = il, nxr, 2
+             ii = ii + 1
+             DO  k = kb, kt, ki
+                ar(k,nyn+1,i) = recvbuf1(k,ii)
+                ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+       ENDIF
+
+       IF ( .NOT. bc_dirichlet_s  .AND.  .NOT. bc_radiation_s )  THEN
+
+          ii = -1
+          il = ileft_for_nys_recv(1,color)
+          kb = kbottom_for_nys_recv(1,color)
+          kt = ktop_for_nys_recv(1,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  i = il, nxr, 2
+             ii = ii + 1
+             DO  k = kb, kt, ki
+                ar(k,nys-1,i) = recvbuf2(k,ii)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+          ii = -1
+          il = ileft_for_nys_recv(2,color)
+          kb = kbottom_for_nys_recv(2,color)
+          kt = ktop_for_nys_recv(2,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  i = il, nxr, 2
+             ii = ii + 1
+             DO  k = kb, kt, ki
+                ar(k,nys-1,i) = recvbuf2(k,ii)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+       ENDIF
+
+       !$ACC END DATA
+       DEALLOCATE( recvbuf1, recvbuf2, sendbuf1, sendbuf2 )
+
+    ENDIF
+
+!
+!-- Exchange in x-direction of lateral boundaries. All grid points including ghost points
+!-- (nys-nbgp_local:nyn+nbgp_local) are exchanged.
+    IF ( npex == 1 )  THEN
+
+       IF ( bc_lr_cyc )  THEN
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  i = 1, nbgp_local
+             DO  j = nys-nbgp_local, nyn+nbgp_local
+                DO  k = nzb, nzt+1
+                   ar(k,j,nxl-nbgp_local-1+i) = ar(k,j,nxr-nbgp_local+i)
+                ENDDO
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+          !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(3) DEFAULT(PRESENT) IF(enable_openacc)
+          DO  i = 1, nbgp_local
+             DO  j = nys-nbgp_local, nyn+nbgp_local
+                DO  k = nzb, nzt+1
+                   ar(k,j,nxr+i) = ar(k,j,nxl+i-1)
+                ENDDO
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+       ENDIF
+
+    ELSE
+
+       req(1:4)  = 0
+       req_count = 0
+
+       ki = kinc
+!
+!--    Special case for exchanging red/black colored pressure points.
+!--    Always using contiguous buffers!
+!--    Allocate buffers for sending / receiving ghost layer data.
+       nyn_rb = ( nyn - nys ) / 2
+
+       ALLOCATE( recvbuf1(nzb+1:nzt,-1:nyn_rb+1) )
+       ALLOCATE( recvbuf2(nzb+1:nzt,-1:nyn_rb+1) )
+       ALLOCATE( sendbuf1(nzb+1:nzt,-1:nyn_rb+1) )
+       ALLOCATE( sendbuf2(nzb+1:nzt,-1:nyn_rb+1) )
+       !$ACC DATA CREATE(recvbuf1,recvbuf2,sendbuf1,sendbuf2) IF(enable_openacc)
+
+       bufsize = ( nzt - nzb ) * ( nyn_rb + 3 )
+
+!
+!--    Pack data for sending left/right boundary.
+       jj = -2
+       js = jsouth_for_nxl_send(1,color)
+       kb = kbottom_for_nxl_send(1,color)
+       kt = ktop_for_nxl_send(1,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  j = js, nyn+1, 2
+          jj = jj + 1
+          DO  k = kb, kt, ki
+             sendbuf1(k,jj) = ar(k,j,nxl)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+       jj = -2
+       js = jsouth_for_nxr_send(1,color)
+       kb = kbottom_for_nxr_send(1,color)
+       kt = ktop_for_nxr_send(1,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  j = js, nyn+1, 2
+          jj = jj + 1
+          DO  k = kb, kt, ki
+             sendbuf2(k,jj) = ar(k,j,nxr)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+       jj = -2
+       js = jsouth_for_nxl_send(2,color)
+       kb = kbottom_for_nxl_send(2,color)
+       kt = ktop_for_nxl_send(2,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  j = js, nyn+1, 2
+          jj = jj + 1
+          DO  k = kb, kt, ki
+             sendbuf1(k,jj) = ar(k,j,nxl)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+       jj = -2
+       js = jsouth_for_nxr_send(2,color)
+       kb = kbottom_for_nxr_send(2,color)
+       kt = ktop_for_nxr_send(2,color)
+       !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+       DO  j = js, nyn+1, 2
+          jj = jj + 1
+          DO  k = kb, kt, ki
+             sendbuf2(k,jj) = ar(k,j,nxr)
+          ENDDO
+       ENDDO
+       !$ACC END PARALLEL LOOP
+
+!
+!--    Send left boundary, receive right one (asynchronous), only red or black points
+       !$ACC HOST_DATA USE_DEVICE(sendbuf1) IF(enable_openacc)
+       CALL MPI_ISEND( sendbuf1(nzb+1,-1), bufsize, MPI_REAL, left_pe, req_count, communicator,    &
+                       req(req_count+1), ierr )
+       !$ACC END HOST_DATA
+
+       !$ACC HOST_DATA USE_DEVICE(recvbuf1) IF(enable_openacc)
+       CALL MPI_IRECV( recvbuf1(nzb+1,-1), bufsize, MPI_REAL, right_pe, req_count, communicator,   &
+                       req(req_count+2), ierr )
+       !$ACC END HOST_DATA
+!
+!--    Send right boundary, receive left one (asynchronous)
+       !$ACC HOST_DATA USE_DEVICE(sendbuf2) IF(enable_openacc)
+       CALL MPI_ISEND( sendbuf2(nzb+1,-1), bufsize, MPI_REAL, right_pe, req_count+1, communicator, &
+                       req(req_count+3), ierr )
+       !$ACC END HOST_DATA
+
+       !$ACC HOST_DATA USE_DEVICE(recvbuf2) IF(enable_openacc)
+       CALL MPI_IRECV( recvbuf2(nzb+1,-1), bufsize, MPI_REAL, left_pe, req_count+1, communicator,  &
+                       req(req_count+4), ierr )
+       !$ACC END HOST_DATA
+
+       CALL MPI_WAITALL( 4, req, wait_stat, ierr )
+
+!
+!--    Unpack received left/right boundary data.
+       IF ( .NOT. bc_dirichlet_r  .AND.  .NOT. bc_radiation_r )  THEN
+
+          jj = -2
+          js = jsouth_for_nxr_recv(1,color)
+          kb = kbottom_for_nxr_recv(1,color)
+         kt = ktop_for_nxr_recv(1,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  j = js, nyn+1, 2
+             jj = jj + 1
+             DO  k = kb, kt, ki
+               ar(k,j,nxr+1) = recvbuf1(k,jj)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+          jj = -2
+          js = jsouth_for_nxr_recv(2,color)
+          kb = kbottom_for_nxr_recv(2,color)
+          kt = ktop_for_nxr_recv(2,color)
+         !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  j = js, nyn+1, 2
+             jj = jj + 1
+             DO  k = kb, kt, ki
+                ar(k,j,nxr+1) = recvbuf1(k,jj)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+       ENDIF
+
+       IF ( .NOT. bc_dirichlet_l  .AND.  .NOT. bc_radiation_l )  THEN
+
+          jj = -2
+          js = jsouth_for_nxl_recv(1,color)
+          kb = kbottom_for_nxl_recv(1,color)
+          kt = ktop_for_nxl_recv(1,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  j = js, nyn+1, 2
+             jj = jj + 1
+             DO  k = kb, kt, ki
+                ar(k,j,nxl-1) = recvbuf2(k,jj)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+          jj = -2
+          js = jsouth_for_nxl_recv(2,color)
+          kb = kbottom_for_nxl_recv(2,color)
+          kt = ktop_for_nxl_recv(2,color)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) IF(enable_openacc)
+          DO  j = js, nyn+1, 2
+             jj = jj + 1
+             DO  k = kb, kt, ki
+                ar(k,j,nxl-1) = recvbuf2(k,jj)
+             ENDDO
+          ENDDO
+          !$ACC END PARALLEL LOOP
+
+       ENDIF
+
+       !$ACC END DATA
+       DEALLOCATE( recvbuf1, recvbuf2, sendbuf1, sendbuf2 )
+
+    ENDIF   ! npex == 1
+
+    CALL cpu_log( log_point_s(47), 'exchange_horiz_rb', 'stop' )
+
+ END SUBROUTINE exchange_horiz_rb
+#endif
+
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+! ------------
 !> @todo Missing subroutine description.
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE exchange_horiz_int( ar, nys_l, nyn_l, nxl_l, nxr_l, nzt_l, nbgp_local, type_xz_in,     &
@@ -580,11 +1128,6 @@
     USE control_parameters,                                                                        &
         ONLY:  bc_lr_cyc,                                                                          &
                bc_ns_cyc
-
-#if defined( __parallel )
-    USE control_parameters,                                                                        &
-        ONLY:  grid_level
-#endif
 
     USE indices,                                                                                   &
         ONLY:  nzb
@@ -618,7 +1161,7 @@
        type_xz = type_xz_in
     ELSE
 #if defined( __parallel )
-       type_xz = type_xz_int(grid_level)
+       type_xz = type_xz_int(0)
 #endif
     ENDIF
 
@@ -626,7 +1169,7 @@
        type_yz = type_yz_in
     ELSE
 #if defined( __parallel )
-       type_yz = type_yz_int(grid_level)
+       type_yz = type_yz_int(0)
 #endif
     ENDIF
 
@@ -747,6 +1290,11 @@
 ! ------------
 !> Exchange of lateral (ghost) boundaries (parallel computers) and cyclic boundary conditions,
 !> respectively, for 2D-arrays.
+!>
+!> TODO: This routine requires adjustments to be used for GPUs. The simple check further below
+!>       is commented, because the routine is called for output purposes in average_3d_data, so that
+!>       the check would stop the run since many of the output quantities do not yet exist on the
+!>       device.
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE exchange_horiz_2d( ar )
 
@@ -778,10 +1326,11 @@
     REAL(wp) ::  ar(nysg:nyng,nxlg:nxrg)  !<
 
 
-#if defined( _OPENACC )
-    message_string = 'routine not prepared for using openacc'
-    CALL message( 'exchange_horiz_2d', 'PAC0359', 1, 2, 0, 6, 0 )
-#endif
+!#if defined( _OPENACC )
+!    message_string = 'routine not prepared for using openacc'
+!    CALL message( 'exchange_horiz_2d', 'PAC0359', 1, 2, 0, 6, 0 )
+!#endif
+
 
     CALL cpu_log( log_point_s(13), 'exchange_horiz_2d', 'start' )
 
@@ -975,10 +1524,7 @@
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE exchange_horiz_2d_int( ar, nys_l, nyn_l, nxl_l, nxr_l, nbgp_local )
 
-#if defined( __parallel )
-    USE control_parameters,                                                                        &
-        ONLY:  grid_level
-#else
+#if ! defined( __parallel )
     USE control_parameters,                                                                        &
         ONLY:  bc_lr_cyc,                                                                          &
                bc_ns_cyc
@@ -1023,17 +1569,13 @@
     ELSE
 !
 !--    Send left boundary, receive right one
-       CALL MPI_SENDRECV( ar(nys_l-nbgp_local,nxl_l),   1,                                         &
-                          type_y_int(grid_level), pleft,  0,                                       &
-                          ar(nys_l-nbgp_local,nxr_l+1), 1,                                         &
-                          type_y_int(grid_level), pright, 0,                                       &
+       CALL MPI_SENDRECV( ar(nys_l-nbgp_local,nxl_l),   1, type_y_int, pleft,  0,                  &
+                          ar(nys_l-nbgp_local,nxr_l+1), 1, type_y_int, pright, 0,                  &
                           comm2d, status, ierr )
 !
 !--    Send right boundary, receive left one
-       CALL MPI_SENDRECV( ar(nys_l-nbgp_local,nxr_l+1-nbgp_local), 1,                              &
-                          type_y_int(grid_level), pright, 1,                                       &
-                          ar(nys_l-nbgp_local,nxl_l-nbgp_local),   1,                              &
-                          type_y_int(grid_level), pleft,  1,                                       &
+       CALL MPI_SENDRECV( ar(nys_l-nbgp_local,nxr_l+1-nbgp_local), 1, type_y_int, pright, 1,       &
+                          ar(nys_l-nbgp_local,nxl_l-nbgp_local),   1, type_y_int, pleft,  1,       &
                           comm2d, status, ierr )
 
     ENDIF
@@ -1048,18 +1590,14 @@
     ELSE
 !
 !--    Send front boundary, receive rear one
-       CALL MPI_SENDRECV( ar(nys_l,nxl_l-nbgp_local),   1,                                         &
-                          type_x_int(grid_level), psouth, 0,                                       &
-                          ar(nyn_l+1,nxl_l-nbgp_local), 1,                                         &
-                          type_x_int(grid_level), pnorth, 0,                                       &
+       CALL MPI_SENDRECV( ar(nys_l,nxl_l-nbgp_local),   1, type_x_int, psouth, 0,                  &
+                          ar(nyn_l+1,nxl_l-nbgp_local), 1, type_x_int, pnorth, 0,                  &
                           comm2d, status, ierr )
 
 !
 !--    Send rear boundary, receive front one
-       CALL MPI_SENDRECV( ar(nyn_l+1-nbgp_local,nxl_l-nbgp_local), 1,                              &
-                          type_x_int(grid_level), pnorth, 1,                                       &
-                          ar(nys_l-nbgp_local,nxl_l-nbgp_local),   1,                              &
-                          type_x_int(grid_level), psouth, 1,                                       &
+       CALL MPI_SENDRECV( ar(nyn_l+1-nbgp_local,nxl_l-nbgp_local), 1, type_x_int, pnorth, 1,       &
+                          ar(nys_l-nbgp_local,nxl_l-nbgp_local),   1, type_x_int, psouth, 1,       &
                           comm2d, status, ierr )
 
     ENDIF

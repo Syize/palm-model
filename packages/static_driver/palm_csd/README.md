@@ -4,7 +4,7 @@ Processing tool for creating PALM Input Data Standard (PIDS) conform static driv
 
 ## Installation
 
-`palm_csd` is written in Python 3 and can be installed using the provided `install` script. Type `bash install -h` to get all available options. In particular, you can use the `-p <install-prefix>` switch to specify the installation directory and the `-e` switch to create a virtual enviroment for `palm_csd` in `<install-prefix>/.palm_csd_venv` using a `venv` virtual environment. All required dependencies of `palm_csd` are installed in this virtual environment. This ensures that `palm_csd` uses only tested versions of its dependencies. Ensure that both, `venv` and `pip` are installed. On Debian-based Linux Distributions this can be achieved by the following command:
+`palm_csd` requires **at least Python version 3.9** and was tested to work with all versions up to Python 3.13. It can be installed using the provided `install` script. Type `bash install -h` to get all available options. In particular, you can use the `-p <install-prefix>` switch to specify the installation directory and the `-e` switch to create a virtual enviroment for `palm_csd` in `<install-prefix>/.palm_csd_venv` using a `venv` virtual environment. All required dependencies of `palm_csd` are installed in this virtual environment. This ensures that `palm_csd` uses only tested versions of its dependencies. Ensure that both, `venv` and `pip` are installed. On Debian-based Linux Distributions this can be achieved by the following command:
 
 ``` bash
 sudo apt-get install python3-pip python3-venv
@@ -47,4 +47,10 @@ If you receive the error `PROJ: internal_proj_create_from_database: Cannot find 
 
 ## License
 
-This repository is free and open-source software licensed under the [GNU GPLv3](LICENSE)
+This repository is free and open-source software licensed under the [GNU GPLv3](LICENSE). For testing purposes, it includes the following data sets:
+
+- `tests/99_full_application/input/geo_referenced/Berlin_ALKIS2025.shp`: Excerpt of the [Berlin ALKIS 2025](https://fbinter.stadt-berlin.de/fb/?loginkey=showMap&mapId=wmsk_alkis@senstadt) from [Geoportal Berlin / ALKIS Berlin](https://www.berlin.de/sen/sbw/stadtdaten/geoportal/liegenschaftskataster/alkis/) accessed on 2025-04-16 licensed under [Data licence Germany – attribution – Version 2.0](http://www.govdata.de/dl-de/by-2-0).
+- `tests/99_full_application/input/geo_referenced/Berlin_buildings2023.shp`: Excerpt of the [Berlin building height 2023](https://www.berlin.de/umweltatlas/nutzung/gebaeudehoehen/fortlaufend-aktualisiert/zusammenfassung/) from Umweltatlas Berlin / Gebäude Berlin accessed on 2025-04-11 licensed under [Data licence Germany – attribution – Version 2.0](http://www.govdata.de/dl-de/by-2-0).
+- `tests/99_full_application/input/geo_referenced/Berlin_DEM2021.tif`: Excerpt of the [Berlin DEM 2021](https://www.berlin.de/sen/sbw/stadtdaten/geoportal/landesvermessung/geotopographie-atkis/dgm-digitale-gelaendemodelle/) from Geoportal Berlin / Digitale Geländemodelle – ATKIS DGM accessed on 2025-04-14 licensed under [Data licence Germany – attribution – Version 2.0](http://www.govdata.de/dl-de/by-2-0).
+- `tests/99_full_application/input/geo_referenced/Berlin_trees_park2025.shp` and `tests/99_full_application/input/geo_referenced/Berlin_trees_street2025.shp`: Excerpt of the [Berlin tree cadastre](https://daten.berlin.de/datensaetze/baumbestand-berlin-wms-52e6ddaa) from Geoportal Berlin / Baumbestand Berlin accessed on 2025-03-04 licensed under [Data licence Germany – attribution – Version 2.0](http://www.govdata.de/dl-de/by-2-0).
+- `tests/99_full_application/input/geo_referenced/Berlin_vegetation_height2020.tif`: Excerpt of the [Berlin vegetation height 2020](https://www.berlin.de/umweltatlas/biotope/vegetationshoehen/2020/zusammenfassung/) from Umweltatlas Berlin / Vegetationshöhen Berlin accessed on 2025-05-13 licensed under [Data licence Germany – attribution – Version 2.0](http://www.govdata.de/dl-de/by-2-0).

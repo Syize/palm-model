@@ -163,6 +163,8 @@
                surf => surf_slurb   ! renamed internally to shorten line lengths in the module
 
 
+    IMPLICIT NONE
+
 !
 !-- Target arrays for timelevel switching.
     REAL(wp), DIMENSION(:), TARGET, ALLOCATABLE ::  m_liq_road_1  !< target array for liquid water reservoir on roads
@@ -425,8 +427,7 @@
             slurb_parin,                                                                           &
             slurb_swap_timelevel,                                                                  &
             slurb_rrd_local,                                                                       &
-            slurb_wrd_local,                                                                       &
-            slurb_timestep
+            slurb_wrd_local
 
     INTERFACE slurb_3d_data_averaging
        MODULE PROCEDURE slurb_3d_data_averaging
@@ -6249,7 +6250,11 @@ SUBROUTINE slurb_canyon_model
     INTEGER(iwp) ::  k_atm     !< k index of the first atmospheric grid level
     INTEGER(iwp) ::  k_topo    !< k index of the topography top
     INTEGER(iwp) ::  m         !< SLUrb tile index for loops
+    INTEGER(iwp) ::  nroad_3d  !< number of road layers in the SLUrb input driver
+    INTEGER(iwp) ::  nroof_3d  !< number of roof layers in the SLUrb input driver
     INTEGER(iwp) ::  num_vars  !< number of variables in the input netCDF file
+    INTEGER(iwp) ::  nwall_3d  !< number of wall layers in the SLUrb input driver
+    INTEGER(iwp) ::  nwin_3d   !< number of win layers in the SLUrb input driver
 
     LOGICAL ::  input_file_present  !< flag to indicate that the driver file has been found
 
@@ -7365,6 +7370,10 @@ SUBROUTINE slurb_canyon_model
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE process_dynamic_inputs
 
+    USE control_parameters,                                                                        &
+        ONLY:  end_time,                                                                           &
+               spinup_time
+
     REAL(wp), DIMENSION(:,:,:), ALLOCATABLE ::  tmp  !<
 
 
@@ -7914,7 +7923,6 @@ SUBROUTINE slurb_canyon_model
     USE control_parameters,                                                                        &
        ONLY:  coupling_char
 
-
     CHARACTER(LEN=100) ::  input_file_slurb = 'PIDS_SLURB'  !< name of driver file which comprises SLUrb input data
 
     CHARACTER(LEN=100), DIMENSION(:), ALLOCATABLE ::  var_names  !< array of variable names in the input driver
@@ -8309,6 +8317,7 @@ SUBROUTINE slurb_canyon_model
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE slurb_model
 
+
     IF ( debug_output_timestep )  THEN
        WRITE( debug_string, * ) 'slurb_model'
        CALL debug_message( debug_string, 'start' )
@@ -8412,6 +8421,7 @@ SUBROUTINE slurb_canyon_model
  SUBROUTINE slurb_swap_timelevel ( mod_count )
 
     INTEGER, INTENT(IN) ::  mod_count
+
 
     SELECT CASE ( mod_count )
 
@@ -9960,6 +9970,9 @@ SUBROUTINE slurb_canyon_model
 
     CHARACTER(LEN=*), INTENT(IN) ::  varname  !< name of the variable to be written
 
+    INTEGER(iwp), INTENT(IN) ::  nzbl  !< layer bottom index
+    INTEGER(iwp), INTENT(IN) ::  nztl  !< layer top index
+
     REAL(wp), DIMENSION(nztl:nzbl,1:surf%ns), INTENT(OUT) ::  tgt  !< target array of the variable
 
     CHARACTER(LEN=3) ::  id  !< layer identifier
@@ -9991,6 +10004,9 @@ SUBROUTINE slurb_canyon_model
  SUBROUTINE rrd_local_3d_av( varname, tgt, nztl, nzbl )
 
     CHARACTER(LEN=*), INTENT(IN) ::  varname  !< name of the variable to be written
+
+    INTEGER(iwp), INTENT(IN) ::  nzbl  !< layer bottom index
+    INTEGER(iwp), INTENT(IN) ::  nztl  !< layer top index
 
     REAL(wp), DIMENSION(:,:), ALLOCATABLE, INTENT(OUT) ::  tgt  !< target array of the variable
 

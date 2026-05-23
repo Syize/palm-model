@@ -5,7 +5,7 @@ compact_lowrise,                   18,       None,        1.0,        0.1
 open_highrise,                     18,       None,        2.0,        0.5
 open_midrise,                      18,       None,        2.0,        0.5
 open_lowrise,                      18,       None,        2.0,        0.5
-leightweight_lowrise,              18,       None,        1.0,        0.1
+lightweight_lowrise,               18,       None,        1.0,        0.1
 large_lowrise,                     18,       None,        0.5,        0.1
 sparsely_built,                    18,       None,        2.0,        0.5
 heavy_industry,                    18,       None,        0.5,        0.0

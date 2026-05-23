@@ -11,12 +11,12 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Tools to handle Local Climate Zones (LCZs)."""
 
-from importlib.resources import open_text
+from importlib.resources import files
 from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
@@ -24,7 +24,7 @@ import numpy.ma as ma
 import scipy.stats
 from pydantic import BaseModel, Field, model_validator
 
-from palm_csd.csd_config import CSDConfigLCZ, defaults
+from palm_csd.csd_config import CSDConfigLCZ, value_defaults
 from palm_csd.tools import DefaultMinMax
 
 
@@ -48,24 +48,24 @@ class LCZ(BaseModel, arbitrary_types_allowed=True, frozen=True):
     """Height of roughness elements."""
 
     index: int = Field(
-        ge=defaults["lcz"].minimum,
-        le=defaults["lcz"].maximum,
+        ge=value_defaults["lcz"].minimum,
+        le=value_defaults["lcz"].maximum,
     )
     """Index."""
 
     r: int = Field(
-        ge=defaults["color_r"].minimum,
-        le=defaults["color_r"].maximum,
+        ge=value_defaults["color_r"].minimum,
+        le=value_defaults["color_r"].maximum,
     )
     """Red value in color coding."""
     g: int = Field(
-        ge=defaults["color_g"].minimum,
-        le=defaults["color_g"].maximum,
+        ge=value_defaults["color_g"].minimum,
+        le=value_defaults["color_g"].maximum,
     )
     """Green value in color coding."""
     b: int = Field(
-        ge=defaults["color_b"].minimum,
-        le=defaults["color_b"].maximum,
+        ge=value_defaults["color_b"].minimum,
+        le=value_defaults["color_b"].maximum,
     )
     """Blue value in color coding."""
 
@@ -187,7 +187,7 @@ class LCZTypes:
     """Open mid-rise LCZ."""
     open_lowrise: LCZ
     """Open low-rise LCZ."""
-    leightweight_lowrise: LCZ
+    lightweight_lowrise: LCZ
     """Lightweight low-rise LCZ."""
     large_lowrise: LCZ
     """Large low-rise LCZ."""
@@ -263,7 +263,7 @@ class LCZTypes:
         #   min and max values based on Steward and Oke (2012)
         #   RGB values based on WUDAPT convention
         #   default values based on W2W convention
-        with open_text("palm_csd.data", "lcz_definitions.csv") as lcz_csv:
+        with files("palm_csd.data").joinpath("lcz_definitions.csv").open() as lcz_csv:
             lcz_definitions = np.genfromtxt(
                 lcz_csv,
                 delimiter=",",
@@ -274,7 +274,7 @@ class LCZTypes:
                 encoding="utf-8",
             )
         # Mapping of LCZ to vegetation and water properties.
-        with open_text("palm_csd.data", "lcz_mappings.csv") as lcz_csv:
+        with files("palm_csd.data").joinpath("lcz_mappings.csv").open() as lcz_csv:
             lcz_mappings = np.genfromtxt(
                 lcz_csv,
                 delimiter=",",
@@ -349,7 +349,7 @@ class LCZTypes:
             self.open_highrise,
             self.open_midrise,
             self.open_lowrise,
-            self.leightweight_lowrise,
+            self.lightweight_lowrise,
             self.large_lowrise,
             self.sparsely_built,
             self.heavy_industry,

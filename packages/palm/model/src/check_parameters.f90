@@ -409,17 +409,6 @@
        CALL message( 'check_parameters', 'PAC0030', 1, 2, 0, 6, 0 )
     ENDIF
 
-    IF ( psolver(1:9) == 'multigrid' )  THEN
-       IF ( cycle_mg == 'w' )  THEN
-          gamma_mg = 2
-       ELSEIF ( cycle_mg == 'v' )  THEN
-          gamma_mg = 1
-       ELSE
-          message_string = 'unknown multigrid cycle: cycle_mg = "' //  TRIM( cycle_mg ) // '"'
-          CALL message( 'check_parameters', 'PAC0031', 1, 2, 0, 6, 0 )
-       ENDIF
-    ENDIF
-
     IF ( fft_method /= 'singleton-algorithm'  .AND.  fft_method /= 'temperton-algorithm'  .AND.    &
          fft_method /= 'fftw'                 .AND.  fft_method /= 'system-specific' )  THEN
        message_string = 'unknown fft-algorithm: fft_method = "' // TRIM( fft_method ) // '"'
@@ -959,16 +948,7 @@
     ENDIF
 
 !
-!-- Top boundary condition for perturbation pressure. The default value depends on the selected
-!-- pressure solver.
-    IF ( bc_p_t == 'default' )  THEN
-       IF ( psolver(1:7) == 'poisfft' )  THEN
-          bc_p_t = 'neumann'
-       ELSE
-          bc_p_t = 'dirichlet'
-       ENDIF
-    ENDIF
-
+!-- Top boundary condition for perturbation pressure.
     IF ( bc_p_t == 'dirichlet' )  THEN
        ibc_p_t = 0
     ELSEIF ( bc_p_t == 'neumann' )  THEN
@@ -1102,8 +1082,14 @@
           CALL message( 'check_parameters', 'PAC0091', 1, 2, 0, 6, 0 )
        ENDIF
 
-       CALL set_bc_scalars( 'q', bc_q_b, bc_q_t, ibc_q_b, ibc_q_t, 'PAC0092', 'PAC0093' )
+!
+!--    Atmosphere ocean coupling requires Dirichlet condition for mixing ratio (because it is
+!--    set as the saturation mixing ratio for surface temperature).
+       IF ( atmosphere_run_coupled_to_ocean )  THEN
+          bc_q_b = 'dirichlet'
+       ENDIF
 
+       CALL set_bc_scalars( 'q', bc_q_b, bc_q_t, ibc_q_b, ibc_q_t, 'PAC0092', 'PAC0093' )
        IF ( surface_waterflux == 9999999.9_wp  )  THEN
           constant_waterflux = .FALSE.
           IF ( large_scale_forcing .OR. land_surface )  THEN
@@ -1197,7 +1183,7 @@
 
 !
 !-- Check the Rayleigh damping factor.
-    IF ( rayleigh_damping_factor < 0.0_wp  .OR.  rayleigh_damping_factor > 1.0_wp )  THEN
+    IF ( rayleigh_damping_factor < 0.0_wp )  THEN
        WRITE( message_string, * )  'rayleigh_damping_factor = ', rayleigh_damping_factor,       &
               ' out of range'
        CALL message( 'check_parameters', 'PAC0101', 1, 2, 0, 6, 0 )
@@ -1217,9 +1203,9 @@
              CALL message( 'check_parameters', 'PAC0102', 1, 2, 0, 6, 0 )
           ENDIF
        ELSE
-          IF ( rayleigh_damping_height > 0.0_wp  .OR.  rayleigh_damping_height < zu(nzb) )  THEN
+          IF ( rayleigh_damping_height > 0.0_wp  .OR.  rayleigh_damping_height < zu(nzb+1) )  THEN
              WRITE( message_string, * )  'rayleigh_damping_height = ', rayleigh_damping_height,    &
-                    ' out of range [0.0,', zu(nzb), ']'
+                    ' out of range [0.0,', zu(nzb+1), ']'
              CALL message( 'check_parameters', 'PAC0102', 1, 2, 0, 6, 0 )
           ENDIF
        ENDIF
@@ -2948,6 +2934,14 @@
        WRITE( message_string, * )  'nonzero bulk velocity requires ',                              &
               'conserve_volume_flow = .T. and ', 'conserve_volume_flow_mode = "bulk_velocity"'
        CALL message( 'check_parameters', 'PAC0172', 1, 2, 0, 6, 0 )
+    ENDIF
+
+!
+!-- Check for illegal roughness length.
+    IF ( roughness_length <= 0.0_wp )  THEN
+       WRITE( message_string, '(A,F8.3)' ) 'illegal value given for roughness_length = ',          &
+                                           roughness_length
+       CALL message( 'check_parameters', 'PAC0366', 1, 2, 0, 6, 0 )
     ENDIF
 
 !

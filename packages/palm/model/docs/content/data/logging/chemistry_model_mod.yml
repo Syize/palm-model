@@ -324,3 +324,10 @@ CHM0050:
   description: |
     In order to use [photolysis_scheme](../Namelists/#chemistry_parameters--photolysis_scheme) = *simple*, a radiation model has to be chosen via [radiation_scheme](../Namelists/#radiation_parameters--radiation_scheme). Alternatively, set [photolysis_scheme](../Namelists/#chemistry_parameters--photolysis_scheme) = *constant*.
 
+CHM0051:
+  loglevel: WARNING
+  message: |
+    molar mass for "..." has not been specified, 50 g/mol used instead
+  description: |
+    Emissions have been set for a chemical compound for which no molar mass is given in the default code. You may either add the compound(s) in source code file `chem_emissions_mod.f90` (search for string `CHM0051` in that file) or report the problem to the PALM developers.
+

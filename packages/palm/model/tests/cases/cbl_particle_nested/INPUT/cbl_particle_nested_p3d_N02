@@ -16,6 +16,7 @@
 !-- Pressure solver
 !------------------------------------------------------------------------------
     psolver   = 'multigrid',
+    masking_method = .F.,
     cycle_mg  = 'w',
     mg_cycles = 2,
 !

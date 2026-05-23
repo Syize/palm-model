@@ -45,6 +45,7 @@ project_kpp_dir=$(readlink -f "${project_root_dir}/kpp/")
 
 program_name=$(basename -s ".sh" ${BASH_SOURCE[0]})
 
+called_from_dir=$(pwd)  # to get the correct folder if output file is given with relative ppath
 cd ${project_root_dir}
 
 set -eu
@@ -100,8 +101,10 @@ while  getopts :hm:o:i:fkup:s:vl:w:  c     # get options
 do case $c in
       m)   MECH=$OPTARG;;            # mechanism
 
-      o)   OUTDIR=$(readlink -f ${OPTARG})  # Output directory of Generated Code
-           OUTDIR_SET="YES";;
+      o)   cd $called_from_dir       # otherwise a relative path would be with respect to the kpp4palm folder
+           OUTDIR=$(readlink -f ${OPTARG})  # Output directory of Generated Code
+           OUTDIR_SET="YES"
+           cd ${project_root_dir};;
 
       i)   DE_INDEX=$OPTARG;;        # if set, deindexing
 
@@ -349,7 +352,7 @@ ${project_root_dir}/bin/${program_name}.exe $PREFIX $MODE $VLEN $DE_INDEX $DE_IN
 #
 sed -i -e '/cfactor =/a !  ' kk_kpp.f90
 sed -i -e '/cfactor =/a BLANKS  IF ( lu_crow(1) == 1  .OR.  lu_icol(1) == 1  .OR.  lu_irow(1) == 1 )  CONTINUE ' kk_kpp.f90
-sed -i -e '/cfactor =/a BLANKS  IF ( time >= -1.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/cfactor =/a BLANKS  IF ( time >= -1.0_wp )  CONTINUE' kk_kpp.f90
 sed -i -e '/cfactor =/a ! Following lines are just to avoid compiler message about unused variables' kk_kpp.f90
 sed -i -e '/cfactor =/a !  ' kk_kpp.f90
 
@@ -357,32 +360,32 @@ if [[ $MODE = "vector" ]]
 then
 sed -i -e '/! Computation of equation rates/i ! The following lines are just to avoid compiler message about unused variables' kk_kpp.f90
 sed -i -e '/! Computation of equation rates/i ! (some of the are only required if there only passive tracers)' kk_kpp.f90
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( f(vl,nfix) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( v(vl,nvar) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( rct(vl,nreact) >= 0.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( f(vl,nfix) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( v(vl,nvar) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( rct(vl,nreact) >= 0.0_wp )  CONTINUE' kk_kpp.f90
 if ! grep -q ' a(1:' kk_kpp.f90 ; then
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( a(vl,nreact) >= 0.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( a(vl,nreact) >= 0.0_wp )  CONTINUE' kk_kpp.f90
 fi
 sed -i -e '/! Computation of equation rates/i !  ' kk_kpp.f90
 sed -i -e '/!   i = 1/i ! Following line is just to avoid compiler message about unused variables' kk_kpp.f90
 sed -i -e '/!   i = 1/i ! if there are only passive tracers' kk_kpp.f90
-sed -i -e '/!   i = 1/i BLANKS   IF ( jvs(vl,1) >= 0.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/!   i = 1/i BLANKS   IF ( jvs(vl,1) >= 0.0_wp )  CONTINUE' kk_kpp.f90
 sed -i -e '/!   i = 1/i !  ' kk_kpp.f90
 
 else
 
 sed -i -e '/! Computation of equation rates/i ! The following lines are just to avoid compiler message about unused variables' kk_kpp.f90
 sed -i -e '/! Computation of equation rates/i ! (some of the are only required if there only passive tracers)' kk_kpp.f90
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( f(nfix) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( v(nvar) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( rct(nreact) >= 0.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( f(nfix) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( v(nvar) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( rct(nreact) >= 0.0_wp )  CONTINUE' kk_kpp.f90
 if ! grep -q ' a(1)' kk_kpp.f90 ; then
-sed -i -e '/! Computation of equation rates/i BLANKS  IF ( a(nreact) >= 0.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/! Computation of equation rates/i BLANKS  IF ( a(nreact) >= 0.0_wp )  CONTINUE' kk_kpp.f90
 fi
 sed -i -e '/! Computation of equation rates/i !  ' kk_kpp.f90
 sed -i -e '/!   i = 1/i ! Following line is just to avoid compiler message about unused variables' kk_kpp.f90
 sed -i -e '/!   i = 1/i ! if there are only passive tracers' kk_kpp.f90
-sed -i -e '/!   i = 1/i BLANKS   IF ( jvs(1) >= 0.0_dp )  CONTINUE' kk_kpp.f90
+sed -i -e '/!   i = 1/i BLANKS   IF ( jvs(1) >= 0.0_wp )  CONTINUE' kk_kpp.f90
 sed -i -e '/!   i = 1/i !  ' kk_kpp.f90
 
 sed -i -e '/IF ( alpha .eq. zero ) RETURN/i !  ' kk_kpp.f90
@@ -393,20 +396,20 @@ fi
 
 if [[ $MODE = "vector" ]]
 then
-sed -i -e '/REAL(kind=dp) :: b/a BLANKS  IF ( v(vl,nvar) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/REAL(kind=dp) :: b/a BLANKS  IF ( f(vl,nfix) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/REAL(kind=dp) :: b/a ! The following lines are just to avoid compiler message about unused variables' kk_kpp.f90
-sed -i -e '/REAL(kind=dp):: b/a !' kk_kpp.f90
+sed -i -e '/REAL(kind=wp) :: b/a BLANKS  IF ( v(vl,nvar) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/REAL(kind=wp) :: b/a BLANKS  IF ( f(vl,nfix) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/REAL(kind=wp) :: b/a ! The following lines are just to avoid compiler message about unused variables' kk_kpp.f90
+sed -i -e '/REAL(kind=wp):: b/a !' kk_kpp.f90
 else
-sed -i -e '/REAL(kind=dp):: b/a BLANKS  IF ( v(nvar) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/REAL(kind=dp):: b/a BLANKS  IF ( f(nfix) >= 0.0_dp )  CONTINUE' kk_kpp.f90
-sed -i -e '/REAL(kind=dp):: b/a ! The following lines are just to avoid compiler message about unused variables' kk_kpp.f90
-sed -i -e '/REAL(kind=dp):: b/a !' kk_kpp.f90
+sed -i -e '/REAL(kind=wp):: b/a BLANKS  IF ( v(nvar) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/REAL(kind=wp):: b/a BLANKS  IF ( f(nfix) >= 0.0_wp )  CONTINUE' kk_kpp.f90
+sed -i -e '/REAL(kind=wp):: b/a ! The following lines are just to avoid compiler message about unused variables' kk_kpp.f90
+sed -i -e '/REAL(kind=wp):: b/a !' kk_kpp.f90
 fi
 
-sed -i -e '/one=1.0_dp/a BLANKS  IF ( incx == 0 )  CONTINUE' kk_kpp.f90
-sed -i -e '/one=1.0_dp/a ! Following line is just to avoid compiler message about unused variables' kk_kpp.f90
-sed -i -e '/one=1.0_dp/a !  ' kk_kpp.f90
+sed -i -e '/one=1.0_wp/a BLANKS  IF ( incx == 0 )  CONTINUE' kk_kpp.f90
+sed -i -e '/one=1.0_wp/a ! Following line is just to avoid compiler message about unused variables' kk_kpp.f90
+sed -i -e '/one=1.0_wp/a !  ' kk_kpp.f90
 
 sed -i -e '/IF ( sum(alpha(1:vl)) .eq. zero ) RETURN/i !  ' kk_kpp.f90
 sed -i -e '/IF ( sum(alpha(1:vl)) .eq. zero ) RETURN/i ! The following line is just to avoid compiler message about unused variables' kk_kpp.f90

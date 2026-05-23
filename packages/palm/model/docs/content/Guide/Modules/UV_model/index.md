@@ -8,11 +8,12 @@ title: Overview
 !!! warning
     This site is  Work in Progress.
 
-## Overview
+## Purpose
 
 The UV-radiation model enables the simulation of (erythemally-weighted) UV-irradiances near the surface, in order to quantify the UV-exposure at a given position in a complex environment and to evaluate possible mitigation strategies, e.g. by additional sun protection such as awnings. Therefore, shading of the direct and diffuse portion of UV-radiation by buildings and trees, transmission of UV-radiation by trees, as well as multiple Lambertian reflections are considered based on PALMs radiative transfer model (RTM, [Krc et al. (2021)](https://gmd.copernicus.org/articles/14/3095/2021/)). To model UV-irradiances near the surface, the UV-radiation model takes the undisturbed externally provided and spectrally resolved UV-radiation at the top of the urban layer (the uppermost rooftop level in the model domain) as boundary condition and models the impact of buildings, trees, 3D obstacles and reflections. The external UV-radiation is prescribed by a NetCDF file named `[run_id]_uv` in the respective `INPUT` directory of the simulation run, where `run_id` is the run-identifier of the simulation. The PALM model system offers the pre-processor tool `uv2palm` to create that file based on the libRadtran tool `uvspec` ([Mayer and Kylling, 2005](https://acp.copernicus.org/articles/5/1855/2005/), [Emde et al. 2016](https://gmd.copernicus.org/articles/9/1647/2016/)).
 
 Two modelling approaches have been implemented to model the UV-irradiation:
+
 i) An LOD1 approach where the shading of direct radiation is considered via a geometric approach, while the incoming diffuse radiation is reduced by an effective sky-view factor according to [Krc et al. (2021)](https://gmd.copernicus.org/articles/14/3095/2021/). This approach is based on an isotropic distribution of the diffuse radiation portion over the sky and requires input of externally provided, spectrally resolved portions of diffuse and direct irradiation in the UV spectral range (280 - 400 nm) at the top of the urban layer.
 
 ii) An LOD2 approach, where the shading of direct and diffuse radiation is modelled based on a spherical-angle dependent method, taking into account a possibly anisotropic distribution of the diffuse radiation portion. This approach requires input of externally provided, spectrally resolved radiances in the UV spectral range (280 - 400 nm) at the top of the urban layer.
@@ -24,7 +25,7 @@ The UV-radiation model assumes UV-specific values of the albedo for the multiple
 
 ## Structure of NetCDF Input File
 
-See [the format description in the reference section](/Reference/LES_Model/Iofiles/PIDS_UV).
+See [the format description in the reference section](../../../../Reference/LES_Model/IO-Files/PIDS_UV).
 
 ## Creation of NetCDF Input File
 
@@ -98,7 +99,7 @@ Further on, the number of Lambertian reflection steps at mutually visible horizo
 
 The UV-radiation model in PALM can be started for example using the following minimal example setup:
 
-```fortran
+```Fortran
 &initialization_parameters
     dx         = 0.25,
     dy         = 0.25,
@@ -173,4 +174,12 @@ The UV-radiation model in PALM can be started for example using the following mi
 You may output 2d-horizontal arrays of the wavelength integrated and/or erythemally weighted UV irradiance that are calculated based on the LOD1 and LOD2 integration methods given via [uv_integration_method](/Reference/LES_Model/Namelists/#uv-radiation-parameters--uv_integration_method). See [table of UV output quantities](/Reference/LES_Model/Output_quantities/#uv-quantities) for allowed quantity names.
 
 **Note**, time-averaged output of UV-related quantities is not possible.
+
+## Further Information
+
+For more detailed scientific and technical information about the UV radiation model, please refer to [Sühring et al. (2025)](https://doi.org/10.1016/j.buildenv.2025.112961).
+
+## References
+
+- **Sühring, M., Lorenz, S. Knoop, H., Gehrke, K.F.** 2025: A microscale UV radiation model for urban environments: Model description and evaluation based on measurements. Building and Environment, 15: 112961. [10.1016/j.buildenv.2025.112961](https://doi.org/10.1016/j.buildenv.2025.112961)
 

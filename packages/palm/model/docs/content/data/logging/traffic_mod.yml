@@ -1,0 +1,30 @@
+TRM0001:
+  loglevel: ERROR
+  message: |
+    Traffic file does not exists for this domain. Check the Traffic driver.
+  description: |
+    See [Traffic input driver](../IO-Files/Drivers/traffic)
+
+TRM0002:
+  loglevel: ERROR
+  message: |
+    Traffic module requires compilation with netcdf. Check compilation directives.
+  description: |
+    Traffic module requires compilation with netcdf. Check compilation directives.
+
+TRM0003:
+  loglevel: WARNING
+  message: |
+    Wind tendencies from traffic exceed limit.
+  description: |
+    Wind tendencies from traffic exceed limit, the values printed for check.
+
+TRM0004:
+  loglevel: ERROR
+  message: |
+    Theta tendency cannot be applied for neutral stratification. Check the configuration.
+  description: |
+    Theta tendency cannot be applied for neutral stratification. Check the configuration.
+
+
+

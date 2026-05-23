@@ -94,6 +94,10 @@
 {{ include_palm_namelist('surface_data_output_parameters') }}
 
 ---
+## **^^Traffic Module Parameters^^**
+{{ include_palm_namelist('traffic_parameters') }}
+
+---
 ## **^^Turbulent Inflow Parameters^^**
 {{ include_palm_namelist('turbulent_inflow_parameters') }}
 

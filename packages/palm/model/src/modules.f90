@@ -164,8 +164,6 @@
                                                                     !< box - v-component
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  diss_s_w              !< artificial numerical dissipation flux at south face of grid
                                                                     !< box - w-component
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  dzu_mg                !< vertical grid size (u-grid) for multigrid pressure solver
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  dzw_mg                !< vertical grid size (w-grid) for multigrid pressure solver
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  flux_s_diss           !< 6th-order advective flux at south face of grid box -
                                                                     !< TKE dissipation
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  flux_s_e              !< 6th-order advective flux at south face of grid box -
@@ -204,19 +202,11 @@
                                                                     !< v-component
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  flux_s_w              !< 6th-order advective flux at south face of grid box -
                                                                     !< w-component
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  f1_mg                 !< grid factor used in right hand side of Gauss-Seidel equation
-                                                                    !< (multigrid)
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  f2_mg                 !< grid factor used in right hand side of Gauss-Seidel equation
-                                                                    !< (multigrid)
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  f3_mg                 !< grid factor used in right hand side of Gauss-Seidel equation
-                                                                    !< (multigrid)
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  mean_inflow_profiles  !< used for turbulent inflow (non-cyclic boundary conditions)
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  precipitation_amount  !< precipitation amount due to gravitational settling
                                                                     !< (bulk microphysics)
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  pt_slope_ref          !< potential temperature in rotated coordinate system
                                                                     !< (in case of sloped surface)
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  rho_air_mg            !< air density profiles on the uv grid for multigrid
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  rho_air_zw_mg         !< air density profiles on the w grid for multigrid
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  total_2d_a            !< horizontal array to store the total domain data, used for
                                                                     !< atmosphere-ocean coupling (atmosphere data)
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  total_2d_o            !< horizontal array to store the total domain data, used for
@@ -553,7 +543,6 @@
     TYPE(file_status), DIMENSION(200+2*max_masks) ::                &  !< indicates if file is open or if it has been opened before
                              openfile = file_status(.FALSE.,.FALSE.)
 
-    CHARACTER (LEN=1)    ::  cycle_mg = 'w'                               !< namelist parameter (see documentation)
     CHARACTER (LEN=1)    ::  timestep_reason = ' '                        !< 'A'dvection or 'D'iffusion criterion, written to
                                                                           !< RUN_CONTROL file
     CHARACTER (LEN=5)    ::  run_zone = ' '                               !< time zone of simulation run
@@ -578,7 +567,7 @@
     CHARACTER (LEN=20)   ::  bc_lr = 'cyclic'                             !< namelist parameter
     CHARACTER (LEN=20)   ::  bc_ns = 'cyclic'                             !< namelist parameter
     CHARACTER (LEN=20)   ::  bc_p_b = 'neumann'                           !< namelist parameter
-    CHARACTER (LEN=20)   ::  bc_p_t = 'default'                           !< namelist parameter
+    CHARACTER (LEN=20)   ::  bc_p_t = 'neumann'                           !< namelist parameter
     CHARACTER (LEN=20)   ::  bc_pt_b = 'dirichlet'                        !< namelist parameter
     CHARACTER (LEN=20)   ::  bc_pt_t = 'initial_gradient'                 !< namelist parameter
     CHARACTER (LEN=20)   ::  bc_q_b = 'dirichlet'                         !< namelist parameter
@@ -647,10 +636,6 @@
     INTEGER(iwp) ::  dots_time_count = 0               !< number of output intervals for timeseries output
     INTEGER(iwp) ::  dp_level_ind_b = 0                !< lowest grid index for external pressure gradient forcing
     INTEGER(iwp) ::  ensemble_member_nr = 0            !< namelist parameter
-    INTEGER(iwp) ::  gamma_mg                          !< switch for steering the multigrid cycle: 1: v-cycle, 2: w-cycle
-    INTEGER(iwp) ::  gathered_size                     !< number of total domain grid points of the grid level which is gathered on
-                                                       !< PE0 (multigrid solver)
-    INTEGER(iwp) ::  grid_level                        !< current grid level handled in the multigrid solver
     INTEGER(iwp) ::  ibc_e_b                           !< integer flag for bc_e_b
     INTEGER(iwp) ::  ibc_p_b                           !< integer flag for bc_p_b
     INTEGER(iwp) ::  ibc_p_t                           !< integer flag for bc_p_t
@@ -673,7 +658,6 @@
     INTEGER(iwp) ::  length = 0                        !< integer that specifies the length of a string in case of writing/reading
                                                        !< restart data
     INTEGER(iwp) ::  masks = 0                         !< counter for number of masked output quantities
-    INTEGER(iwp) ::  maximum_grid_level                !< number of grid levels that the multigrid solver is using
     INTEGER(iwp) ::  maximum_parallel_io_streams = -1  !< maximum number of parallel io streams that the underlying parallel file
                                                        !< system allows, set with palmrun option -w, ENVPAR namelist parameter, provided by palmrun
     INTEGER(iwp) ::  max_pr_cs = 0                     !< number of chemistry profiles in output
@@ -682,11 +666,6 @@
     INTEGER(iwp) ::  max_pr_user = 0                   !< number of user-defined profiles (must not change within a job chain)
     INTEGER(iwp) ::  max_pr_user_tmp = 0               !< number of user-defined profiles that is temporary stored to check it
                                                        !< against max_pr_user in case of restarts
-    INTEGER(iwp) ::  mgcycles = 0                      !< number of multigrid cycles that the multigrid solver has actually carried
-                                                       !< out
-    INTEGER(iwp) ::  mg_cycles = 4                     !< namelist parameter
-    INTEGER(iwp) ::  mg_switch_to_pe0_level = -1       !< namelist parameter
-    INTEGER(iwp) ::  ngsrb = 2                         !< namelist parameter
     INTEGER(iwp) ::  nr_timesteps_this_run = 0         !< number of timesteps (cpu time measurements)
     INTEGER(iwp) ::  nsor = 20                         !< namelist parameter
     INTEGER(iwp) ::  nsor_ini = 100                    !< namelist parameter
@@ -703,7 +682,6 @@
     INTEGER(iwp) ::  nz_do3d = -9999                   !< namelist parameter
     INTEGER(iwp) ::  prt_time_count = 0                !< number of output intervals for particle data output
     INTEGER(iwp) ::  runnr = 0                         !< number of run in job chain
-    INTEGER(iwp) ::  subdomain_size                    !< number of grid points in (3d) subdomain including ghost points
     INTEGER(iwp) ::  symmetry_flag = 0                 !< flag for sterring the symmetric behavior of the bottom and top boundary
     INTEGER(iwp) ::  terminate_coupled = 0             !< switch for steering termination in case of coupled runs
     INTEGER(iwp) ::  timestep_count = 0                !< number of timesteps carried out since the beginning of the initial run
@@ -749,8 +727,6 @@
     INTEGER(iwp), DIMENSION(max_masks,mask_xyz_dimension) ::  mask_k_over_surface = -1  !< namelist parameter, k index of height
                                                                                         !<over surface
 
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  grid_level_count  !< internal switch for steering the multigrid v- and w-cycles
-
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  mask_i         !< subdomain grid index of masked output point on x-dimension
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  mask_j         !< subdomain grid index of masked output point on y-dimension
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  mask_k         !< subdomain grid index of masked output point on z-dimension
@@ -761,7 +737,7 @@
     LOGICAL ::  advanced_div_correction = .FALSE.                !< namelist parameter
     LOGICAL ::  agent_time_unlimited = .FALSE.                   !< namelist parameter
     LOGICAL ::  air_chemistry = .FALSE.                          !< chemistry model switch
-    LOGICAL ::  allow_negative_scalar_values = .FALSE.           !< namelist parameter
+    LOGICAL ::  allow_negative_scalar_values = .TRUE.            !< namelist parameter
     LOGICAL ::  allow_roughness_limitation = .FALSE.             !< namelist parameter
     LOGICAL ::  atmosphere_run_coupled_to_ocean = .FALSE.        !< atmosphere part of a coupled atmosphere-ocean run
     LOGICAL ::  bc_dirichlet_l = .FALSE.                         !< flag indicating dirichlet boundary condition on left model
@@ -821,8 +797,6 @@
     LOGICAL ::  dt_3d_reached                                    !< internal timestep for particle advection
     LOGICAL ::  dt_3d_reached_l                                  !< internal timestep for particle advection
     LOGICAL ::  det_enabled= .FALSE.                             !< switch for the dust transport and emission module (DET)
-    LOGICAL ::  enable_lsm_openacc = .FALSE.                     !< namelist parameter, enables OpenACC offloading for the land surface model, only meaningful if built with OpenACC support
-    LOGICAL ::  enable_multigrid_openacc = .FALSE.               !< namelist parameter, enables OpenACC offloading for the multigrid solver, only meaningful if built with OpenACC support
     LOGICAL ::  enable_openacc = .TRUE.                          !< namelist parameter, enables OpenACC offloading, only meaningful if built with OpenACC support
     LOGICAL ::  fct_enabled = .FALSE.                            !< switch for activating the flow control module
     LOGICAL ::  first_call_mas = .TRUE.                          !< call mas only once per timestep ??
@@ -847,9 +821,7 @@
     LOGICAL ::  lsf_exception = .FALSE.                          !< use of lsf with buildings (temporary)?
     LOGICAL ::  lsf_surf = .TRUE.                                !< use surface forcing (large scale forcing)?
     LOGICAL ::  lsf_vert = .TRUE.                                !< use atmospheric forcing (large scale forcing)?
-    LOGICAL ::  masking_method = .FALSE.                         !< namelist parameter
-    LOGICAL ::  mg_switch_to_pe0 = .FALSE.                       !< internal multigrid switch for steering the ghost point exchange
-                                                                 !< in case that data has been collected on PE0
+    LOGICAL ::  masking_method = .TRUE.                          !< namelist parameter
     LOGICAL ::  monotonic_limiter_z = .FALSE.                    !< use monotonic flux limiter for vertical scalar advection
     LOGICAL ::  nested_run = .FALSE.                             !< general switch to indicate a nested run
     LOGICAL ::  nesting_offline = .FALSE.                        !< flag controlling offline nesting in COSMO model
@@ -905,6 +877,7 @@
     LOGICAL ::  use_upstream_for_tke = .FALSE.                   !< namelist parameter
     LOGICAL ::  uv_radiation = .FALSE.                           !< use UV-radiation module
     LOGICAL ::  vdi_checks = .FALSE.                             !< do internal controls after VDI 3783 Part 9
+    LOGICAL ::  traffic = .FALSE.                                !< use traffic module
     LOGICAL ::  virtual_flight = .FALSE.                         !< use virtual flight model
     LOGICAL ::  virtual_measurement = .FALSE.                    !< control parameter to switch-on virtual measurements
     LOGICAL ::  wall_adjustment = .TRUE.                         !< namelist parameter
@@ -1017,7 +990,6 @@
     REAL(wp) ::  q_surface_initial_change = 0.0_wp             !< namelist parameter
     REAL(wp) ::  rayleigh_damping_factor = 0.0_wp              !< namelist parameter
     REAL(wp) ::  rayleigh_damping_height = -1.0_wp             !< namelist parameter
-    REAL(wp) ::  residual_limit = 1.0E-4_wp                    !< namelist parameter
     REAL(wp) ::  restart_file_size                             !< size of restart file in mbyte
     REAL(wp) ::  restart_time = 9999999.9_wp                   !< namelist parameter
     REAL(wp) ::  rho_cp                                        !< rho at surface * c_p
@@ -1164,9 +1136,6 @@
     REAL(wp) ::  dy = 1.0_wp  !< horizontal grid size (along y-direction)
     REAL(wp) ::  dy2          !< dy*dy
 
-    REAL(wp), DIMENSION(:), ALLOCATABLE ::  ddx2_mg  !< 1/dx_l**2 (dx_l: grid spacing along x on different multigrid level)
-    REAL(wp), DIMENSION(:), ALLOCATABLE ::  ddy2_mg  !< 1/dy_l**2 (dy_l: grid spacing along y on different multigrid level)
-
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  zu_s_inner  !< height of topography top on scalar grid
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  zw_w_inner  !< height of topography top on w grid
 
@@ -1228,29 +1197,10 @@
                                                               !< through the total domain
     INTEGER(idp), DIMENSION(:), ALLOCATABLE ::  ngp_3d        !< number of grid points of the total domain
     INTEGER(idp), DIMENSION(:), ALLOCATABLE ::  ngp_3d_inner  !< ! need to have 64 bit for grids > 2E9
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  nxl_mg        !< left-most grid index of subdomain on different multigrid level
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  nxr_mg        !< right-most grid index of subdomain on different multigrid level
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  nyn_mg        !< north-most grid index of subdomain on different multigrid level
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  nys_mg        !< south-most grid index of subdomain on different multigrid level
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  nzt_mg        !< top-most grid index of subdomain on different multigrid level
 
-
-    INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  mg_loc_ind        !< internal array to store index bounds of all PEs of that
-                                                                    !< multigrid level where data is collected to PE0
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  ngp_2dh_outer     !< number of horizontal grid points which are non-topography and
                                                                     !< non-surface-bounded
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  ngp_2dh_s_inner   !< number of horizontal grid points which are non-topography
-
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_1   !< topograpyh masking flag on multigrid level 1
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_2   !< topograpyh masking flag on multigrid level 2
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_3   !< topograpyh masking flag on multigrid level 3
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_4   !< topograpyh masking flag on multigrid level 4
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_5   !< topograpyh masking flag on multigrid level 5
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_6   !< topograpyh masking flag on multigrid level 6
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_7   !< topograpyh masking flag on multigrid level 7
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_8   !< topograpyh masking flag on multigrid level 8
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_9   !< topograpyh masking flag on multigrid level 9
-    INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE,  TARGET ::  topo_flags_10  !< topograpyh masking flag on multigrid level 10
 
     INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE ::  advc_flags_m            !< flags used to degrade order of advection scheme for
                                                                             !< momentum
@@ -1260,8 +1210,6 @@
 
     INTEGER(iwp), DIMENSION(:,:,:), ALLOCATABLE ::  topo_flags              !< flags to mask topography and surface-bounded grid
                                                                             !< points
-
-    INTEGER(iwp), DIMENSION(:,:,:), POINTER ::  flags  !< pointer to topo_flags_1-10
 
     SAVE
 
@@ -1364,7 +1312,6 @@
     PRIVATE MPI_STATUS_SIZE
 #endif
 
-    CHARACTER(LEN=2) ::  send_receive = 'al'     !<
     CHARACTER(LEN=7) ::  myid_char = ''          !< character string containing processor id number
 
     INTEGER(iwp) ::  comm1dx                     !< communicator for domain decomposition along x
@@ -1435,18 +1382,17 @@
 
     INTEGER(iwp), DIMENSION(MPI_STATUS_SIZE,100) ::  wait_stat  !< MPI status variable used in various MPI calls
 
+    INTEGER(iwp) ::  type_x_int  !< derived MPI datatype for 2-D integer ghost-point exchange - north/south
+    INTEGER(iwp) ::  type_y_int  !< derived MPI datatype for 2-D integer ghost-point exchange - left/right
+
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  ngp_xz      !< number of ghost points in xz-plane on different multigrid level
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  ngp_xz_int  !< number of ghost points in xz-plane on different multigrid level
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  ngp_yz      !< number of ghost points in yz-plane on different multigrid level
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  ngp_yz_int  !< number of ghost points in yz-plane on different multigrid level
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  type_x_int  !< derived MPI datatype for 2-D integer ghost-point exchange - north /
-                                                            !< south
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  type_xz     !< derived MPI datatype for 3-D integer ghost-point exchange - north /
                                                             !< south
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  type_xz_int !< derived MPI datatype for 3-D integer ghost-point exchange - north /
                                                             !< south
-    INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  type_y_int  !< derived MPI datatype for 2-D integer ghost-point exchange - left /
-                                                            !< right
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  type_yz     !< derived MPI datatype for 3-D integer ghost-point exchange - left /
                                                             !< right
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE ::  type_yz_int !< derived MPI datatype for 3-D integer ghost-point exchange - left /
@@ -1476,6 +1422,8 @@
 
     USE kinds
 
+    INTEGER(iwp) ::  iii  !< loop index for assignment statement
+
     INTEGER(iwp), PARAMETER ::  crmax = 100  !< maximum number of coordinate systems for profile output
 
     CHARACTER (LEN=27), DIMENSION(20) ::  cross_ts_profiles = &  !< time series to be plotted into one coordinate system, respectively
@@ -1490,7 +1438,7 @@
                                              ' theta(0) theta(zp)        ',                        &
                                              ' splux spluy spluz         ',                        &
                                              ' L                         ',                        &
-                                           ( '                           ', i9 = 1, 9 ) /)
+                                           ( '                           ', iii = 1, 9 ) /)
 
     CHARACTER (LEN=100), DIMENSION(crmax) ::  cross_profiles = &  !< quantities to be plotted into one coordinate system, respectively
                                               (/ ' u v                                          ', &
@@ -1499,7 +1447,7 @@
                                                  ' w"u" w*u* wu w"v" w*v* wv                    ', &
                                                  ' km kh                                        ', &
                                                  ' l                                            ', &
-                                 ( '                                              ', i9 = 1, 94 ) /)
+                               ( '                                              ', iii = 1, 94 ) /)
 
     INTEGER(iwp) ::  profile_columns = 2  !< number of coordinate systems on a profile plot per column
     INTEGER(iwp) ::  profile_rows = 3     !< number of coordinate systems on a profile plot per row

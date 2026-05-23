@@ -61,6 +61,11 @@
                urban_surface,                                                                      &
                varnamelength
 
+#if defined( _OPENACC )
+    USE control_parameters,                                                                        &
+        ONLY:  enable_openacc
+#endif
+
     USE cpulog,                                                                                    &
         ONLY:  cpu_log,                                                                            &
                log_point
@@ -166,6 +171,7 @@
                    ALLOCATE( p_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 ENDIF
                 p_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(p_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
 
              CASE ( 'pc' )
                 IF ( .NOT. ALLOCATED( pc_av ) )  THEN
@@ -280,6 +286,7 @@
                    ALLOCATE( pt_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 ENDIF
                 pt_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(pt_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
 
              CASE ( 'thetal' )
                 IF ( .NOT. ALLOCATED( lpt_av ) )  THEN
@@ -298,6 +305,7 @@
                    ALLOCATE( u_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 ENDIF
                 u_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(u_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
 
              CASE ( 'us*' )
                 IF ( .NOT. ALLOCATED( us_av ) )  THEN
@@ -310,6 +318,7 @@
                    ALLOCATE( v_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 ENDIF
                 v_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(v_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
 
              CASE ( 'thetav' )
                 IF ( .NOT. ALLOCATED( vpt_av ) )  THEN
@@ -322,6 +331,7 @@
                    ALLOCATE( w_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 ENDIF
                 w_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(w_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
 
              CASE ( 'z0*' )
                 IF ( .NOT. ALLOCATED( z0_av ) )  THEN
@@ -400,17 +410,6 @@
                 ENDDO
              ENDIF
 
-          CASE ( 'thetal' )
-             IF ( ALLOCATED( lpt_av ) ) THEN
-                DO  i = nxl, nxr
-                   DO  j = nys, nyn
-                      DO  k = nzb, nzt+1
-                         lpt_av(k,j,i) = lpt_av(k,j,i) + pt(k,j,i)
-                      ENDDO
-                   ENDDO
-                ENDDO
-             ENDIF
-
           CASE ( 'lwp*' )
              IF ( ALLOCATED( lwp_av ) ) THEN
                 DO  i = nxl, nxr
@@ -444,6 +443,8 @@
 
           CASE ( 'p' )
              IF ( ALLOCATED( p_av ) ) THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxl, nxr
                    DO  j = nys, nyn
                       DO  k = nzb, nzt+1
@@ -858,23 +859,36 @@
           CASE ( 'theta' )
              IF ( ALLOCATED( pt_av ) ) THEN
                 IF ( .NOT. bulk_cloud_model ) THEN
-                DO  i = nxl, nxr
-                   DO  j = nys, nyn
-                      DO  k = nzb, nzt+1
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+                   DO  i = nxl, nxr
+                      DO  j = nys, nyn
+                         DO  k = nzb, nzt+1
                             pt_av(k,j,i) = pt_av(k,j,i) + pt(k,j,i)
                          ENDDO
                       ENDDO
                    ENDDO
                 ELSE
-                DO  i = nxl, nxr
-                   DO  j = nys, nyn
-                      DO  k = nzb, nzt+1
+                   DO  i = nxl, nxr
+                      DO  j = nys, nyn
+                         DO  k = nzb, nzt+1
                             pt_av(k,j,i) = pt_av(k,j,i) + pt(k,j,i) + lv_d_cp * d_exner(k)         &
                                                                               * ql(k,j,i)
                          ENDDO
                       ENDDO
                    ENDDO
                 ENDIF
+             ENDIF
+
+          CASE ( 'thetal' )
+             IF ( ALLOCATED( lpt_av ) ) THEN
+                DO  i = nxl, nxr
+                   DO  j = nys, nyn
+                      DO  k = nzb, nzt+1
+                         lpt_av(k,j,i) = lpt_av(k,j,i) + pt(k,j,i)
+                      ENDDO
+                   ENDDO
+                ENDDO
              ENDIF
 
           CASE ( 'tsurf*' )
@@ -907,6 +921,8 @@
           CASE ( 'u' )
              IF ( ALLOCATED( u_av ) ) THEN
                 IF ( interpolate_to_grid_center )  THEN
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb, nzt+1
@@ -915,6 +931,8 @@
                       ENDDO
                    ENDDO
                 ELSE
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb, nzt+1
@@ -949,6 +967,8 @@
           CASE ( 'v' )
              IF ( ALLOCATED( v_av ) ) THEN
                 IF ( interpolate_to_grid_center )  THEN
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb, nzt+1
@@ -957,6 +977,8 @@
                       ENDDO
                    ENDDO
                 ELSE
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb, nzt+1
@@ -981,6 +1003,8 @@
           CASE ( 'w' )
              IF ( ALLOCATED( w_av ) ) THEN
                 IF ( interpolate_to_grid_center )  THEN
+                   !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          w_av(nzb,j,i) = w_av(nzb,j,i) + w(nzb,j,i)
@@ -991,6 +1015,8 @@
                       ENDDO
                    ENDDO
                 ELSE
+                   !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb, nzt+1

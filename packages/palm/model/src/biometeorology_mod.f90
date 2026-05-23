@@ -160,7 +160,7 @@
     LOGICAL ::  do_calculate_utci_av   = .FALSE.  !< Turn index UTCI (averaged input) on or off
     LOGICAL ::  do_calculate_mrt2d     = .FALSE.  !< Turn index MRT 2D (averaged or inst) on or off
 
-    REAL(wp)    ::  bio_output_height  !< height output is calculated in m
+    REAL(wp) ::  bio_output_height  !< height output is calculated in m
 
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  perct         !< PT results   (degree_C)
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  perct_av      !< PT results (aver. input)   (degree_C)
@@ -437,7 +437,6 @@
                       ENDDO
                    ENDDO
                 ENDDO
-                CALL exchange_horiz( u_av, nbgp )
              ENDIF
 
              IF ( .NOT. ALLOCATED( v_av ) )  THEN
@@ -453,7 +452,6 @@
                       ENDDO
                    ENDDO
                 ENDDO
-                CALL exchange_horiz( v_av, nbgp )
              ENDIF
 
              IF ( .NOT. ALLOCATED( w_av ) )  THEN
@@ -469,7 +467,6 @@
                       ENDDO
                    ENDDO
                 ENDDO
-                CALL exchange_horiz( w_av, nbgp )
              ENDIF
 
              IF ( .NOT. ALLOCATED( mrt_av_grid ) )  THEN
@@ -564,8 +561,11 @@
                       ENDDO
                    ENDDO
                 ENDDO
-                CALL exchange_horiz( u_av, nbgp )
              ENDIF
+!
+!--          Values at indices i+1 are later used for calculating thermal indices,
+!--          so ghost point exchange is required.
+             CALL exchange_horiz( u_av, nbgp )
 
              IF ( ALLOCATED( v_av )  .AND.  do_average_v )  THEN
                 DO  i = nxl, nxr
@@ -577,6 +577,10 @@
                 ENDDO
                 CALL exchange_horiz( v_av, nbgp )
              ENDIF
+!
+!--          Values at indices j+1 are later used for calculating thermal indices,
+!--          so ghost point exchange is required.
+             CALL exchange_horiz( v_av, nbgp )
 
              IF ( ALLOCATED( w_av )  .AND.  do_average_w )  THEN
                 DO  i = nxl, nxr
@@ -586,7 +590,6 @@
                       ENDDO
                    ENDDO
                 ENDDO
-                CALL exchange_horiz( w_av, nbgp )
              ENDIF
 
              IF ( ALLOCATED( mrt_av_grid )  .AND.  do_average_mrt )  THEN
@@ -999,24 +1002,19 @@
  SUBROUTINE bio_header( io )
 
     IMPLICIT NONE
-!
-!-- Input variables
-    INTEGER(iwp), INTENT(IN) ::  io           !< Unit of the output file
-!
-!-- Internal variables
-    CHARACTER (LEN=86) ::  output_height_chr  !< String for output height
 
-    WRITE( output_height_chr, '(F8.1,7X)' )  bio_output_height
+    INTEGER(iwp), INTENT(IN) ::  io  !< output file unit
+
+
 !
-!-- Write biom header
+!-- Write header.
     WRITE( io, 1 )
-    WRITE( io, 2 )  TRIM( output_height_chr )
-    WRITE( io, 3 )  TRIM( ACHAR( bio_cell_level ) )
+    WRITE( io, 2 )  bio_output_height, bio_cell_level
 
 1   FORMAT (//' Human thermal comfort module information:'/                                        &
               ' ------------------------------'/)
-2   FORMAT ('    --> All indices calculated for a height of (m): ', A )
-3   FORMAT ('    --> This corresponds to cell level : ', A )
+2   FORMAT ('    --> all indices calculated for a height of (m): ',F8.1/                           &
+            '        corresponding to cell level index: ',I4)
 
  END SUBROUTINE bio_header
 

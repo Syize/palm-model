@@ -496,7 +496,7 @@
     INTEGER(iwp) ::  i                !<
     INTEGER(iwp) ::  ierr             !<
     INTEGER(iwp) ::  j                !<
-    INTEGER(iwp) ::  local_nr_arrays  !< store number of arrays in  local variiab le
+    INTEGER(iwp) ::  local_nr_arrays  !< store number of arrays in local variable
     INTEGER(iwp) ::  myindex          !<
     INTEGER(iwp) ::  total_npes       !< total number of PEs parent and child
 

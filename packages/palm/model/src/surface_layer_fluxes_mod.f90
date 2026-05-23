@@ -97,9 +97,7 @@
 
 #if defined( _OPENACC )
     USE control_parameters,                                                                        &
-        ONLY:  enable_lsm_openacc,                                                                 &
-               enable_openacc
-
+        ONLY:  enable_openacc
 #endif
 
     USE kinds
@@ -178,11 +176,13 @@
     END INTERFACE phi_m
 
     INTERFACE psi_h
-       MODULE PROCEDURE psi_h
+       MODULE PROCEDURE psi_h_dp
+       MODULE PROCEDURE psi_h_sp
     END INTERFACE psi_h
 
     INTERFACE psi_m
-       MODULE PROCEDURE psi_m
+       MODULE PROCEDURE psi_m_dp
+       MODULE PROCEDURE psi_m_sp
     END INTERFACE psi_m
 
     INTERFACE surface_layer_fluxes
@@ -722,7 +722,9 @@
 !--------------------------------------------------------------------------------------------------!
 ! Description:
 ! ------------
-!> Calculate the Obukhov length (L).
+!> Calculate the Obukhov length (L). On GPUs, this routine always needs to run with 64-bit precision
+!> (in the vector branch), because with 32-bit the algorithm partly does not converge within the
+!> maximum of 1000 iterations.
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE calc_ol( ns, ln_z_z0, ln_z_z0h, ol, rib, z0, z0h, z_mo )
 
@@ -748,10 +750,53 @@
     REAL(wp) ::  ol_m     !< previous value of L for Newton iteration
     REAL(wp) ::  ol_prev  !< previous time step value of L
     REAL(wp) ::  ol_u     !< upper bound of L for Newton iteration
+!
+!-- Variables for vector branch.
+#if defined( _OPENACC )
+!-- GPUs require 64 bit precision, because otherwise the algorithm often does not converge.
+    REAL(dp) ::  arg_h_zmo_m  !< argument for psi-function
+    REAL(dp) ::  arg_h_z0h_m  !< argument for psi-function
+    REAL(dp) ::  arg_m_zmo_m  !< argument for psi-function
+    REAL(dp) ::  arg_m_z0_m   !< argument for psi-function
+    REAL(dp) ::  arg_h_zmo_u  !< argument for psi-function
+    REAL(dp) ::  arg_h_z0h_u  !< argument for psi-function
+    REAL(dp) ::  arg_m_zmo_u  !< argument for psi-function
+    REAL(dp) ::  arg_m_z0_u   !< argument for psi-function
+    REAL(dp) ::  arg_h_zmo_l  !< argument for psi-function
+    REAL(dp) ::  arg_h_z0h_l  !< argument for psi-function
+    REAL(dp) ::  arg_m_zmo_l  !< argument for psi-function
+    REAL(dp) ::  arg_m_z0_l   !< argument for psi-function
+    REAL(dp) ::  f_vec        !< function for Newton iteration: f = Ri - [...]/[...]^2 = 0
+    REAL(dp) ::  f_d_ol_vec   !< derivative of f
+    REAL(dp) ::  ol_l_vec     !< lower bound of L for Newton iteration
+    REAL(dp) ::  ol_m_vec     !< previous value of L for Newton iteration
+    REAL(dp) ::  ol_u_vec     !< upper bound of L for Newton iteration
 
-    REAL(wp), DIMENSION(ns) ::  ol_prev_vec  !< temporary array required for vectorization
+    REAL(dp), DIMENSION(ns) ::  ol_prev_vec  !< temporary array required for vectorization
 
     !$ACC DATA CREATE( convergence_reached, ol_prev_vec ) IF(enable_openacc)
+#else
+    REAL(wp) ::  arg_h_zmo_m  !< argument for psi-function
+    REAL(wp) ::  arg_h_z0h_m  !< argument for psi-function
+    REAL(wp) ::  arg_m_zmo_m  !< argument for psi-function
+    REAL(wp) ::  arg_m_z0_m   !< argument for psi-function
+    REAL(wp) ::  arg_h_zmo_u  !< argument for psi-function
+    REAL(wp) ::  arg_h_z0h_u  !< argument for psi-function
+    REAL(wp) ::  arg_m_zmo_u  !< argument for psi-function
+    REAL(wp) ::  arg_m_z0_u   !< argument for psi-function
+    REAL(wp) ::  arg_h_zmo_l  !< argument for psi-function
+    REAL(wp) ::  arg_h_z0h_l  !< argument for psi-function
+    REAL(wp) ::  arg_m_zmo_l  !< argument for psi-function
+    REAL(wp) ::  arg_m_z0_l   !< argument for psi-function
+    REAL(wp) ::  f_vec        !< function for Newton iteration: f = Ri - [...]/[...]^2 = 0
+    REAL(wp) ::  f_d_ol_vec   !< derivative of f
+    REAL(wp) ::  ol_l_vec     !< lower bound of L for Newton iteration
+    REAL(wp) ::  ol_m_vec     !< previous value of L for Newton iteration
+    REAL(wp) ::  ol_u_vec     !< upper bound of L for Newton iteration
+
+    REAL(wp), DIMENSION(ns) ::  ol_prev_vec  !< temporary array required for vectorization
+#endif
+
 
 !
 !-- Calculate the Obukhov length using Newton iteration.
@@ -890,65 +935,85 @@
              EXIT
           ENDIF
 
-          !$ACC PARALLEL LOOP PRIVATE(ol_m, ol_l, ol_u, f, f_d_ol) &
+          !$ACC PARALLEL LOOP PRIVATE(ol_m_vec, ol_l_vec, ol_u_vec, f_vec, f_d_ol_vec) &
+          !$ACC PRIVATE(arg_h_zmo_m, arg_h_z0h_m, arg_m_zmo_m, arg_m_z0_m) &
+          !$ACC PRIVATE(arg_h_zmo_u, arg_h_z0h_u, arg_m_zmo_u, arg_m_z0_u) &
+          !$ACC PRIVATE(arg_h_zmo_l, arg_h_z0h_l, arg_m_zmo_l, arg_m_z0_l) &
           !$ACC PRESENT(ns, ln_z_z0, ln_z_z0h, ol, rib, z0, z0h, z_mo) DEFAULT(NONE) IF(enable_openacc)
           DO  m = 1, ns
              IF ( convergence_reached(m) )  CYCLE
 
 !
 !--          Calculate step size for central difference.
-             ol_m = ol(m)
-             ol_l = ol_m - 0.001_wp * ol_m
-             ol_u = ol_m + 0.001_wp * ol_m
-
+             ol_m_vec = ol(m)
+             ol_l_vec = ol_m_vec - 0.001_wp * ol_m_vec
+             ol_u_vec = ol_m_vec + 0.001_wp * ol_m_vec
 
              IF ( ibc_pt_b /= 1 )  THEN
 !
 !--             Calculate f = Ri - [...]/[...]^2 = 0.
-                f = rib(m) - ( z_mo(m) / ol_m ) * ( ln_z_z0h(m) - psi_h( z_mo(m) / ol_m )          &
-                                                                + psi_h( z0h(m)  / ol_m ) )        &
-                                                / ( ln_z_z0(m)  - psi_m( z_mo(m) / ol_m )          &
-                                                                + psi_m( z0(m)   /  ol_m ) )**2
+                arg_h_zmo_m = z_mo(m) / ol_m_vec
+                arg_h_z0h_m = z0h(m)  / ol_m_vec
+                arg_m_zmo_m = z_mo(m) / ol_m_vec
+                arg_m_z0_m  = z0(m)   / ol_m_vec
+                f_vec = rib(m) - ( arg_h_zmo_m ) * ( ln_z_z0h(m) - psi_h( arg_h_zmo_m )            &
+                                                                 + psi_h( arg_h_z0h_m ) )          &
+                                                 / ( ln_z_z0(m)  - psi_m( arg_m_zmo_m )            &
+                                                                 + psi_m( arg_m_z0_m ) )**2
 !
 !--             Calculate df/dL.
-                f_d_ol = ( - ( z_mo(m) / ol_u ) * ( ln_z_z0h(m) - psi_h( z_mo(m) / ol_u )          &
-                                                                + psi_h( z0h(m)  / ol_u ) )        &
-                                                / ( ln_z_z0(m)  - psi_m( z_mo(m) / ol_u )          &
-                                                                + psi_m( z0(m)   / ol_u ) )**2     &
-                           + ( z_mo(m) / ol_l ) * ( ln_z_z0h(m) - psi_h( z_mo(m) / ol_l )          &
-                                                                + psi_h( z0h(m)  / ol_l ) )        &
-                                                / ( ln_z_z0(m)  - psi_m( z_mo(m) / ol_l )          &
-                                                                + psi_m( z0(m)   / ol_l ) )**2     &
-                         ) / ( ol_u - ol_l )
+                arg_h_zmo_u = z_mo(m) / ol_u_vec
+                arg_h_z0h_u = z0h(m)  / ol_u_vec
+                arg_m_zmo_u = z_mo(m) / ol_u_vec
+                arg_m_z0_u  = z0(m)   / ol_u_vec
+                arg_h_zmo_l = z_mo(m) / ol_l_vec
+                arg_h_z0h_l = z0h(m)  / ol_l_vec
+                arg_m_zmo_l = z_mo(m) / ol_l_vec
+                arg_m_z0_l  = z0(m)   / ol_l_vec
+                f_d_ol_vec = ( - ( arg_h_zmo_u ) * ( ln_z_z0h(m) - psi_h( arg_h_zmo_u )            &
+                                                                 + psi_h( arg_h_z0h_u ) )          &
+                                                 / ( ln_z_z0(m)  - psi_m( arg_m_zmo_u )            &
+                                                                 + psi_m( arg_m_z0_u  ) )**2       &
+                               + ( arg_h_zmo_l ) * ( ln_z_z0h(m) - psi_h( arg_h_zmo_l )            &
+                                                                 + psi_h( arg_h_z0h_l ) )          &
+                                                 / ( ln_z_z0(m)  - psi_m( arg_m_zmo_l )            &
+                                                                 + psi_m( arg_m_z0_l  ) )**2       &
+                         ) / ( ol_u_vec - ol_l_vec )
              ELSE
 !
 !--             Calculate f = Ri - 1 /[...]^3 = 0.
-                f = rib(m) - ( z_mo(m) / ol_m ) / ( ln_z_z0(m)  - psi_m( z_mo(m) / ol_m )          &
-                                                                + psi_m( z0(m)   / ol_m ) )**3
+                arg_h_zmo_m = z_mo(m) / ol_m_vec
+                arg_m_z0_m  = z0(m)   / ol_m_vec
+                f_vec = rib(m) - ( arg_h_zmo_m ) / ( ln_z_z0(m)  - psi_m( arg_h_zmo_m )            &
+                                                                 + psi_m( arg_m_z0_m  ) )**3
 
 !
 !--             Calculate df/dL.
-                f_d_ol = ( - ( z_mo(m) / ol_u ) / ( ln_z_z0(m)  - psi_m( z_mo(m) / ol_u )          &
-                                                                + psi_m( z0(m)   / ol_u ) )**3     &
-                           + ( z_mo(m) / ol_l ) / ( ln_z_z0(m)  - psi_m( z_mo(m) / ol_l )          &
-                                                                + psi_m( z0(m)   / ol_l ) )**3     &
-                         ) / ( ol_u - ol_l )
+                arg_m_zmo_u = z_mo(m) / ol_u_vec
+                arg_m_z0_u  = z0(m)   / ol_u_vec
+                arg_m_zmo_l = z_mo(m) / ol_l_vec
+                arg_m_z0_l  = z0(m)   / ol_l_vec
+                f_d_ol_vec = ( - ( arg_m_zmo_u ) / ( ln_z_z0(m)  - psi_m( arg_m_zmo_u )            &
+                                                                 + psi_m( arg_m_z0_u  ) )**3       &
+                               + ( arg_m_zmo_l ) / ( ln_z_z0(m)  - psi_m( arg_m_zmo_l )            &
+                                                                 + psi_m( arg_m_z0_l  ) )**3       &
+                             ) / ( ol_u_vec - ol_l_vec )
              ENDIF
 !
 !--          Calculate new L.
-             ol(m) = ol_m - f / f_d_ol
+             ol(m) = ol_m_vec - f_vec / f_d_ol_vec
 
 !
 !--          Ensure that the bulk Richardson number and the Obukhov length have the same sign and
 !--          ensure convergence. If the sign is not the same, the above calculated Obukhov length
 !--          obviously overshooted to the opposite side, so the next iteration should start with
 !--          a smaller value.
-             IF ( ol(m) * ol_m < 0.0_wp )  ol(m) = ol_m * 0.5_wp
+             IF ( ol(m) * ol_m_vec < 0.0_wp )  ol(m) = ol_m_vec * 0.5_wp
 
 !
 !--          Check for convergence.
 !--          This check does not modify ol, therefore this is done first.
-             IF ( ABS( ( ol(m) - ol_m ) /  ol(m) ) < ol_min )  THEN
+             IF ( ABS( ( ol(m) - ol_m_vec ) /  ol(m) ) < ol_min )  THEN
                 convergence_reached(m) = .TRUE.
              ENDIF
 !
@@ -1351,7 +1416,7 @@
        !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
        !$ACC COPY(surf, surf%ns, surf%z_mo, surf%pt1, surf%pt_surface) &
        !$ACC COPY(surf%ln_z_z0h, surf%ol, surf%z0h, surf%ts, surf%consider_stability) &
-       !$ACC PRIVATE(z_mo) IF(enable_lsm_openacc)
+       !$ACC PRIVATE(z_mo) IF(enable_openacc)
        DO  m = 1, surf%ns
           z_mo = surf%z_mo(m)
 !
@@ -1427,7 +1492,7 @@
           ENDIF
 
 !
-!--       Assume saturation for atmosphere coupled to ocean (but not in case of precursor runs).
+!--       Assume saturation for atmosphere coupled to ocean.
           IF ( atmosphere_run_coupled_to_ocean )  THEN
              !$OMP PARALLEL DO PRIVATE( i, j, k, e_s )
              DO  m = 1, surf%ns
@@ -1443,7 +1508,7 @@
           !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
           !$ACC COPY(surf, surf%ns, surf%k,  surf%koff, surf%z_mo, surf%qs, surf%qv1) &
           !$ACC COPY(surf%q_surface, surf%ln_z_z0q, surf%ol, surf%z0q, surf%consider_stability) &
-          !$ACC PRIVATE(k, k_off, z_mo) IF(enable_lsm_openacc)
+          !$ACC PRIVATE(k, k_off, z_mo) IF(enable_openacc)
           DO  m = 1, surf%ns
              k = surf%k(m)
              k_off = surf%koff(m)
@@ -2127,80 +2192,159 @@
 !--------------------------------------------------------------------------------------------------!
 ! Description:
 ! ------------
-!> Integrated stability function for momentum.
+!> Integrated stability function for momentum. 64-bit version.
 !--------------------------------------------------------------------------------------------------!
- PURE FUNCTION psi_m( zeta )
+ PURE FUNCTION psi_m_dp( zeta )
     !$ACC ROUTINE SEQ
 
     USE kinds
 
     IMPLICIT NONE
 
-    REAL(wp), INTENT(IN) ::  zeta   !< Stability parameter z/L
+    REAL(dp), INTENT(IN) ::  zeta   !< Stability parameter z/L
 
-    REAL(wp) ::  psi_m  !< Integrated similarity function result
-    REAL(wp) ::  x      !< dummy variable
+    REAL(dp) ::  psi_m_dp  !< Integrated similarity function result
+    REAL(dp) ::  x         !< dummy variable
 
-    REAL(wp), PARAMETER ::  a = 1.0_wp            !< constant
-    REAL(wp), PARAMETER ::  b = 0.66666666666_wp  !< constant
-    REAL(wp), PARAMETER ::  c = 5.0_wp            !< constant
-    REAL(wp), PARAMETER ::  d = 0.35_wp           !< constant
-    REAL(wp), PARAMETER ::  c_d_d = c / d         !< constant
-    REAL(wp), PARAMETER ::  bc_d_d = b * c / d    !< constant
+    REAL(dp), PARAMETER ::  a = 1.0_dp            !< constant
+    REAL(dp), PARAMETER ::  b = 0.66666666666_dp  !< constant
+    REAL(dp), PARAMETER ::  c = 5.0_dp            !< constant
+    REAL(dp), PARAMETER ::  d = 0.35_dp           !< constant
+    REAL(dp), PARAMETER ::  c_d_d = c / d         !< constant
+    REAL(dp), PARAMETER ::  bc_d_d = b * c / d    !< constant
 
 
-    IF ( zeta < 0.0_wp )  THEN
-       x = SQRT( SQRT( 1.0_wp  - 16.0_wp * zeta ) )
-       psi_m = pi * 0.5_wp - 2.0_wp * ATAN( x ) + LOG( ( 1.0_wp + x )**2                           &
-               * ( 1.0_wp + x**2 ) * 0.125_wp )
+    IF ( zeta < 0.0_dp )  THEN
+       x = SQRT( SQRT( 1.0_dp  - 16.0_dp * zeta ) )
+       psi_m_dp = pi * 0.5_dp - 2.0_dp * ATAN( x ) + LOG( ( 1.0_dp + x )**2                        &
+                  * ( 1.0_dp + x**2 ) * 0.125_dp )
     ELSE
 
-       psi_m = - b * ( zeta - c_d_d ) * EXP( -d * zeta ) - a * zeta - bc_d_d
+       psi_m_dp = - b * ( zeta - c_d_d ) * EXP( -d * zeta ) - a * zeta - bc_d_d
 !
 !--    Old version for stable conditions (only valid for z/L < 0.5) psi_m = - 5.0_wp * zeta
 
     ENDIF
 
- END FUNCTION psi_m
+ END FUNCTION psi_m_dp
 
 
 !--------------------------------------------------------------------------------------------------!
 ! Description:
-!------------
-!> Integrated stability function for heat and moisture.
+! ------------
+!> Integrated stability function for momentum. 32-bit version.
 !--------------------------------------------------------------------------------------------------!
- PURE FUNCTION psi_h( zeta )
+ PURE FUNCTION psi_m_sp( zeta )
     !$ACC ROUTINE SEQ
 
     USE kinds
 
     IMPLICIT NONE
 
-    REAL(wp), INTENT(IN) ::  zeta   !< stability parameter z/L
+    REAL(sp), INTENT(IN) ::  zeta   !< Stability parameter z/L
 
-    REAL(wp) ::  psi_h  !< integrated similarity function result
-    REAL(wp) ::  x      !< dummy variable
+    REAL(sp) ::  psi_m_sp  !< Integrated similarity function result
+    REAL(sp) ::  x         !< dummy variable
 
-    REAL(wp), PARAMETER ::  a = 1.0_wp            !< constant
-    REAL(wp), PARAMETER ::  b = 0.66666666666_wp  !< constant
-    REAL(wp), PARAMETER ::  c = 5.0_wp            !< constant
-    REAL(wp), PARAMETER ::  d = 0.35_wp           !< constant
-    REAL(wp), PARAMETER ::  c_d_d = c / d         !< constant
-    REAL(wp), PARAMETER ::  bc_d_d = b * c / d    !< constant
+    REAL(sp), PARAMETER ::  a = 1.0_sp            !< constant
+    REAL(sp), PARAMETER ::  b = 0.66666666666_sp  !< constant
+    REAL(sp), PARAMETER ::  c = 5.0_sp            !< constant
+    REAL(sp), PARAMETER ::  d = 0.35_sp           !< constant
+    REAL(sp), PARAMETER ::  c_d_d = c / d         !< constant
+    REAL(sp), PARAMETER ::  bc_d_d = b * c / d    !< constant
 
 
-    IF ( zeta < 0.0_wp )  THEN
-       x = SQRT( 1.0_wp  - 16.0_wp * zeta )
-       psi_h = 2.0_wp * LOG( (1.0_wp + x ) / 2.0_wp )
+    IF ( zeta < 0.0_sp )  THEN
+       x = SQRT( SQRT( 1.0_sp  - 16.0_sp * zeta ) )
+       psi_m_sp = pi * 0.5_sp - 2.0_sp * ATAN( x ) + LOG( ( 1.0_sp + x )**2                        &
+                  * ( 1.0_sp + x**2 ) * 0.125_sp )
     ELSE
-       psi_h = - b * ( zeta - c_d_d ) * EXP( -d * zeta ) - (1.0_wp                                 &
-               + 0.66666666666_wp * a * zeta )**1.5_wp - bc_d_d + 1.0_wp
+
+       psi_m_sp = - b * ( zeta - c_d_d ) * EXP( -d * zeta ) - a * zeta - bc_d_d
+!
+!--    Old version for stable conditions (only valid for z/L < 0.5) psi_m = - 5.0_wp * zeta
+
+    ENDIF
+
+ END FUNCTION psi_m_sp
+
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+!------------
+!> Integrated stability function for heat and moisture. 64-bit version.
+!--------------------------------------------------------------------------------------------------!
+ PURE FUNCTION psi_h_dp( zeta )
+    !$ACC ROUTINE SEQ
+
+    USE kinds
+
+    IMPLICIT NONE
+
+    REAL(dp), INTENT(IN) ::  zeta   !< stability parameter z/L
+
+    REAL(dp) ::  psi_h_dp  !< integrated similarity function result
+    REAL(dp) ::  x         !< dummy variable
+
+    REAL(dp), PARAMETER ::  a = 1.0_dp            !< constant
+    REAL(dp), PARAMETER ::  b = 0.66666666666_dp  !< constant
+    REAL(dp), PARAMETER ::  c = 5.0_dp            !< constant
+    REAL(dp), PARAMETER ::  d = 0.35_dp           !< constant
+    REAL(dp), PARAMETER ::  c_d_d = c / d         !< constant
+    REAL(dp), PARAMETER ::  bc_d_d = b * c / d    !< constant
+
+
+    IF ( zeta < 0.0_dp )  THEN
+       x = SQRT( 1.0_dp  - 16.0_dp * zeta )
+       psi_h_dp = 2.0_dp * LOG( (1.0_dp + x ) / 2.0_dp )
+    ELSE
+       psi_h_dp = - b * ( zeta - c_d_d ) * EXP( -d * zeta ) - (1.0_dp                              &
+                  + 0.66666666666_dp * a * zeta )**1.5_dp - bc_d_d + 1.0_dp
 !
 !--    Old version for stable conditions (only valid for z/L < 0.5)
 !--    psi_h = - 5.0_wp * zeta
     ENDIF
 
- END FUNCTION psi_h
+ END FUNCTION psi_h_dp
+
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+!------------
+!> Integrated stability function for heat and moisture. 32-bit version.
+!--------------------------------------------------------------------------------------------------!
+ PURE FUNCTION psi_h_sp( zeta )
+    !$ACC ROUTINE SEQ
+
+    USE kinds
+
+    IMPLICIT NONE
+
+    REAL(sp), INTENT(IN) ::  zeta   !< stability parameter z/L
+
+    REAL(sp) ::  psi_h_sp  !< integrated similarity function result
+    REAL(sp) ::  x         !< dummy variable
+
+    REAL(sp), PARAMETER ::  a = 1.0_sp            !< constant
+    REAL(sp), PARAMETER ::  b = 0.66666666666_sp  !< constant
+    REAL(sp), PARAMETER ::  c = 5.0_sp            !< constant
+    REAL(sp), PARAMETER ::  d = 0.35_sp           !< constant
+    REAL(sp), PARAMETER ::  c_d_d = c / d         !< constant
+    REAL(sp), PARAMETER ::  bc_d_d = b * c / d    !< constant
+
+
+    IF ( zeta < 0.0_sp )  THEN
+       x = SQRT( 1.0_sp  - 16.0_sp * zeta )
+       psi_h_sp = 2.0_sp * LOG( (1.0_sp + x ) / 2.0_sp )
+    ELSE
+       psi_h_sp = - b * ( zeta - c_d_d ) * EXP( -d * zeta ) - (1.0_sp                              &
+                  + 0.66666666666_sp * a * zeta )**1.5_sp - bc_d_d + 1.0_sp
+!
+!--    Old version for stable conditions (only valid for z/L < 0.5)
+!--    psi_h = - 5.0_wp * zeta
+    ENDIF
+
+ END FUNCTION psi_h_sp
 
 
 !--------------------------------------------------------------------------------------------------!

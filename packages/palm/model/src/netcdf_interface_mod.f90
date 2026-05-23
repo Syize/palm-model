@@ -19,19 +19,12 @@
 !
 ! Description:
 ! ------------
-!> In case of extend = .FALSE.:
 !> Define all necessary dimensions, axes and variables for the different netCDF datasets. This
 !> subroutine is called from check_open after a new dataset is created. It leaves the open netCDF
 !> files ready to write.
 !>
-!> In case of extend = .TRUE.:
-!> Find out if dimensions and variables of an existing file match the values of the actual run. If
-!> so, get all necessary information (ids, etc.) from this file.
-!>
 !> Parameter av can assume values 0 (non-averaged data) and 1 (time averaged data)
 !>
-!> @todo calculation of output time levels for parallel NetCDF still does not cover every exception
-!        (change of dt_do, end_time in restart)
 !> @todo timeseries and profile output still needs to be rewritten to allow modularization
 !--------------------------------------------------------------------------------------------------!
  MODULE netcdf_interface
@@ -99,6 +92,7 @@
 
     CHARACTER (LEN=9), DIMENSION(500) ::  dopr_unit = 'unknown'
 
+    INTEGER(iwp) ::  i9  !< loop index for following array assignment
     CHARACTER (LEN=13), DIMENSION(dots_max) :: dots_label =                                        &
           (/ 'E            ', 'E*           ', 'dt           ',                                    &
              'us*          ', 'th*          ', 'umax         ',                                    &
@@ -283,7 +277,7 @@
 
  CONTAINS
 
- SUBROUTINE netcdf_define_header( callmode, extend, av )
+ SUBROUTINE netcdf_define_header( callmode, av )
 
 #if defined( __netcdf )
 
@@ -310,27 +304,15 @@
                det_enabled,                                                                        &
                domask,                                                                             &
                dopr_n,                                                                             &
-               dopr_time_count,                                                                    &
-               dots_time_count,                                                                    &
                do2d,                                                                               &
-               do2d_at_begin,                                                                      &
-               do2d_xz_time_count,                                                                 &
-               do3d, do3d_at_begin,                                                                &
-               do2d_yz_time_count,                                                                 &
-               dt_data_output_av,                                                                  &
-               dt_do2d_xy,                                                                         &
-               dt_do2d_xz,                                                                         &
-               dt_do2d_yz,                                                                         &
-               dt_do3d,                                                                            &
+               do3d,                                                                               &
                dt_write_agent_data,                                                                &
                mask_size,                                                                          &
-               do2d_xy_time_count,                                                                 &
-               do3d_time_count,                                                                    &
-               domask_time_count,                                                                  &
                end_time,                                                                           &
                indoor_model,                                                                       &
                land_surface,                                                                       &
                mask_size_l,                                                                        &
+               mask_start_l,                                                                       &
                mask_i,                                                                             &
                mask_i_global,                                                                      &
                mask_j,                                                                             &
@@ -343,23 +325,20 @@
                ntdim_2d_yz,                                                                        &
                ntdim_3d,                                                                           &
                nz_do3d,                                                                            &
+               origin_date_time,                                                                   &
                ocean_mode,                                                                         &
                plant_canopy,                                                                       &
                run_description_header,                                                             &
                salsa,                                                                              &
                section,                                                                            &
-               simulated_time,                                                                     &
-               simulated_time_at_begin,                                                            &
-               skip_time_data_output_av,                                                           &
-               skip_time_do2d_xy,                                                                  &
-               skip_time_do2d_xz,                                                                  &
-               skip_time_do2d_yz,                                                                  &
-               skip_time_do3d,                                                                     &
                slurb,                                                                              &
                topography,                                                                         &
                num_leg,                                                                            &
                num_var_fl,                                                                         &
-               urban_surface
+               traffic,                                                                            &
+               urban_surface,                                                                      &
+               use_fixed_date,                                                                     &
+               use_fixed_time
 
     USE dcep_mod,                                                                                  &
         ONLY:  dcep_define_netcdf_grid,                                                            &
@@ -420,6 +399,9 @@
 
     USE pegrid
 
+    USE palm_date_time_mod,                                                                        &
+        ONLY:  date_time_str_len
+
     USE plant_canopy_model_mod,                                                                    &
         ONLY:  pch_index,                                                                          &
                pcm_define_netcdf_grid
@@ -449,7 +431,6 @@
         ONLY:  averaging_interval_sp,                                                              &
                comp_spectra_level,                                                                 &
                data_output_sp,                                                                     &
-               dosp_time_count,                                                                    &
                spectra_direction
 
     USE statistics,                                                                                &
@@ -469,22 +450,22 @@
     USE uv_radiation_model_mod,                                                                    &
         ONLY:  uv_radiation_define_netcdf_grid
 
+    USE traffic_mod,                                                                               &
+        ONLY:  trm_define_netcdf_grid
 
     IMPLICIT NONE
 
-    CHARACTER (LEN=2), INTENT (IN) ::  callmode              !<
-    CHARACTER (LEN=4000)           ::  char_cross_profiles   !<
-    CHARACTER (LEN=4)              ::  grid_x                !<
-    CHARACTER (LEN=4)              ::  grid_y                !<
-    CHARACTER (LEN=varnamelength)  ::  grid_z                !<
-    CHARACTER (LEN=6)              ::  mode                  !<
-    CHARACTER (LEN=20)             ::  netcdf_var_name       !<
-    CHARACTER (LEN=3)              ::  suffix                !<
-    CHARACTER (LEN=80)             ::  time_average_text     !<
-    CHARACTER (LEN=varnamelength)  ::  trimvar               !< TRIM of output-variable string
-    CHARACTER (LEN=10)             ::  var                   !<
-    CHARACTER (LEN=4000)           ::  var_list              !<
-    CHARACTER (LEN=4000)           ::  var_list_old          !<
+    CHARACTER (LEN=2), INTENT (IN)       ::  callmode              !<
+    CHARACTER (LEN=4000)                 ::  char_cross_profiles   !<
+    CHARACTER (LEN=4)                    ::  grid_x                !<
+    CHARACTER (LEN=4)                    ::  grid_y                !<
+    CHARACTER (LEN=varnamelength)        ::  grid_z                !<
+    CHARACTER (LEN=20)                   ::  netcdf_var_name       !<
+    CHARACTER (LEN=3)                    ::  suffix                !<
+    CHARACTER (LEN=80)                   ::  time_average_text     !<
+    CHARACTER (LEN=date_time_str_len+14) ::  time_unit             !< unit of the time coordinate
+    CHARACTER (LEN=varnamelength)        ::  trimvar               !< TRIM of output-variable string
+    CHARACTER (LEN=4000)                 ::  var_list              !<
 
     CHARACTER (LEN=100), DIMENSION(1:crmax) ::  cross_profiles_adj   !<
     CHARACTER (LEN=100), DIMENSION(1:crmax) ::  cross_profiles_char  !<
@@ -507,46 +488,36 @@
     INTEGER(iwp) ::  mid                                     !< masked output running index
     INTEGER(iwp) ::  ns                                      !<
     INTEGER(iwp) ::  ns_do                                   !< actual value of ns for soil model data
-    INTEGER(iwp) ::  ns_old                                  !<
-    INTEGER(iwp) ::  ntime_count                             !< number of time levels found in file
-    INTEGER(iwp) ::  nz_old                                  !<
 
     INTEGER(iwp), SAVE ::  oldmode                           !<
 
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_time_old           !<
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_x_yz_old           !<
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_y_xz_old           !<
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_zu_sp_old          !<
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_zu_xy_old          !<
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_zu_3d_old          !<
-    INTEGER(iwp), DIMENSION(1) ::  id_dim_zu_mask_old        !<
 
-
+    INTEGER(iwp), DIMENSION(1:2)     ::  start               !< temporary array for start indices along x and y
     INTEGER(iwp), DIMENSION(1:crmax) ::  cross_profiles_numb !<
 
-    LOGICAL, INTENT (INOUT) ::  extend                       !<
-    LOGICAL                 ::  found                        !<
-
-    REAL(wp), DIMENSION(1) ::  last_time_coordinate          !< last time value in file
+    LOGICAL  ::  found  !<
 
     REAL(wp), DIMENSION(:), ALLOCATABLE   ::  netcdf_data    !<
     REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  netcdf_data_2d !<
 
 
 !
-!-- Determine the mode to be processed
-    IF ( extend )  THEN
-       mode = callmode // '_ext'
+!-- Set time unit following CF-convention. If origin_date_time has the default value,
+!-- it is assumed that the simulation is not based on a specific date/time.
+    IF ( use_fixed_date  .OR.  use_fixed_time  .OR.                                                &
+         origin_date_time == '2019-06-21 12:00:00 +00' )                                           &
+    THEN
+       time_unit = 'seconds'
     ELSE
-       mode = callmode // '_new'
+       time_unit = 'seconds since ' // origin_date_time
     ENDIF
 
 !
 !-- Select the mode to be processed. Possibilities are 3d, ma (mask), xy, xz, yz, pr (profiles), ps
 !-- (particle timeseries), fl (flight data), ts (timeseries) or sp (spectra).
-    SELECT CASE ( mode )
+    SELECT CASE ( callmode )
 
-       CASE ( 'ma_new' )
+       CASE ( 'ma' )
 
 !
 !--       Decompose actual parameter file_id (=formal parameter av) into mid and av
@@ -588,7 +559,7 @@
           CALL netcdf_create_var( id_set_mask(mid,av),                                             &
                                   (/ id_dim_time_mask(mid,av) /), 'time',                          &
                                   NF90_DOUBLE, id_var_time_mask(mid,av),                           &
-                                 'seconds', 'time', 468, 469, 000 )
+                                  TRIM( time_unit ), 'time', 468, 469, 000 )
           CALL netcdf_create_att( id_set_mask(mid,av), id_var_time_mask(mid,av),                   &
                                   'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_mask(mid,av), id_var_time_mask(mid,av), 'axis', 'T', 000)
@@ -834,6 +805,10 @@
                    IF ( .NOT. found  .AND.  urban_surface )  THEN
                       CALL usm_define_netcdf_grid( trimvar, found, grid_x, grid_y, grid_z )
                    ENDIF
+
+                   IF ( .NOT. found  .AND.  traffic )  THEN
+                      CALL trm_define_netcdf_grid( trimvar, found, grid_x, grid_y, grid_z )
+                   ENDIF
 !
 !--                Now check for user-defined quantities
                    IF ( .NOT. found  .AND.  user_module_enabled )  THEN
@@ -996,14 +971,23 @@
 !--       In case of non-flat topography write height information
           IF ( TRIM( topography ) /= 'flat'  .AND.  netcdf_data_format > 4 )  THEN
 
-             ALLOCATE( netcdf_data_2d(mask_size_l(mid,1),mask_size_l(mid,2)) )
+             IF (  mask_size_l(mid,1) > 0  .AND.  mask_size_l(mid,2) > 0  )  THEN
+                start = (/ mask_start_l(mid,1), mask_start_l(mid,2) /)
+                ALLOCATE( netcdf_data_2d(mask_size_l(mid,1),mask_size_l(mid,2)) )
+             ELSE
+!
+!--             Set use dummy values if no mask is defined on this PE.
+                start = (/ 1, 1 /)
+                ALLOCATE( netcdf_data_2d(1,1) )
+             ENDIF
+
              netcdf_data_2d = zu_s_inner( mask_i(mid,:mask_size_l(mid,1)),                         &
                                           mask_j(mid,:mask_size_l(mid,2)) )
 
              nc_stat = NF90_PUT_VAR( id_set_mask(mid,av),                                          &
                                      id_var_zusi_mask(mid,av),                                     &
                                      netcdf_data_2d,                                               &
-                                     start = (/ 1, 1 /),                                           &
+                                     start = start,                                                &
                                      count = (/ mask_size_l(mid,1), mask_size_l(mid,2) /) )
              CALL netcdf_handle_error( 'netcdf_define_header', 505 )
 
@@ -1013,7 +997,7 @@
              nc_stat = NF90_PUT_VAR( id_set_mask(mid,av),                                          &
                                      id_var_zwwi_mask(mid,av),                                     &
                                      netcdf_data_2d,                                               &
-                                     start = (/ 1, 1 /),                                           &
+                                     start = start,                                                &
                                      count = (/ mask_size_l(mid,1), mask_size_l(mid,2) /) )
              CALL netcdf_handle_error( 'netcdf_define_header', 506 )
 
@@ -1044,152 +1028,7 @@
           av = file_id
 
 
-       CASE ( 'ma_ext' )
-
-!
-!--       Decompose actual parameter file_id (=formal parameter av) into mid and av
-          file_id = av
-          IF ( file_id <= 200+max_masks )  THEN
-             mid = file_id - 200
-             av = 0
-          ELSE
-             mid = file_id - (200+max_masks)
-             av = 1
-          ENDIF
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_mask(mid,av), NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 507 )
-
-          var_list = ';'
-          i = 1
-          DO WHILE ( domask(mid,av,i)(1:1) /= ' ' )
-             var_list = TRIM(var_list) // TRIM( domask(mid,av,i) ) // ';'
-             i = i + 1
-          ENDDO
-
-          IF ( av == 0 )  THEN
-             var = '(mask)'
-          ELSE
-             var = '(mask_av)'
-          ENDIF
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             WRITE ( message_string, * ) 'netCDF file for "', TRIM( var ),                         &
-                                         '" data for mask', mid, ' from previous run found,',      &
-                                         '&but this file cannot be extended due to variable ',     &
-                                         'mismatch.&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0007', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get and compare the number of vertical gridpoints
-          nc_stat = NF90_INQ_VARID( id_set_mask(mid,av), 'zu_3d', id_var_zu_mask(mid,av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 508 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_mask(mid,av),                                    &
-                                           id_var_zu_mask(mid,av),                                 &
-                                           dimids = id_dim_zu_mask_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 509 )
-          id_dim_zu_mask(mid,av) = id_dim_zu_mask_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_mask(mid,av),                                   &
-                                            id_dim_zu_mask(mid,av),                                &
-                                            LEN = nz_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 510 )
-
-          IF ( mask_size(mid,3) /= nz_old )  THEN
-             WRITE ( message_string, * ) 'netCDF file for "', TRIM( var ),                         &
-                                         '" data for mask', mid, ' from previous run found,',      &
-                                         ' but this file cannot be extended due to mismatch in ',  &
-                                         ' number of vertical grid points.',                       &
-                                         '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0008', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is plmask..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_mask(mid,av), 'time', id_var_time_mask(mid,av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 511 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_mask(mid,av),                                    &
-                                           id_var_time_mask(mid,av),                               &
-                                           dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 512 )
-          id_dim_time_mask(mid,av) = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_mask(mid,av),                                   &
-                                            id_dim_time_mask(mid,av),                              &
-                                            LEN = domask_time_count(mid,av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 513 )
-
-          nc_stat = NF90_GET_VAR( id_set_mask(mid,av),                                             &
-                                  id_var_time_mask(mid,av),                                        &
-                                  last_time_coordinate,                                            &
-                                  start = (/ domask_time_count(mid,av) /),                         &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 514 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             WRITE ( message_string, * ) 'netCDF file for "', TRIM( var ),                         &
-                                         '" data for mask', mid, ' from previous run found,',      &
-                                         '&but this file cannot be extended because the current ', &
-                                         'output time is less or equal than the last output time ',&
-                                         'on this file.&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0009', 0, 1, 0, 6, 0 )
-             domask_time_count(mid,av) = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO WHILE ( domask(mid,av,i)(1:1) /= ' ' )
-             nc_stat = NF90_INQ_VARID( id_set_mask(mid,av),                                        &
-                                       TRIM( domask(mid,av,i) ),                                   &
-                                       id_var_domask(mid,av,i) )
-             CALL netcdf_handle_error( 'netcdf_define_header', 515 )
-             i = i + 1
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          IF ( av == 0 )  THEN
-             time_average_text = ' '
-          ELSE
-             WRITE (time_average_text, '('', '',F7.1,'' s average'')')  averaging_interval
-          ENDIF
-          nc_stat = NF90_REDEF( id_set_mask(mid,av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 516 )
-          nc_stat = NF90_PUT_ATT( id_set_mask(mid,av), NF90_GLOBAL, 'title',                       &
-                                  TRIM( run_description_header ) // TRIM( time_average_text ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 517 )
-          nc_stat = NF90_ENDDEF( id_set_mask(mid,av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 518 )
-          WRITE ( message_string, * ) 'netCDF file for "', TRIM( var ), '" data for mask', mid,    &
-                                     ' from previous run found.', ' &This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0010', 0, 0, 0, 6, 0 )
-!
-!--       Restore original parameter file_id (=formal parameter av) into av
-          av = file_id
-
-
-       CASE ( '3d_new' )
+       CASE ( '3d' )
 
           CALL location_message( 'netcdf_define_header 3d', 'start' )
 !
@@ -1218,7 +1057,7 @@
           ENDIF
 
           CALL netcdf_create_var( id_set_3d(av), (/ id_dim_time_3d(av) /), 'time', NF90_DOUBLE,    &
-                                  id_var_time_3d(av), 'seconds', 'time', 65, 66, 00 )
+                                  id_var_time_3d(av), TRIM( time_unit ), 'time', 65, 66, 00 )
           CALL netcdf_create_att( id_set_3d(av), id_var_time_3d(av), 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_3d(av), id_var_time_3d(av), 'axis', 'T', 000)
 !
@@ -1532,6 +1371,10 @@
                       CALL uv_radiation_define_netcdf_grid( do3d(av,i), found, grid_x, grid_y, grid_z )
                    ENDIF
 
+                   IF ( .NOT. found  .AND.  traffic )  THEN
+                      CALL trm_define_netcdf_grid( do3d(av,i), found, grid_x, grid_y, grid_z )
+                   ENDIF
+
                    IF ( .NOT. found )  THEN
                       WRITE ( message_string, * ) 'no grid defined for variable "',                &
                                                   TRIM( do3d(av,i) ), '"'
@@ -1776,175 +1619,8 @@
 
           CALL location_message( 'netcdf_define_header 3d', 'finished' )
 
-       CASE ( '3d_ext' )
 
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_3d(av), NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 87 )
-
-          var_list = ';'
-          i = 1
-          DO  WHILE ( do3d(av,i)(1:1) /= ' ' )
-             var_list = TRIM( var_list ) // TRIM( do3d(av,i) ) // ';'
-             i = i + 1
-          ENDDO
-
-          IF ( av == 0 )  THEN
-             var = '(3d)'
-          ELSE
-             var = '(3d_av)'
-          ENDIF
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for volume data "' // TRIM( var ) //                    &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0011', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get and compare the number of vertical gridpoints
-          nc_stat = NF90_INQ_VARID( id_set_3d(av), 'zu_3d', id_var_zu_3d(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 88 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_3d(av), id_var_zu_3d(av),                        &
-                                           dimids = id_dim_zu_3d_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 89 )
-          id_dim_zu_3d(av) = id_dim_zu_3d_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_3d(av), id_dim_zu_3d(av), LEN = nz_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 90 )
-
-          IF ( nz_do3d-nzb+1 /= nz_old )  THEN
-              message_string = 'netCDF file for volume data "' // TRIM( var ) //                   &
-                               '" from previous run found,' //                                     &
-                               '&but this file cannot be extended due to' //                       &
-                               ' mismatch in number of' // ' vertical grid points (nz_do3d).' //   &
-                               '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0012', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is pl3d..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_3d(av), 'time', id_var_time_3d(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 91 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_3d(av), id_var_time_3d(av),                      &
-                                           dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 92 )
-
-          id_dim_time_3d(av) = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_3d(av), id_dim_time_3d(av), LEN = ntime_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 93 )
-
-!
-!--       For non-parallel output use the last output time level of the netcdf file because the time
-!--       dimension is unlimited. In case of parallel output the variable ntime_count could get the
-!--       value of 9*10E36 because the time dimension is limited.
-          IF ( netcdf_data_format < 5 ) do3d_time_count(av) = ntime_count
-
-          nc_stat = NF90_GET_VAR( id_set_3d(av), id_var_time_3d(av),                               &
-                                  last_time_coordinate,                                            &
-                                  start = (/ do3d_time_count(av) /),                               &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 94 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for volume data "' // TRIM( var ) //                    &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output time' // ' on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0013', 0, 1, 0, 6, 0 )
-             do3d_time_count(av) = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-          IF ( netcdf_data_format > 4 )  THEN
-!
-!--          Check if the needed number of output time levels is increased compared to the number of
-!--          time levels in the existing file.
-             IF ( ntdim_3d(av) > ntime_count )  THEN
-                message_string = 'netCDF file for volume data "' // TRIM( var ) //                 &
-                                 '" from previous run found,' //                                   &
-                                 '&but this file cannot be extended becaus' //                     &
-                                 'e the number of output time levels has b' //                     &
-                                 'een increased compared to the previous simulation.' //           &
-                                 '&New file is created instead.'
-                CALL message( 'define_netcdf_header', 'NCI0014', 0, 1, 0, 6, 0 )
-                do3d_time_count(av) = 0
-                extend = .FALSE.
-!
-!--             Recalculate the needed time levels for the new file.
-                IF ( av == 0 )  THEN
-                   ntdim_3d(0) = CEILING( ( end_time - MAX( skip_time_do3d,                        &
-                                                            simulated_time_at_begin )              &
-                                          ) / dt_do3d )
-                   IF ( do3d_at_begin )  ntdim_3d(0) = ntdim_3d(0) + 1
-                ELSE
-                   ntdim_3d(1) = CEILING( ( end_time - MAX( skip_time_data_output_av,              &
-                                                            simulated_time_at_begin )              &
-                                          ) / dt_data_output_av )
-                ENDIF
-                RETURN
-             ENDIF
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO  WHILE ( do3d(av,i)(1:1) /= ' ' )
-             nc_stat = NF90_INQ_VARID( id_set_3d(av), TRIM( do3d(av,i) ), id_var_do3d(av,i) )
-             CALL netcdf_handle_error( 'netcdf_define_header', 95 )
-#if defined( __netcdf4_parallel )
-!
-!--          Set collective io operations for parallel io
-             IF ( netcdf_data_format > 4 )  THEN
-                nc_stat = NF90_VAR_PAR_ACCESS( id_set_3d(av), id_var_do3d(av,i), NF90_COLLECTIVE )
-                CALL netcdf_handle_error( 'netcdf_define_header', 453 )
-             ENDIF
-#endif
-             i = i + 1
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size. Maybe revise later.
-          IF ( av == 0 )  THEN
-             time_average_text = ' '
-          ELSE
-             WRITE ( time_average_text, '('', '',F7.1,'' s average'')' ) averaging_interval
-          ENDIF
-          nc_stat = NF90_REDEF( id_set_3d(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 429 )
-          nc_stat = NF90_PUT_ATT( id_set_3d(av), NF90_GLOBAL, 'title',                             &
-                                  TRIM( run_description_header ) // TRIM( time_average_text ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 96 )
-          nc_stat = NF90_ENDDEF( id_set_3d(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 430 )
-          message_string = 'netCDF file for volume data "' // TRIM( var ) //                       &
-                           '" from previous run found.' // '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0015', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'ag_new' )
+       CASE ( 'ag' )
 
 !
 !--       Define some global attributes of the dataset
@@ -1963,7 +1639,7 @@
           ENDIF
 
           CALL netcdf_create_var( id_set_agt, (/ id_dim_time_agt /), 'time', NF90_REAL4,           &
-                                  id_var_time_agt, 'seconds', 'time', 332, 333, 000 )
+                                  id_var_time_agt, TRIM( time_unit ), 'time', 332, 333, 000 )
           CALL netcdf_create_att( id_set_agt, id_var_time_agt, 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_agt, id_var_time_agt, 'axis', 'T', 000)
 
@@ -2003,60 +1679,7 @@
           CALL netcdf_handle_error( 'netcdf_define_header', 342 )
 
 
-!        CASE ( 'ag_ext' )
-! !+?agent extend output for restart runs has to be adapted
-!
-! !
-! !--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-! !--       The next time level is prt..count+1.
-! !--       The current time must be larger than the last output time on the file.
-!           nc_stat = NF90_INQ_VARID( id_set_agt, 'time', id_var_time_agt )
-!           CALL netcdf_handle_error( 'netcdf_define_header', 343 )
-!
-!           nc_stat = NF90_INQUIRE_VARIABLE( id_set_agt, id_var_time_agt, dimids = id_dim_time_old )
-!           CALL netcdf_handle_error( 'netcdf_define_header', 344 )
-!           id_dim_time_agt = id_dim_time_old(1)
-!
-!           nc_stat = NF90_INQUIRE_DIMENSION( id_set_agt, id_dim_time_agt, LEN = agt_time_count )
-!           CALL netcdf_handle_error( 'netcdf_define_header', 345 )
-!
-!           nc_stat = NF90_GET_VAR( id_set_agt, id_var_time_agt,                                   &
-!                                   last_time_coordinate,                                          &
-!                                   start = (/ agt_time_count /),                                  &
-!                                   count = (/ 1 /) )
-!           CALL netcdf_handle_error( 'netcdf_define_header', 346 )
-!
-!           IF ( last_time_coordinate(1) >= simulated_time )  THEN
-!              message_string = 'netCDF file for agents ' //'from previous run found,' //           &
-!                               '&but this file cannot be extended because' //                      &
-!                               ' the current output time' //                &
-!                               '&is less or equal than the last output time' // ' on this file.' //&
-!                               '&New file is created instead.'
-!              CALL message( 'define_netcdf_header', 'NCIxxxx', 0, 1, 0, 6, 0 )
-!              agt_time_count = 0
-!              extend = .FALSE.
-!              RETURN
-!           ENDIF
-!
-! !
-! !--       Dataset seems to be extendable.
-! !--       Now get the variable ids.
-!           nc_stat = NF90_INQ_VARID( id_set_agt, 'real_num_of_agt', id_var_rnoa_agt )
-!           CALL netcdf_handle_error( 'netcdf_define_header', 347 )
-!
-!           DO  i = 1, 17
-!
-!              nc_stat = NF90_INQ_VARID( id_set_agt, agt_var_names(i), id_var_prt(i) )
-!              CALL netcdf_handle_error( 'netcdf_define_header', 348 )
-!
-!           ENDDO
-!
-!           message_string = 'netCDF file for particles ' //'from previous run found.' //           &
-!                            '&This file will be extended.'
-!           CALL message( 'define_netcdf_header', 'NCIxxxx', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'xy_new' )
+       CASE ( 'xy' )
 
 !
 !--       Define some global attributes of the dataset
@@ -2085,7 +1708,7 @@
           ENDIF
 
           CALL netcdf_create_var( id_set_xy(av), (/ id_dim_time_xy(av) /), 'time', NF90_DOUBLE,    &
-                                  id_var_time_xy(av), 'seconds', 'time', 100, 101, 000 )
+                                  id_var_time_xy(av), TRIM( time_unit ), 'time', 100, 101, 000 )
           CALL netcdf_create_att( id_set_xy(av), id_var_time_xy(av), 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_xy(av), id_var_time_xy(av), 'axis', 'T', 000)
 !
@@ -2557,223 +2180,7 @@
 
           ENDIF
 
-       CASE ( 'xy_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_xy(av), NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 129 )
-
-          var_list = ';'
-          i = 1
-          DO  WHILE ( do2d(av,i)(1:1) /= ' ' )
-             IF ( INDEX( do2d(av,i), 'xy' ) /= 0 )  THEN
-                var_list = TRIM( var_list ) // TRIM( do2d(av,i) ) // ';'
-             ENDIF
-             i = i + 1
-          ENDDO
-
-          IF ( av == 0 )  THEN
-             var = '(xy)'
-          ELSE
-             var = '(xy_av)'
-          ENDIF
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for cross-sections "' //                                &
-                              TRIM( var ) // '" from previous run found,' //                       &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0016', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Calculate the number of current sections
-          ns = 1
-          DO  WHILE ( section(ns,1) /= -9999  .AND.  ns <= 100 )
-             ns = ns + 1
-          ENDDO
-          ns = ns - 1
-
-!
-!--       Get and compare the number of horizontal cross sections
-          nc_stat = NF90_INQ_VARID( id_set_xy(av), 'zu_xy', id_var_zu_xy(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 130 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_xy(av), id_var_zu_xy(av),                        &
-                                           dimids = id_dim_zu_xy_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 131 )
-          id_dim_zu_xy(av) = id_dim_zu_xy_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_xy(av), id_dim_zu_xy(av), LEN = ns_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 132 )
-
-          IF ( ns /= ns_old )  THEN
-             message_string = 'netCDF file for cross-sections "' //                                &
-                              TRIM( var ) // '" from previous run found,' //                       &
-                              '&but this file cannot be extended due to' //                        &
-                              ' mismatch in number of' // ' cross sections.' //                    &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0017', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get and compare the heights of the cross sections
-          ALLOCATE( netcdf_data(1:ns_old) )
-
-          nc_stat = NF90_GET_VAR( id_set_xy(av), id_var_zu_xy(av), netcdf_data )
-          CALL netcdf_handle_error( 'netcdf_define_header', 133 )
-
-          DO  i = 1, ns
-             IF ( section(i,1) /= -1 )  THEN
-                IF ( zu(section(i,1)) /= netcdf_data(i) )  THEN
-                   message_string = 'netCDF file for cross-sections "' //                          &
-                                     TRIM( var ) // '" from previous run found,' //                &
-                                     ' but this file cannot be extended' //                        &
-                                     ' due to mismatch in cross' // ' section levels.' //          &
-                                     ' New file is created instead.'
-                   CALL message( 'define_netcdf_header', 'NCI0018', 0, 1, 0, 6, 0 )
-                   extend = .FALSE.
-                   RETURN
-                ENDIF
-             ELSE
-                IF ( -1.0_wp /= netcdf_data(i) )  THEN
-                   message_string = 'netCDF file for cross-sections "' //                          &
-                                     TRIM( var ) // '" from previous run found,' //                &
-                                     ' but this file cannot be extended' //                        &
-                                     ' due to mismatch in cross' // ' section levels.' //          &
-                                     ' New file is created instead.'
-                   CALL message( 'define_netcdf_header', 'NCI0018', 0, 1, 0, 6, 0 )
-                   extend = .FALSE.
-                   RETURN
-                ENDIF
-             ENDIF
-          ENDDO
-
-          DEALLOCATE( netcdf_data )
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is do2d..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_xy(av), 'time', id_var_time_xy(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 134 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_xy(av), id_var_time_xy(av),                      &
-                                           dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 135 )
-          id_dim_time_xy(av) = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_xy(av), id_dim_time_xy(av), LEN = ntime_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 136 )
-
-!
-!--       For non-parallel output use the last output time level of the netcdf file because the time
-!--       dimension is unlimited. In case of parallel output the variable ntime_count could get the
-!--       value of 9*10E36 because the time dimension is limited.
-          IF ( netcdf_data_format < 5 ) do2d_xy_time_count(av) = ntime_count
-
-          nc_stat = NF90_GET_VAR( id_set_xy(av), id_var_time_xy(av),                               &
-                                  last_time_coordinate,                                            &
-                                  start = (/ do2d_xy_time_count(av) /),                            &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 137 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for cross sections "' //                                &
-                              TRIM( var ) // '" from previous run found,' //                       &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output time' // ' on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0019', 0, 1, 0, 6, 0 )
-             do2d_xy_time_count(av) = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-          IF ( netcdf_data_format > 4 )  THEN
-!
-!--          Check if the needed number of output time levels is increased compared to the number of
-!--          time levels in the existing file.
-             IF ( ntdim_2d_xy(av) > ntime_count )  THEN
-                message_string = 'netCDF file for cross sections "' //                             &
-                                 TRIM( var ) // '" from previous run found,' //                    &
-                                 '&but this file cannot be extended becaus' //                     &
-                                 'e the number of output time levels has b' //                     &
-                                 'een increased compared to the previous s' //                     &
-                                 'imulation.' // '&New file is created instead.'
-                CALL message( 'define_netcdf_header', 'NCI0020', 0, 1, 0, 6, 0 )
-                do2d_xy_time_count(av) = 0
-                extend = .FALSE.
-!
-!--             Recalculate the needed time levels for the new file.
-                IF ( av == 0 )  THEN
-                   ntdim_2d_xy(0) = CEILING( ( end_time - MAX( skip_time_do2d_xy,                  &
-                                                               simulated_time_at_begin )           &
-                                             ) / dt_do2d_xy )
-                   IF ( do2d_at_begin )  ntdim_2d_xy(0) = ntdim_2d_xy(0) + 1
-                ELSE
-                   ntdim_2d_xy(1) = CEILING( ( end_time - MAX( skip_time_data_output_av,           &
-                                                               simulated_time_at_begin )           &
-                                             ) / dt_data_output_av )
-                ENDIF
-                RETURN
-             ENDIF
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO  WHILE ( do2d(av,i)(1:1) /= ' ' )
-             IF ( INDEX( do2d(av,i), 'xy' ) /= 0 )  THEN
-                nc_stat = NF90_INQ_VARID( id_set_xy(av), do2d(av,i), id_var_do2d(av,i) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 138 )
-#if defined( __netcdf4_parallel )
-!
-!--             Set collective io operations for parallel io
-                IF ( netcdf_data_format > 4 )  THEN
-                   nc_stat = NF90_VAR_PAR_ACCESS( id_set_xy(av), id_var_do2d(av,i),                &
-                                                  NF90_COLLECTIVE )
-                   CALL netcdf_handle_error( 'netcdf_define_header', 454 )
-                ENDIF
-#endif
-             ENDIF
-             i = i + 1
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          IF ( av == 0 )  THEN
-             time_average_text = ' '
-          ELSE
-             WRITE ( time_average_text, '('', '',F7.1,'' s average'')' ) averaging_interval
-          ENDIF
-          nc_stat = NF90_REDEF( id_set_xy(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 431 )
-          nc_stat = NF90_PUT_ATT( id_set_xy(av), NF90_GLOBAL, 'title',                             &
-                                  TRIM( run_description_header ) // TRIM( time_average_text ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 139 )
-          nc_stat = NF90_ENDDEF( id_set_xy(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 432 )
-          message_string = 'netCDF file for cross-sections "' //                                   &
-                            TRIM( var ) // '" from previous run found.' //                         &
-                           '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0021', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'xz_new' )
+       CASE ( 'xz' )
 
 !
 !--       Define some global attributes of the dataset
@@ -2803,7 +2210,7 @@
           ENDIF
 
           CALL netcdf_create_var( id_set_xz(av), (/ id_dim_time_xz(av) /), 'time', NF90_DOUBLE,    &
-                                  id_var_time_xz(av), 'seconds', 'time', 143, 144, 000 )
+                                  id_var_time_xz(av), TRIM( time_unit ), 'time', 143, 144, 000 )
           CALL netcdf_create_att( id_set_xz(av), id_var_time_xz(av), 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_xz(av), id_var_time_xz(av), 'axis', 'T', 000)
 !
@@ -3170,222 +2577,7 @@
           ENDIF
 
 
-       CASE ( 'xz_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_xz(av), NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 168 )
-
-          var_list = ';'
-          i = 1
-          DO WHILE ( do2d(av,i)(1:1) /= ' ' )
-             IF ( INDEX( do2d(av,i), 'xz' ) /= 0 )  THEN
-                var_list = TRIM( var_list ) // TRIM( do2d(av,i) ) // ';'
-             ENDIF
-             i = i + 1
-          ENDDO
-
-          IF ( av == 0 )  THEN
-             var = '(xz)'
-          ELSE
-             var = '(xz_av)'
-          ENDIF
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for cross-sections "' // TRIM( var ) //                 &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0016', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Calculate the number of current sections
-          ns = 1
-          DO WHILE ( section(ns,2) /= -9999  .AND.  ns <= 100 )
-             ns = ns + 1
-          ENDDO
-          ns = ns - 1
-
-!
-!--       Get and compare the number of vertical cross sections
-          nc_stat = NF90_INQ_VARID( id_set_xz(av), 'y_xz', id_var_y_xz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 169 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_xz(av), id_var_y_xz(av),                         &
-                                           dimids = id_dim_y_xz_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 170 )
-          id_dim_y_xz(av) = id_dim_y_xz_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_xz(av), id_dim_y_xz(av), LEN = ns_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 171 )
-
-          IF ( ns /= ns_old )  THEN
-             message_string = 'netCDF file for cross-sections "' // TRIM( var ) //                 &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended due to' //                        &
-                              ' mismatch in number of' // ' cross sections.' //                    &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0017', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get and compare the heights of the cross sections
-          ALLOCATE( netcdf_data(1:ns_old) )
-
-          nc_stat = NF90_GET_VAR( id_set_xz(av), id_var_y_xz(av), netcdf_data )
-          CALL netcdf_handle_error( 'netcdf_define_header', 172 )
-
-          DO  i = 1, ns
-             IF ( section(i,2) /= -1 )  THEN
-                IF ( ( ( section(i,2) + 0.5 ) * dy ) /= netcdf_data(i) )  THEN
-                   message_string = 'netCDF file for cross-sections "' // TRIM( var ) //           &
-                                    '" from previous run found,' //                                &
-                                    ' but this file cannot be extended' //                         &
-                                    ' due to mismatch in cross' // ' section levels.' //           &
-                                     ' New file is created instead.'
-                   CALL message( 'define_netcdf_header', 'NCI0018', 0, 1, 0, 6, 0 )
-                   extend = .FALSE.
-                   RETURN
-                ENDIF
-             ELSE
-                IF ( -1.0_wp /= netcdf_data(i) )  THEN
-                   message_string = 'netCDF file for cross-sections "' // TRIM( var ) //           &
-                                    '" from previous run found,' //                                &
-                                    ' but this file cannot be extended' //                         &
-                                     ' due to mismatch in cross' // ' section levels.' //          &
-                                     ' New file is created instead.'
-                   CALL message( 'define_netcdf_header', 'NCI0018', 0, 1, 0, 6, 0 )
-                   extend = .FALSE.
-                   RETURN
-                ENDIF
-             ENDIF
-          ENDDO
-
-          DEALLOCATE( netcdf_data )
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is do2d..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_xz(av), 'time', id_var_time_xz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 173 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_xz(av), id_var_time_xz(av),                      &
-                                           dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 174 )
-          id_dim_time_xz(av) = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_xz(av), id_dim_time_xz(av), LEN = ntime_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 175 )
-
-!
-!--       For non-parallel output use the last output time level of the netcdf file because the time
-!--       dimension is unlimited. In case of parallel output the variable ntime_count could get the
-!--       value of 9*10E36 because the time dimension is limited.
-          IF ( netcdf_data_format < 5 ) do2d_xz_time_count(av) = ntime_count
-
-          nc_stat = NF90_GET_VAR( id_set_xz(av), id_var_time_xz(av),                               &
-                                  last_time_coordinate,                                            &
-                                  start = (/ do2d_xz_time_count(av) /),                            &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 176 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for cross sections "' // TRIM( var ) //                 &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                   &
-                              '&is less or equal than the last output time' // ' on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0019', 0, 1, 0, 6, 0 )
-             do2d_xz_time_count(av) = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-          IF ( netcdf_data_format > 4 )  THEN
-!
-!--          Check if the needed number of output time levels is increased compared to the number of
-!--          time levels in the existing file.
-             IF ( ntdim_2d_xz(av) > ntime_count )  THEN
-                message_string = 'netCDF file for cross sections "' // TRIM( var ) //              &
-                                 '" from previous run found,' //                                   &
-                                 '&but this file cannot be extended becaus' //                     &
-                                 'e the number of output time levels has b' //                     &
-                                 'een increased compared to the previous s' // 'imulation.' //     &
-                                 '&New file is created instead.'
-                CALL message( 'define_netcdf_header', 'NCI0022', 0, 1, 0, 6, 0 )
-                do2d_xz_time_count(av) = 0
-                extend = .FALSE.
-!
-!--             Recalculate the needed time levels for the new file.
-                IF ( av == 0 )  THEN
-                   ntdim_2d_xz(0) = CEILING( ( end_time - MAX( skip_time_do2d_xz,                  &
-                                                               simulated_time_at_begin )           &
-                                             ) / dt_do2d_xz )
-                   IF ( do2d_at_begin )  ntdim_2d_xz(0) = ntdim_2d_xz(0) + 1
-                ELSE
-                   ntdim_2d_xz(1) = CEILING( ( end_time - MAX( skip_time_data_output_av,           &
-                                                               simulated_time_at_begin )           &
-                                             ) / dt_data_output_av )
-                ENDIF
-                RETURN
-             ENDIF
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO WHILE ( do2d(av,i)(1:1) /= ' ' )
-             IF ( INDEX( do2d(av,i), 'xz' ) /= 0 )  THEN
-                nc_stat = NF90_INQ_VARID( id_set_xz(av), do2d(av,i), id_var_do2d(av,i) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 177 )
-#if defined( __netcdf4_parallel )
-!
-!--             Set collective io operations for parallel io.
-                IF ( netcdf_data_format > 4 )  THEN
-                   nc_stat = NF90_VAR_PAR_ACCESS( id_set_xz(av), id_var_do2d(av,i),                &
-                                                  NF90_COLLECTIVE )
-                   CALL netcdf_handle_error( 'netcdf_define_header', 455 )
-                ENDIF
-#endif
-             ENDIF
-             i = i + 1
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          IF ( av == 0 )  THEN
-             time_average_text = ' '
-          ELSE
-             WRITE ( time_average_text, '('', '',F7.1,'' s average'')' ) averaging_interval
-          ENDIF
-          nc_stat = NF90_REDEF( id_set_xz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 433 )
-          nc_stat = NF90_PUT_ATT( id_set_xz(av), NF90_GLOBAL, 'title',                             &
-                                  TRIM( run_description_header ) // TRIM( time_average_text ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 178 )
-          nc_stat = NF90_ENDDEF( id_set_xz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 434 )
-          message_string = 'netCDF file for cross-sections "' // TRIM( var ) //                    &
-                           '" from previous run found.' // '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0021', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'yz_new' )
+       CASE ( 'yz' )
 
 !
 !--       Define some global attributes of the dataset
@@ -3415,7 +2607,7 @@
           ENDIF
 
           CALL netcdf_create_var( id_set_yz(av), (/ id_dim_time_yz(av) /), 'time', NF90_DOUBLE,    &
-                                  id_var_time_yz(av), 'seconds', 'time', 182, 183, 000 )
+                                  id_var_time_yz(av), TRIM( time_unit ), 'time', 182, 183, 000 )
           CALL netcdf_create_att( id_set_yz(av), id_var_time_yz(av), 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_yz(av), id_var_time_yz(av), 'axis', 'T', 000)
 !
@@ -3769,223 +2961,7 @@
           ENDIF
 
 
-       CASE ( 'yz_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_yz(av), NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 207 )
-
-          var_list = ';'
-          i = 1
-          DO  WHILE ( do2d(av,i)(1:1) /= ' ' )
-             IF ( INDEX( do2d(av,i), 'yz' ) /= 0 )  THEN
-                var_list = TRIM( var_list ) // TRIM( do2d(av,i) ) // ';'
-             ENDIF
-             i = i + 1
-          ENDDO
-
-          IF ( av == 0 )  THEN
-             var = '(yz)'
-          ELSE
-             var = '(yz_av)'
-          ENDIF
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for cross-sections "' // TRIM( var ) //                 &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0016', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Calculate the number of current sections
-          ns = 1
-          DO WHILE ( section(ns,3) /= -9999  .AND.  ns <= 100 )
-             ns = ns + 1
-          ENDDO
-          ns = ns - 1
-
-!
-!--       Get and compare the number of vertical cross sections
-          nc_stat = NF90_INQ_VARID( id_set_yz(av), 'x_yz', id_var_x_yz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 208 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_yz(av), id_var_x_yz(av), &
-                                           dimids = id_dim_x_yz_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 209 )
-          id_dim_x_yz(av) = id_dim_x_yz_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_yz(av), id_dim_x_yz(av), LEN = ns_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 210 )
-
-          IF ( ns /= ns_old )  THEN
-             message_string = 'netCDF file for cross-sections "' // TRIM( var ) //                 &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended due to' //                        &
-                              ' mismatch in number of' // ' cross sections.' //                    &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0017', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get and compare the heights of the cross sections
-          ALLOCATE( netcdf_data(1:ns_old) )
-
-          nc_stat = NF90_GET_VAR( id_set_yz(av), id_var_x_yz(av), netcdf_data )
-          CALL netcdf_handle_error( 'netcdf_define_header', 211 )
-
-          DO  i = 1, ns
-             IF ( section(i,3) /= -1 )  THEN
-                IF ( ( ( section(i,3) + 0.5 ) * dx ) /= netcdf_data(i) )  THEN
-                   message_string = 'netCDF file for cross-sections "' // TRIM( var ) //           &
-                                    '" from previous run found,' //                                &
-                                    ' but this file cannot be extended' //                         &
-                                    ' due to mismatch in cross' // ' section levels.' //           &
-                                    ' New file is created instead.'
-                   CALL message( 'define_netcdf_header', 'NCI0018', 0, 1, 0, 6, 0 )
-                   extend = .FALSE.
-                   RETURN
-                ENDIF
-             ELSE
-                IF ( -1.0_wp /= netcdf_data(i) )  THEN
-                   message_string = 'netCDF file for cross-sections "' // TRIM( var ) //           &
-                                    '" from previous run found,' //                                &
-                                    ' but this file cannot be extended' //                         &
-                                    ' due to mismatch in cross' // ' section levels.' //           &
-                                    ' New file is created instead.'
-                   CALL message( 'define_netcdf_header', 'NCI0018', 0, 1, 0, 6, 0 )
-                   extend = .FALSE.
-                   RETURN
-                ENDIF
-             ENDIF
-          ENDDO
-
-          DEALLOCATE( netcdf_data )
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is pl2d..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_yz(av), 'time', id_var_time_yz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 212 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_yz(av), id_var_time_yz(av),                      &
-                                           dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 213 )
-          id_dim_time_yz(av) = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_yz(av), id_dim_time_yz(av), LEN = ntime_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 214 )
-
-!
-!--       For non-parallel output use the last output time level of the netcdf file because the time
-!--       dimension is unlimited. In case of parallel output the variable ntime_count could get the
-!--       value of 9*10E36 because the time dimension is limited.
-          IF ( netcdf_data_format < 5 ) do2d_yz_time_count(av) = ntime_count
-
-          nc_stat = NF90_GET_VAR( id_set_yz(av), id_var_time_yz(av),                               &
-                                  last_time_coordinate,                                            &
-                                  start = (/ do2d_yz_time_count(av) /),                            &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 215 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for cross sections "' // TRIM( var ) //                 &
-                              '" from previous run found,' //                                      &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output time' // ' on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0019', 0, 1, 0, 6, 0 )
-             do2d_yz_time_count(av) = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-          IF ( netcdf_data_format > 4 )  THEN
-!
-!--          Check if the needed number of output time levels is increased
-!--          compared to the number of time levels in the existing file.
-             IF ( ntdim_2d_yz(av) > ntime_count )  THEN
-                message_string = 'netCDF file for cross sections "' // TRIM( var ) //              &
-                                 '" from previous run found,' //                                   &
-                                 '&but this file cannot be extended because' //                    &
-                                 ' the number of output time levels has ' //                       &
-                                 'been increased compared to the previous ' // 'simulation.' //    &
-                                 '&New file is created instead.'
-                CALL message( 'define_netcdf_header', 'NCI0023', 0, 1, 0, 6, 0 )
-                do2d_yz_time_count(av) = 0
-                extend = .FALSE.
-!
-!--             Recalculate the needed time levels for the new file.
-                IF ( av == 0 )  THEN
-                   ntdim_2d_yz(0) = CEILING( ( end_time - MAX( skip_time_do2d_yz,                  &
-                                                               simulated_time_at_begin )           &
-                                             ) / dt_do2d_yz )
-                   IF ( do2d_at_begin )  ntdim_2d_yz(0) = ntdim_2d_yz(0) + 1
-                ELSE
-                   ntdim_2d_yz(1) = CEILING( ( end_time - MAX( skip_time_data_output_av,           &
-                                                               simulated_time_at_begin )           &
-                                             ) / dt_data_output_av )
-                ENDIF
-                RETURN
-             ENDIF
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO WHILE ( do2d(av,i)(1:1) /= ' ' )
-             IF ( INDEX( do2d(av,i), 'yz' ) /= 0 )  THEN
-                nc_stat = NF90_INQ_VARID( id_set_yz(av), do2d(av,i), id_var_do2d(av,i) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 216 )
-#if defined( __netcdf4_parallel )
-!
-!--             Set collective io operations for parallel io.
-                IF ( netcdf_data_format > 4 )  THEN
-                   nc_stat = NF90_VAR_PAR_ACCESS( id_set_yz(av), id_var_do2d(av,i),                &
-                                                  NF90_COLLECTIVE )
-                   CALL netcdf_handle_error( 'netcdf_define_header', 450 )
-                ENDIF
-#endif
-             ENDIF
-             i = i + 1
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          IF ( av == 0 )  THEN
-             time_average_text = ' '
-          ELSE
-             WRITE ( time_average_text, '('', '',F7.1,'' s average'')' )  averaging_interval
-          ENDIF
-          nc_stat = NF90_REDEF( id_set_yz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 435 )
-          nc_stat = NF90_PUT_ATT( id_set_yz(av), NF90_GLOBAL, 'title',                             &
-                                  TRIM( run_description_header ) // TRIM( time_average_text ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 217 )
-          nc_stat = NF90_ENDDEF( id_set_yz(av) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 436 )
-          message_string = 'netCDF file for cross-sections "' //                                   &
-                            TRIM( var ) // '" from previous run found.' //                         &
-                           '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0021', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'pr_new' )
+       CASE ( 'pr' )
 
 !
 !--       Define some global attributes of the dataset
@@ -4106,7 +3082,7 @@
              message_string = 'It is not allowed to arrange more than ' //                         &
                               '100 profiles with & cross_profiles. Apart' //                       &
                               ' from that, all profiles are saved & to ' // 'the netCDF file.'
-             CALL message( 'define_netcdf_header', 'NCI0024', 0, 0, 0, 6, 0 )
+             CALL message( 'define_netcdf_header', 'NCI0007', 0, 0, 0, 6, 0 )
           ENDIF
 
 !
@@ -4144,7 +3120,7 @@
 !--       Define time coordinate for profiles (unlimited dimension)
           CALL netcdf_create_dim( id_set_pr, 'time', NF90_UNLIMITED, id_dim_time_pr, 220 )
           CALL netcdf_create_var( id_set_pr, (/ id_dim_time_pr /), 'time', NF90_DOUBLE,            &
-                                  id_var_time_pr, 'seconds', 'time', 221, 222, 000 )
+                                  id_var_time_pr, TRIM( time_unit ), 'time', 221, 222, 000 )
           CALL netcdf_create_att( id_set_pr, id_var_time_pr, 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_pr, id_var_time_pr, 'axis', 'T', 000)
 !
@@ -4225,115 +3201,7 @@
           ENDDO
 
 
-       CASE ( 'pr_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_pr, NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 240 )
-
-          var_list = ';'
-          DO  i = 1, dopr_n
-
-             IF ( statistic_regions == 0 )  THEN
-                var_list = TRIM( var_list ) // TRIM( data_output_pr(i) ) // ';'
-             ELSE
-                DO  j = 0, statistic_regions
-                   WRITE ( suffix, '(''_'',I2.2)' )  j
-                   var_list = TRIM( var_list ) // TRIM( data_output_pr(i) ) // suffix // ';'
-                ENDDO
-             ENDIF
-
-          ENDDO
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for vertical profiles ' // 'from previous run found,' //&
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0025', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is dopr..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_pr, 'time', id_var_time_pr )
-          CALL netcdf_handle_error( 'netcdf_define_header', 241 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_pr, id_var_time_pr, dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 242 )
-          id_dim_time_pr = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_pr, id_dim_time_pr, LEN = dopr_time_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 243 )
-
-          nc_stat = NF90_GET_VAR( id_set_pr, id_var_time_pr,                                       &
-                                  last_time_coordinate,                                            &
-                                  start = (/ dopr_time_count /),                                   &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 244 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for vertical profiles ' // 'from previous run found,' //&
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output ' // 'time on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0026', 0, 1, 0, 6, 0 )
-             dopr_time_count = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO  i = 1, dopr_n
-
-             IF ( statistic_regions == 0 )  THEN
-                nc_stat = NF90_INQ_VARID( id_set_pr, data_output_pr(i), id_var_dopr(i,0) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 245 )
-             ELSE
-                DO  j = 0, statistic_regions
-                   WRITE ( suffix, '(''_'',I2.2)' )  j
-                   netcdf_var_name = TRIM( data_output_pr(i) ) // suffix
-                   nc_stat = NF90_INQ_VARID( id_set_pr, netcdf_var_name, id_var_dopr(i,j) )
-                   CALL netcdf_handle_error( 'netcdf_define_header', 246 )
-                ENDDO
-             ENDIF
-
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          IF ( averaging_interval_pr == 0.0_wp )  THEN
-             time_average_text = ' '
-          ELSE
-             WRITE ( time_average_text, '('', '',F7.1,'' s average'')' )  averaging_interval_pr
-          ENDIF
-          nc_stat = NF90_REDEF( id_set_pr )
-          CALL netcdf_handle_error( 'netcdf_define_header', 437 )
-          nc_stat = NF90_PUT_ATT( id_set_pr, NF90_GLOBAL, 'title',                                 &
-                                  TRIM( run_description_header ) // TRIM( time_average_text ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 248 )
-
-          nc_stat = NF90_ENDDEF( id_set_pr )
-          CALL netcdf_handle_error( 'netcdf_define_header', 438 )
-          message_string = 'netCDF file for vertical profiles ' // 'from previous run found.' //   &
-                           '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0027', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'ts_new' )
+       CASE ( 'ts' )
 
 !
 !--       Define some global attributes of the dataset
@@ -4346,7 +3214,7 @@
 !--       Define time coordinate for time series (unlimited dimension)
           CALL netcdf_create_dim( id_set_ts, 'time', NF90_UNLIMITED, id_dim_time_ts, 250 )
           CALL netcdf_create_var( id_set_ts, (/ id_dim_time_ts /), 'time', NF90_DOUBLE,            &
-                                  id_var_time_ts, 'seconds', 'time', 251, 252, 000 )
+                                  id_var_time_ts, TRIM( time_unit ), 'time', 251, 252, 000 )
           CALL netcdf_create_att( id_set_ts, id_var_time_ts, 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_ts, id_var_time_ts, 'axis', 'T', 000)
 !
@@ -4393,109 +3261,7 @@
           CALL netcdf_handle_error( 'netcdf_define_header', 259 )
 
 
-       CASE ( 'ts_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_ts, NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 260 )
-
-          var_list = ';'
-          i = 1
-          DO  i = 1, dots_num
-
-             IF ( statistic_regions == 0 )  THEN
-                var_list = TRIM( var_list ) // TRIM( dots_label(i) ) // ';'
-             ELSE
-                DO  j = 0, statistic_regions
-                   WRITE ( suffix, '(''_'',I2.2)' )  j
-                   var_list = TRIM( var_list ) // TRIM( dots_label(i) ) // suffix // ';'
-                ENDDO
-             ENDIF
-
-          ENDDO
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for time series ' // 'from previous run found,' //      &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0028', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is dots..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_ts, 'time', id_var_time_ts )
-          CALL netcdf_handle_error( 'netcdf_define_header', 261 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_ts, id_var_time_ts, dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 262 )
-          id_dim_time_ts = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_ts, id_dim_time_ts, LEN = dots_time_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 263 )
-
-          nc_stat = NF90_GET_VAR( id_set_ts, id_var_time_ts,                                       &
-                                  last_time_coordinate,                                            &
-                                  start = (/ dots_time_count /),                                   &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 264 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for time series ' // 'from previous run found,' //      &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output ' // 'time on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0029', 0, 1, 0, 6, 0 )
-             dots_time_count = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids
-          i = 1
-          DO  i = 1, dots_num
-
-             IF ( statistic_regions == 0 )  THEN
-                nc_stat = NF90_INQ_VARID( id_set_ts, dots_label(i), id_var_dots(i,0) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 265 )
-             ELSE
-                DO  j = 0, statistic_regions
-                   WRITE ( suffix, '(''_'',I2.2)' )  j
-                   netcdf_var_name = TRIM( dots_label(i) ) // suffix
-                   nc_stat = NF90_INQ_VARID( id_set_ts, netcdf_var_name, id_var_dots(i,j) )
-                   CALL netcdf_handle_error( 'netcdf_define_header', 266 )
-                ENDDO
-             ENDIF
-
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          nc_stat = NF90_REDEF( id_set_ts )
-          CALL netcdf_handle_error( 'netcdf_define_header', 439 )
-          nc_stat = NF90_PUT_ATT( id_set_ts, NF90_GLOBAL, 'title', TRIM( run_description_header ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 267 )
-          nc_stat = NF90_ENDDEF( id_set_ts )
-          CALL netcdf_handle_error( 'netcdf_define_header', 440 )
-          message_string = 'netCDF file for time series ' // 'from previous run found.' //         &
-                           '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0030', 0, 0, 0, 6, 0 )
-
-
-       CASE ( 'sp_new' )
+       CASE ( 'sp' )
 
 !
 !--       Define some global attributes of the dataset
@@ -4517,7 +3283,7 @@
 !--       Define time coordinate for spectra (unlimited dimension)
           CALL netcdf_create_dim( id_set_sp, 'time', NF90_UNLIMITED, id_dim_time_sp, 270 )
           CALL netcdf_create_var( id_set_sp, (/ id_dim_time_sp /), 'time', NF90_DOUBLE,            &
-                                  id_var_time_sp, 'seconds', 'time', 271, 272, 000 )
+                                  id_var_time_sp, TRIM( time_unit ), 'time', 271, 272, 000 )
           CALL netcdf_create_att( id_set_sp, id_var_time_sp, 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_sp, id_var_time_sp, 'axis', 'T', 000)
 !
@@ -4691,176 +3457,9 @@
           DEALLOCATE( netcdf_data )
 
 
-       CASE ( 'sp_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_sp, NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 297 )
-          var_list = ';'
-          i = 1
-          DO  WHILE ( data_output_sp(i) /= ' '  .AND.  i <= 10 )
-
-             IF ( INDEX( spectra_direction(i), 'x' ) /= 0 )  THEN
-                netcdf_var_name = TRIM( data_output_sp(i) ) // '_x'
-                var_list = TRIM( var_list ) // TRIM( netcdf_var_name ) // ';'
-             ENDIF
-
-             IF ( INDEX( spectra_direction(i), 'y' ) /= 0 )  THEN
-                netcdf_var_name = TRIM( data_output_sp(i) ) // '_y'
-                var_list = TRIM( var_list ) // TRIM( netcdf_var_name ) // ';'
-             ENDIF
-
-             i = i + 1
-
-          ENDDO
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for spectra  ' // 'from previous run found,' //         &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0031', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Determine the number of current vertical levels for which spectra shall be output.
-          ns = 1
-          DO  WHILE ( comp_spectra_level(ns) /= 999999  .AND.  ns <= 100 )
-             ns = ns + 1
-          ENDDO
-          ns = ns - 1
-
-!
-!--       Get and compare the number of vertical levels
-          nc_stat = NF90_INQ_VARID( id_set_sp, 'zu_sp', id_var_zu_sp )
-          CALL netcdf_handle_error( 'netcdf_define_header', 298 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_sp, id_var_zu_sp, dimids = id_dim_zu_sp_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 299 )
-          id_dim_zu_sp = id_dim_zu_sp_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_sp, id_dim_zu_sp, LEN = ns_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 300 )
-
-          IF ( ns /= ns_old )  THEN
-             message_string = 'netCDF file for spectra ' // ' from previous run found,' //         &
-                              '&but this file cannot be extended due to' //                        &
-                              ' mismatch in number of' // ' vertical levels.' //                   &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0032', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get and compare the heights of the cross sections
-          ALLOCATE( netcdf_data(1:ns_old) )
-
-          nc_stat = NF90_GET_VAR( id_set_sp, id_var_zu_sp, netcdf_data )
-          CALL netcdf_handle_error( 'netcdf_define_header', 301 )
-
-          DO  i = 1, ns
-             IF ( zu(comp_spectra_level(i)) /= netcdf_data(i) )  THEN
-                message_string = 'netCDF file for spectra ' // ' from previous run found,' //      &
-                                 '&but this file cannot be extended due to' //                     &
-                                 ' mismatch in heights of' // ' vertical levels.' //               &
-                                 '&New file is created instead.'
-                CALL message( 'define_netcdf_header', 'NCI0033', 0, 1, 0, 6, 0 )
-                extend = .FALSE.
-                RETURN
-             ENDIF
-          ENDDO
-
-          DEALLOCATE( netcdf_data )
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is plsp..count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_sp, 'time', id_var_time_sp )
-          CALL netcdf_handle_error( 'netcdf_define_header', 302 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_sp, id_var_time_sp, dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 303 )
-          id_dim_time_sp = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_sp, id_dim_time_sp, LEN = dosp_time_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 304 )
-
-          nc_stat = NF90_GET_VAR( id_set_sp, id_var_time_sp,                                       &
-                                  last_time_coordinate,                                            &
-                                  start = (/ dosp_time_count /),                                   &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 305 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for spectra ' // 'from previous run found,' //          &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output ' // 'time on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0034', 0, 1, 0, 6, 0 )
-             dosp_time_count = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the variable ids.
-          i = 1
-          DO  WHILE ( data_output_sp(i) /= ' '  .AND.  i <= 10 )
-
-             IF ( INDEX( spectra_direction(i), 'x' ) /= 0 )  THEN
-                netcdf_var_name = TRIM( data_output_sp(i) ) // '_x'
-                nc_stat = NF90_INQ_VARID( id_set_sp, netcdf_var_name, id_var_dospx(i) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 306 )
-             ENDIF
-
-             IF ( INDEX( spectra_direction(i), 'y' ) /= 0 )  THEN
-                netcdf_var_name = TRIM( data_output_sp(i) ) // '_y'
-                nc_stat = NF90_INQ_VARID( id_set_sp, netcdf_var_name, id_var_dospy(i) )
-                CALL netcdf_handle_error( 'netcdf_define_header', 307 )
-             ENDIF
-
-             i = i + 1
-
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode'enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          nc_stat = NF90_REDEF( id_set_sp )
-          CALL netcdf_handle_error( 'netcdf_define_header', 441 )
-          IF ( averaging_interval_sp /= 0.0_wp )  THEN
-             WRITE ( time_average_text, '('', '',F7.1,'' s average'')' ) averaging_interval_sp
-             nc_stat = NF90_PUT_ATT( id_set_sp, NF90_GLOBAL, 'title',                              &
-                                     TRIM( run_description_header ) // TRIM( time_average_text ) )
-             CALL netcdf_handle_error( 'netcdf_define_header', 308 )
-
-             WRITE ( time_average_text,'(F7.1,'' s avg'')' )  averaging_interval_sp
-             nc_stat = NF90_PUT_ATT( id_set_sp, NF90_GLOBAL, 'time_avg', TRIM( time_average_text ) )
-          ELSE
-             nc_stat = NF90_PUT_ATT( id_set_sp, NF90_GLOBAL, 'title',                              &
-                                     TRIM( run_description_header ) )
-          ENDIF
-          CALL netcdf_handle_error( 'netcdf_define_header', 309 )
-          nc_stat = NF90_ENDDEF( id_set_sp )
-          CALL netcdf_handle_error( 'netcdf_define_header', 442 )
-          message_string = 'netCDF file for spectra ' // 'from previous run found.' //             &
-                           '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0035', 0, 0, 0, 6, 0 )
-
 !
 !--    Flight data
-       CASE ( 'fl_new' )
+       CASE ( 'fl' )
 !
 !--       Define some global attributes of the dataset
           nc_stat = NF90_PUT_ATT( id_set_fl, NF90_GLOBAL, 'title', TRIM( run_description_header ) )
@@ -4871,7 +3470,7 @@
 !--       Error number must still be set appropriately.
           CALL netcdf_create_dim( id_set_fl, 'time', NF90_UNLIMITED, id_dim_time_fl, 250 )
           CALL netcdf_create_var( id_set_fl, (/ id_dim_time_fl /), 'time', NF90_DOUBLE,            &
-                                  id_var_time_fl, 'seconds', 'time', 251, 252, 000 )
+                                  id_var_time_fl, TRIM( time_unit ), 'time', 251, 252, 000 )
           CALL netcdf_create_att( id_set_fl, id_var_time_fl, 'standard_name', 'time', 000)
           CALL netcdf_create_att( id_set_fl, id_var_time_fl, 'axis', 'T', 000)
 
@@ -4914,108 +3513,10 @@
           CALL netcdf_handle_error( 'netcdf_define_header', 259 )
 
 
-       CASE ( 'fl_ext' )
-
-!
-!--       Get the list of variables and compare with the actual run.
-!--       First var_list_old has to be reset, since GET_ATT does not assign trailing blanks.
-          var_list_old = ' '
-          nc_stat = NF90_GET_ATT( id_set_fl, NF90_GLOBAL, 'VAR_LIST', var_list_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 260 )
-
-          var_list = ';'
-          i = 1
-          DO  i = 1, num_leg * num_var_fl
-
-             var_list = TRIM( var_list ) // TRIM( dofl_label(i) ) // ';'
-
-          ENDDO
-
-          IF ( TRIM( var_list ) /= TRIM( var_list_old ) )  THEN
-             message_string = 'netCDF file for flight time series ' //                             &
-                              'from previous run found,' //                                        &
-                              '&but this file cannot be extended due to' //                        &
-                              ' variable mismatch.' // '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0028', 0, 1, 0, 6, 0 )
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Get the id of the time coordinate (unlimited coordinate) and its last index on the file.
-!--       The next time level is dofl_time_count+1.
-!--       The current time must be larger than the last output time on the file.
-          nc_stat = NF90_INQ_VARID( id_set_fl, 'time', id_var_time_fl )
-          CALL netcdf_handle_error( 'netcdf_define_header', 261 )
-
-          nc_stat = NF90_INQUIRE_VARIABLE( id_set_fl, id_var_time_fl, dimids = id_dim_time_old )
-          CALL netcdf_handle_error( 'netcdf_define_header', 262 )
-          id_dim_time_fl = id_dim_time_old(1)
-
-          nc_stat = NF90_INQUIRE_DIMENSION( id_set_fl, id_dim_time_fl, LEN = dofl_time_count )
-          CALL netcdf_handle_error( 'netcdf_define_header', 263 )
-
-          nc_stat = NF90_GET_VAR( id_set_fl, id_var_time_fl,                                       &
-                                  last_time_coordinate,                                            &
-                                  start = (/ dofl_time_count /),                                   &
-                                  count = (/ 1 /) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 264 )
-
-          IF ( last_time_coordinate(1) >= simulated_time )  THEN
-             message_string = 'netCDF file for flight-time series ' //                             &
-                              'from previous run found,' //                                        &
-                              '&but this file cannot be extended because' //                       &
-                              ' the current output time' //                                        &
-                              '&is less or equal than the last output ' // 'time on this file.' // &
-                              '&New file is created instead.'
-             CALL message( 'define_netcdf_header', 'NCI0029', 0, 1, 0, 6, 0 )
-             dofl_time_count = 0
-             extend = .FALSE.
-             RETURN
-          ENDIF
-
-!
-!--       Dataset seems to be extendable.
-!--       Now get the remaining dimension and variable ids.
-          DO l = 1, num_leg
-             nc_stat = NF90_INQ_VARID( id_set_fl, dofl_label_x(l), id_var_x_fl(l) )
-             CALL netcdf_handle_error( 'netcdf_define_header', 265 )
-             nc_stat = NF90_INQ_VARID( id_set_fl, dofl_label_y(l), id_var_y_fl(l) )
-             CALL netcdf_handle_error( 'netcdf_define_header', 265 )
-             nc_stat = NF90_INQ_VARID( id_set_fl, dofl_label_z(l), id_var_z_fl(l) )
-             CALL netcdf_handle_error( 'netcdf_define_header', 265 )
-
-          ENDDO
-
-
-          DO  i = 1, num_leg * num_var_fl
-
-            nc_stat = NF90_INQ_VARID( id_set_fl, dofl_label(i), id_var_dofl(i) )
-            CALL netcdf_handle_error( 'netcdf_define_header', 265 )
-
-          ENDDO
-
-!
-!--       Update the title attribute on file.
-!--       In order to avoid 'data mode' errors if updated attributes are larger than their original
-!--       size, NF90_PUT_ATT is called in 'define mode' enclosed by NF90_REDEF and NF90_ENDDEF
-!--       calls. This implies a possible performance loss due to data copying; an alternative
-!--       strategy would be to ensure equal attribute size in a job chain. Maybe revise later.
-          nc_stat = NF90_REDEF( id_set_fl )
-          CALL netcdf_handle_error( 'netcdf_define_header', 439 )
-          nc_stat = NF90_PUT_ATT( id_set_fl, NF90_GLOBAL, 'title', TRIM( run_description_header ) )
-          CALL netcdf_handle_error( 'netcdf_define_header', 267 )
-          nc_stat = NF90_ENDDEF( id_set_fl )
-          CALL netcdf_handle_error( 'netcdf_define_header', 440 )
-          message_string = 'netCDF file for flight time series ' // 'from previous run found.' //  &
-                           '&This file will be extended.'
-          CALL message( 'define_netcdf_header', 'NCI0030', 0, 0, 0, 6, 0 )
-
-
        CASE DEFAULT
 
-          message_string = 'mode "' // TRIM( mode) // '" not supported'
-          CALL message( 'netcdf_define_header', 'NCI0036', 0, 0, 0, 6, 0 )
+          message_string = 'mode "' // TRIM( callmode) // '" not supported'
+          CALL message( 'netcdf_define_header', 'NCI0008', 0, 0, 0, 6, 0 )
 
     END SELECT
 
@@ -5095,7 +3596,9 @@
 
     CALL netcdf_handle_error( 'netcdf_create_file', errno )
 #endif
+
  END SUBROUTINE netcdf_create_file
+
 
 !--------------------------------------------------------------------------------------------------!
 ! Description:
@@ -5550,7 +4053,7 @@
 
 #if ! defined( __netcdf4_compression )
              message_string = 'preprocessor option "-D__netcdf4_compression" not set'
-             CALL message( 'netcdf_define_header', 'NCI0038', 2, 2, 0, 6, 0 )
+             CALL message( 'netcdf_define_header', 'NCI0010', 2, 2, 0, 6, 0 )
 #endif
 
              IF ( netcdf_compression_level == HUGE( 1 ) )  THEN
@@ -5566,7 +4069,7 @@
 
 #if ! defined( __netcdf4_compression )
              message_string = 'preprocessor option "-D__netcdf4_compression" not set'
-             CALL message( 'netcdf_define_header', 'NCI0038', 2, 2, 0, 6, 0 )
+             CALL message( 'netcdf_define_header', 'NCI0010', 2, 2, 0, 6, 0 )
 #endif
 
              IF ( netcdf_compression_level == HUGE( 1 ) )  THEN
@@ -5585,7 +4088,7 @@
           CASE DEFAULT
              message_string = 'unknown compression method netcdf_compression = "' //               &
                               TRIM( netcdf_compression_method ) // '"'
-             CALL message( 'netcdf_define_header', 'NCI0037', 1, 2, 0, 6, 0 )
+             CALL message( 'netcdf_define_header', 'NCI0009', 1, 2, 0, 6, 0 )
 
        END SELECT
 
@@ -5595,7 +4098,7 @@
           IF ( netcdf_compression_nsd /= HUGE( 1 ) )  THEN
 #if ! defined( __netcdf4_compression )
              message_string = 'preprocessor option "-D__netcdf4_compression" not set'
-             CALL message( 'netcdf_define_header', 'NCI0038', 2, 2, 0, 6, 0 )
+             CALL message( 'netcdf_define_header', 'NCI0010', 2, 2, 0, 6, 0 )
 #endif
              IF ( netcdf_compression_nsd < 1  .OR.  netcdf_compression_nsd > 15 )  THEN
                 WRITE ( message_string, '(A,A,I7,A)' ) 'netcdf_compression_nsd = ',                &

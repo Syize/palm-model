@@ -1535,13 +1535,13 @@
                                            SIZE( building_emis, 1 ) )
     CALL usm_check_parameters_input_bpars( 'building_fraction', building_frac_f,                   &
                                            SIZE( building_frac, 1 ) )
-    CALL usm_check_parameters_input_bpars( 'building_general', building_gen_f,                     &
+    CALL usm_check_parameters_input_bpars( 'building_general_pars', building_gen_f,                &
                                            SIZE( building_gen, 1 ) )
     CALL usm_check_parameters_input_bpars( 'building_heat_capacity', building_hcap_f,              &
                                            SIZE( building_hcap, 1 ), SIZE( building_hcap, 2 ) )
     CALL usm_check_parameters_input_bpars( 'building_heat_conductivity', building_hcond_f,         &
                                            SIZE( building_hcond, 1 ), SIZE( building_hcond, 2 ) )
-    CALL usm_check_parameters_input_bpars( 'building_indoor', building_indoor_f,                   &
+    CALL usm_check_parameters_input_bpars( 'building_indoor_pars', building_indoor_f,              &
                                            SIZE( building_indoor, 1 ) )
     CALL usm_check_parameters_input_bpars( 'building_lai', building_lai_f,                         &
                                            SIZE( building_lai, 1 ) )

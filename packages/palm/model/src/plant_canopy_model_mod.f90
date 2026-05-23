@@ -151,7 +151,7 @@
 
     REAL(wp) ::  alpha_lad = 9999999.9_wp                        !< coefficient for lad calculation
     REAL(wp) ::  beta_lad = 9999999.9_wp                         !< coefficient for lad calculation
-    REAL(wp) ::  canopy_drag_coeff = 0.0_wp                      !< canopy drag coefficient (parameter)
+    REAL(wp) ::  canopy_drag_coeff = 0.15_wp                     !< canopy drag coefficient (parameter)
     REAL(wp) ::  cthf = 0.0_wp                                   !< canopy top heat flux
     REAL(wp) ::  dt_plant_canopy = 0.0_wp                        !< timestep account. for canopy drag
     REAL(wp) ::  ext_coef = 0.6_wp                               !< extinction coefficient
@@ -635,7 +635,7 @@
              pcm_sensible_flux_av = 0.0_wp
 
 
-          CASE ( 'pcm_latent_flux' )
+          CASE ( 'pcm_latentflux' )
              IF ( .NOT. ALLOCATED( pcm_latent_flux_av ) )  THEN
                 ALLOCATE( pcm_latent_flux_av(0:pch_index,nysg:nyng,nxlg:nxrg) )
              ENDIF
@@ -2228,7 +2228,7 @@
              ALLOCATE( pcm_transpiration_vol_av(nzb:pch_index,nysg:nyng,nxlg:nxrg) )
           ENDIF
           ALLOCATE( tmp_3d(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-          CALL rrd_mpi_io( 'pcm_transpirationvolume_av', tmp_3d )
+          CALL rrd_mpi_io( 'pcm_transpiration_vol_av', tmp_3d )
           pcm_transpiration_vol_av = tmp_3d(nzb:pch_index,:,:)
           DEALLOCATE( tmp_3d )
        ENDIF

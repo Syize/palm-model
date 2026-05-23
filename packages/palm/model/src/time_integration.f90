@@ -270,7 +270,6 @@
     USE pmc_interface,                                                                             &
         ONLY:  atmosphere_ocean_coupled_run,                                                       &
                cpl_id,                                                                             &
-               homogeneous_initialization_child,                                                   &
                nesting_coupling_time_reached,                                                      &
                nesting_mode,                                                                       &
                pmci_atmos_ocean,                                                                   &
@@ -421,6 +420,7 @@
                odf_x,                                                                              &
                odf_y,                                                                              &
                p,                                                                                  &
+               p_loc,                                                                              &
                pt_p,                                                                               &
                ptdf_x,                                                                             &
                ptdf_y,                                                                             &
@@ -472,6 +472,10 @@
                nz,                                                                                 &
                nzb_max,                                                                            &
                topo_flags
+
+    USE land_surface_model_mod,                                                                    &
+        ONLY:  nzb_soil,                                                                           &
+               nzt_soil
 
     USE statistics,                                                                                &
         ONLY:  pr_max,                                                                             &
@@ -527,7 +531,6 @@
 !
 !-- Copy data from arrays_3d
 !$ACC DATA &
-!$ACC COPY(d(nzb+1:nzt,nys:nyn,nxl:nxr)) &
 !$ACC COPY(diss(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(e(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(u(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
@@ -536,6 +539,7 @@
 !$ACC COPY(kh(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(km(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(p(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
+!$ACC COPY(p_loc(nzb:nzt+1,nys-1:nyn+1,nxl-1:nxr+1)) &
 !$ACC COPY(pt(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(q(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(ql(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
@@ -580,7 +584,7 @@
 !$ACC COPYIN(waterflux_output_conversion(nzb:nzt+1)) &
 !$ACC COPYIN(momentumflux_output_conversion(nzb:nzt+1)) &
 !$ACC COPYIN(ngp_2dh(:)) &
-!$ACC COPYIN(ngp_2dh_s_inner(:)) &
+!$ACC COPYIN(ngp_2dh_s_inner(:,:)) &
 !$ACC COPYIN(ngp_2dh_wgrid(nzb+1:nzt)) &
 !$ACC COPYIN(rdf(nzb+1:nzt), rdf_sc(nzb+1:nzt)) &
 !$ACC COPYIN(ptdf_x(nxlg:nxrg), ptdf_y(nysg:nyng)) &
@@ -653,18 +657,16 @@
     ddy = ddy
 
 #if defined( _OPENACC )
-    CALL enter_surface_arrays
+    CALL enter_surface_arrays( nzb_soil, nzt_soil )
 #endif
 !
-!-- If child domains are initialized with domain-averaged parent profiles
-!-- run pressure solver before time integration starts.
+!-- Call pressure solve for child domains before time integration starts, because this is not
+!-- done in pmci_child_initialize.
     IF ( TRIM( initializing_actions )  /= 'read_restart_data' )  THEN
 #if defined( __parallel )
-       IF ( nested_run  .AND. .NOT. atmosphere_ocean_coupled_run)  THEN
-          IF ( child_domain  .AND.  homogeneous_initialization_child )  THEN
-             CALL pmci_ensure_nest_mass_conservation
-             CALL pres
-          ENDIF
+       IF ( nested_run  .AND. .NOT. atmosphere_ocean_coupled_run  .AND.  child_domain)  THEN
+          CALL pmci_ensure_nest_mass_conservation
+          CALL pres
        ENDIF
 #endif
     ENDIF
@@ -1016,7 +1018,11 @@
 !
 !--          Mass (volume) flux correction to ensure global mass conservation for child domains.
              IF ( child_domain  .AND.  .NOT. atmosphere_ocean_coupled_run )  THEN
-                CALL pmci_ensure_nest_mass_conservation
+                IF ( synchronize_timestep  .OR.                                                    &
+                     ( nesting_coupling_time_reached  .AND.  intermediate_timestep_count == 1 ) )  &
+                THEN
+                   CALL pmci_ensure_nest_mass_conservation
+                ENDIF
              ENDIF
 #endif
              CALL pres
@@ -1636,7 +1642,6 @@
        CALL cpu_log( log_point_s(10), 'timesteps', 'stop' )
 
     ENDDO   ! time loop
-    WRITE(9,*) 'after time loop'; FLUSH( 9 )
 
     CALL module_interface_actions( 'after_time_integration' )
 

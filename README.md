@@ -9,6 +9,8 @@ The following [packages](packages) are included (in alphabetical order):
 
 -   [Dynamic Driver](packages/dynamic_driver)
     -   **inifor** - A mesoscale Interface for Initializing and Forcing PALM using offline nesting
+    -   **palm_meteo** - A processor of meteorological input data for the PALM model system
+    -   **promet** - A preprocessor tool that helps you create dynamic drivers for mesoscale forcing from ICON or WRF output
     -   **wrf_interface** - Scripts for processing of WRF and CAMx files to PALM dynamic driver
 
 -   [GUI](packages/gui)
@@ -49,12 +51,18 @@ Also some additional python dependencies are needed, which can be installed usin
 python3 -m pip install -r requirements.txt
 ```
 
-Now the PALM model system can be installed with the following commands (please replace `<install-prefix>` with the desired installation directory):
+Now the PALM model system can be installed with the following three commands:
 
 ``` bash
 export install_prefix="<install-prefix>"
 bash install -p ${install_prefix}
 export PATH=${install_prefix}/bin:${PATH}
+```
+
+**When typing the first command, please replace the string `"<install-prefix>"` with the desired installation directory.** Example:
+
+``` bash
+export install_prefix="$HOME/palm"
 ```
 
 The following optional command permanently adds this installation to your bash environment:

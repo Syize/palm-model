@@ -1,10 +1,12 @@
+[project]
+name = "palm_csd"
+requires-python = ">=3.9"
+
 [tool.pytest.ini_options]
-addopts = "-n auto --cov=palm_csd --cov-report=term --cov-report=xml --cov-report=html:coverage"
+addopts = "--basetemp tests/tmp -n auto --cov=palm_csd --cov-report=term --cov-report=xml --cov-report=html:coverage"
 
 [tool.mypy]
-plugins = ["numpy.typing.mypy_plugin", "pydantic.mypy"]
-install_types = true
-non_interactive = true
+plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 
 [tool.pymarkdown]
@@ -12,7 +14,8 @@ ignore_missing_imports = true
 # https://github.com/jackdewinter/pymarkdown/issues/771
 # disable for now
 plugins.line-length.enabled = false
-plugins.no-inline-html.allowed_elements = "code, img"
+plugins.no-duplicate-heading.enabled = false
+plugins.no-inline-html.allowed_elements = "code, sup"
 
 [tool.ruff]
 line-length = 100

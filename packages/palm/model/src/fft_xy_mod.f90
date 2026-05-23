@@ -210,10 +210,17 @@
 
 #if defined( __cuda_fft )
           CALL cpu_log( log_point_s(108), 'cuda_fft_init', 'start' )
+#if defined( __single_precision )
+          CALL CUFFTPLAN1D( plan_xf, nx+1, CUFFT_R2C, (nyn_x-nys_x+1) * (nzt_x-nzb_x+1) )
+          CALL CUFFTPLAN1D( plan_xi, nx+1, CUFFT_C2R, (nyn_x-nys_x+1) * (nzt_x-nzb_x+1) )
+          CALL CUFFTPLAN1D( plan_yf, ny+1, CUFFT_R2C, (nxr_y-nxl_y+1) * (nzt_y-nzb_y+1) )
+          CALL CUFFTPLAN1D( plan_yi, ny+1, CUFFT_C2R, (nxr_y-nxl_y+1) * (nzt_y-nzb_y+1) )
+#else
           CALL CUFFTPLAN1D( plan_xf, nx+1, CUFFT_D2Z, (nyn_x-nys_x+1) * (nzt_x-nzb_x+1) )
           CALL CUFFTPLAN1D( plan_xi, nx+1, CUFFT_Z2D, (nyn_x-nys_x+1) * (nzt_x-nzb_x+1) )
           CALL CUFFTPLAN1D( plan_yf, ny+1, CUFFT_D2Z, (nxr_y-nxl_y+1) * (nzt_y-nzb_y+1) )
           CALL CUFFTPLAN1D( plan_yi, ny+1, CUFFT_Z2D, (nxr_y-nxl_y+1) * (nzt_y-nzb_y+1) )
+#endif
           CALL cpu_log( log_point_s(108), 'cuda_fft_init', 'stop' )
 #else
           message_string = 'no system-specific fft-call available'
@@ -435,7 +442,7 @@
        REAL(wp), DIMENSION(nys_x:nyn_x_max,nzb_x:nzt_x,0:nx_y_max), OPTIONAL ::  ar_inv   !<
 
 #if defined( __cuda_fft )
-       COMPLEX(dp), ALLOCATABLE, DIMENSION(:,:,:) :: ar_tmp
+       COMPLEX(wp), ALLOCATABLE, DIMENSION(:,:,:) :: ar_tmp
 
        ALLOCATE(ar_tmp(0:(nx+1)/2,nys_x:nyn_x,nzb_x:nzt_x))
        !$ACC DATA CREATE(ar_tmp) IF(enable_openacc)
@@ -899,7 +906,11 @@
           IF ( forward_fft )  THEN
 
              !$ACC HOST_DATA USE_DEVICE(ar, ar_tmp) IF(enable_openacc)
+#if defined( __single_precision )
+             CALL CUFFTEXECR2C( plan_xf, ar, ar_tmp )
+#else
              CALL CUFFTEXECD2Z( plan_xf, ar, ar_tmp )
+#endif
              !$ACC END HOST_DATA
 
              !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i,j,k) &
@@ -936,7 +947,11 @@
              ENDDO
 
              !$ACC HOST_DATA USE_DEVICE(ar, ar_tmp) IF(enable_openacc)
+#if defined( __single_precision )
+             CALL CUFFTEXECC2R( plan_xi, ar_tmp, ar )
+#else
              CALL CUFFTEXECZ2D( plan_xi, ar_tmp, ar )
+#endif
              !$ACC END HOST_DATA
 
           ENDIF
@@ -1229,7 +1244,7 @@
        COMPLEX(wp), DIMENSION(:), ALLOCATABLE ::  cwork  !<
 
 #if defined( __cuda_fft )
-       COMPLEX(dp), ALLOCATABLE, DIMENSION(:,:,:) ::  ar_tmp  !<
+       COMPLEX(wp), ALLOCATABLE, DIMENSION(:,:,:) ::  ar_tmp  !<
 
        ALLOCATE(ar_tmp(0:(ny+1)/2,nxl_y:nxr_y,nzb_y:nzt_y))
        !$ACC DATA CREATE(ar_tmp) IF(enable_openacc)
@@ -1711,7 +1726,11 @@
           IF ( forward_fft )  THEN
 
              !$ACC HOST_DATA USE_DEVICE(ar, ar_tmp) IF(enable_openacc)
+#if defined( __single_precision )
+             CALL CUFFTEXECR2C( plan_yf, ar, ar_tmp )
+#else
              CALL CUFFTEXECD2Z( plan_yf, ar, ar_tmp )
+#endif
              !$ACC END HOST_DATA
 
              !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i,j,k) &
@@ -1748,7 +1767,11 @@
              ENDDO
 
              !$ACC HOST_DATA USE_DEVICE(ar, ar_tmp) IF(enable_openacc)
+#if defined( __single_precision )
+             CALL CUFFTEXECC2R( plan_yi, ar_tmp, ar )
+#else
              CALL CUFFTEXECZ2D( plan_yi, ar_tmp, ar )
+#endif
              !$ACC END HOST_DATA
 
           ENDIF

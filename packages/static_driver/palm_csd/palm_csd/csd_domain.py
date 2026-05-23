@@ -11,37 +11,64 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Variables and methods for domains."""
 
-import inspect
 import logging
 from enum import Enum
 from math import floor
 from pathlib import Path
-from typing import Callable, Optional, Tuple, Type, TypedDict, cast
+from typing import (
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    TypedDict,
+    TypeVar,
+    Union,
+    cast,
+)
 
+import geopandas as gpd
 import numpy as np
+import numpy.ma as ma
+import numpy.ma.core as ma_core
 import numpy.typing as npt
+import pandas as pd
+import pandas.api.extensions as pde
+import pandas.api.typing as pdtypes
 import rasterio.warp as riowp
 from netCDF4 import Dataset, Variable
-from numpy import ma
 
 from palm_csd import StatusLogger
-from palm_csd.csd_config import (
+from palm_csd.constants import (
+    INPUT_DATA_INFO,
     NBUILDING_SURFACE_LAYER,
-    CSDConfig,
-    CSDConfigAttributes,
-    CSDConfigDomain,
-    CSDConfigInput,
+    NGHOST_POINTS,
+    ColumnGeneral,
+    FillValue,
     IndexBuildingGeneralPars,
     IndexBuildingIndoorPars,
     IndexBuildingSurfaceLevel,
     IndexBuildingSurfaceType,
+    IndexPavementType,
+    IndexVegetationType,
+    IndexWaterType,
+    InputData,
+    get_parent_input_data,
+)
+from palm_csd.csd_config import (
+    CSDConfig,
+    CSDConfigAttributes,
+    CSDConfigDomain,
+    CSDConfigInput,
     ScalingMethods,
-    defaults,
+    value_defaults,
 )
 from palm_csd.geo_converter import GeoConverter
 from palm_csd.lcz import LCZTypes
@@ -51,14 +78,15 @@ from palm_csd.netcdf_data import (
     NCDFVariable,
     remove_existing_file,
 )
-from palm_csd.tools import DefaultMinMax
+from palm_csd.tools import Node
+from palm_csd.vegetation import CanopyGenerator, tree_defaults
 
 # Module logger. In __init__.py, it is ensured that the logger is a StatusLogger. For type checking,
 # do explicit cast.
 logger = cast(StatusLogger, logging.getLogger(__name__))
 
 
-class CSDDomain:
+class CSDDomain(Node["CSDDomain"]):
     """A domain that stores all its configurations, output dimensions and variables."""
 
     name: str
@@ -71,15 +99,17 @@ class CSDDomain:
     attributes: CSDConfigAttributes
     """Attributes configuration"""
 
-    # TODO: Python 3.11: Use Self to indicate same type as class
-    parent: Optional["CSDDomain"]
-    """Parent domain."""
+    canopy_generator: CanopyGenerator
+    """Canopy generator."""
 
     geo_converter: Optional[GeoConverter]
     """GeoConverter to handle geographic data and transformation."""
 
     file_output: Path
     """Output path."""
+
+    input_surface_polygons: Optional[Dict[Path, gpd.GeoDataFrame]]
+    """Input surface polygons."""
 
     rotation_angle: float
     """Rotation angle."""
@@ -122,6 +152,9 @@ class CSDDomain:
     """z dimension used for buildings."""
     zlad: NCDFDimension
     """z dimension used for resolved vegetation."""
+
+    buildings_2d_removed: Optional[npt.NDArray[np.bool_]] = None
+    """2D buildings that were removed due to building free border."""
 
     nsurface_fraction: NCDFDimension
     """Surface fraction dimension."""
@@ -265,6 +298,9 @@ class CSDDomain:
         Raises:
             ValueError: When using geo converter, geo converter of parent is None.
         """
+        # Initialize Node part of the domain including parent to allow tree structure.
+        super().__init__(parent)
+
         self.name = name
 
         # configurations
@@ -273,21 +309,31 @@ class CSDDomain:
 
         self.attributes = config.attributes
 
-        self.parent = parent
+        # Create CanopyGenerator with the LAD method and parameters from the configuration.
+        self.canopy_generator = CanopyGenerator(
+            method=config.settings.lad_method,
+            alpha_Metal2003=config.settings.lad_alpha,
+            beta_Metal2003=config.settings.lad_beta,
+            z_max_rel_LM2004=config.settings.lad_z_max_rel,
+            dz=self.config.dz,
+            pixel_size=self.config.pixel_size,
+            season=config.settings.season,
+            height_rel_resolved_vegetation_lower_threshold=config.settings.height_rel_resolved_vegetation_lower_threshold,
+            lai_tree_lower_threshold=config.settings.lai_tree_lower_threshold,
+            remove_low_lai_tree=self.config.remove_low_lai_tree,
+        )
 
         # converter for geo data
         if config.settings.epsg is None:
             self.geo_converter = None
         else:
             # Find root parent
-            if self.parent is not None:
-                parent_geoconverter = self.parent.geo_converter
+            parent = self.get_parent()
+            if parent is not None:
+                parent_geoconverter = parent.geo_converter
                 if parent_geoconverter is None:
                     raise ValueError("Parent domain has no geo converter")
-                parent_tmp = self.parent
-                while parent_tmp.parent is not None:
-                    parent_tmp = parent_tmp.parent
-                root_parent_geoconverter = parent_tmp.geo_converter
+                root_parent_geoconverter = self.find_root().geo_converter
                 if root_parent_geoconverter is None:
                     raise ValueError("Root parent domain has no geo converter")
             else:
@@ -307,9 +353,8 @@ class CSDDomain:
         self.replace_invalid_input_values = config.settings.replace_invalid_input_values
 
         # set output file name: file_out + domain name
-        # TODO: use with_stem with Python 3.9
-        self.file_output = config.output.file_out.with_name(
-            f"{config.output.file_out.name}_{self.name}"
+        self.file_output = config.output.file_out.with_stem(
+            f"{config.output.file_out.stem}_{self.name}"
         )
 
         self.rotation_angle = config.settings.rotation_angle
@@ -340,65 +385,196 @@ class CSDDomain:
 
         self.check_consistency()
 
+        self.input_surface_polygons = self._read_vector_data("surfaces")
+
         self._initialize_dimensions()
         self._initialize_variables()
+
+    def _read_vector_data(
+        self, element_type: Literal["surfaces", "trees"]
+    ) -> Optional[Dict[Path, gpd.GeoDataFrame]]:
+        """Read vector data from input files and process them.
+
+        The vector data is read according to the element type's input configuration. Only required
+        columns are kept and renamed to the internal names. Surface type columns that include
+        several types (e.g. vegetation and pavement) are expanded to multiple columns.
+
+        Args:
+            element_type: Type of the element to read, either "trees" or "surfaces".
+
+        Returns:
+            Dictionary with file names as keys and GeoDataFrames as values. If no input files are
+            found, return None.
+        """
+        # Assign input vector files, shape type and coordinate columns based on element type.
+        shape_type: Literal["Point", "Polygon"]
+        if element_type == "trees":
+            if "trees" not in self.input_config.files.keys():
+                return None
+            vector_files = self.input_config.files["trees"]
+            shape_type = "Point"
+            columns_coordinates = [
+                ColumnGeneral.geometry,
+                ColumnGeneral.x_index,
+                ColumnGeneral.y_index,
+            ]
+        elif element_type == "surfaces":
+            if "surfaces" not in self.input_config.files.keys():
+                return None
+            vector_files = self.input_config.files["surfaces"]
+            shape_type = "Polygon"
+            columns_coordinates = [ColumnGeneral.geometry]
+        else:
+            raise ValueError(f"Unknown element type {element_type} for reading vector data.")
+
+        if self.geo_converter is None:
+            raise ValueError("geo_converter not set.")
+
+        # Get user-defined columns from input configuration.
+        # All columns
+        columns_input = [key for key in self.input_config.columns.keys()]
+        # Only columns that should be expanded according to the value's dict
+        columns_expand = [
+            key for key, value in self.input_config.columns.items() if isinstance(value, Dict)
+        ]
+
+        # Create mapping from column names to types and IDs. This will be used to expand single
+        # columns with potentially multiple values into multiple columns according to the user input
+        # in columns_expand.
+        # Target types
+        column_to_surface_type = {
+            InputData.pavement_type: IndexPavementType,
+            InputData.vegetation_type: IndexVegetationType,
+            InputData.water_type: IndexWaterType,
+        }
+        # Mapping from surface type member names to their respective type and ID, for example:
+        # "bare_soil" -> "vegetation_type", 1
+        member_to_type = {}
+        member_to_id = {}
+        for surface_type_column, surface_type_members in column_to_surface_type.items():
+            member_to_type.update(
+                {member.name: surface_type_column for member in surface_type_members}
+            )
+            member_to_id.update({member.name: member.value for member in surface_type_members})
+
+        # Read vector files and process them.
+        input_shapes = {}
+        for vector_file in vector_files:
+            if not isinstance(vector_file, Path):
+                raise ValueError(f"{element_type} file must be a Path object.")
+            shapes = self.geo_converter.read_shp_to_dst(
+                vector_file, shape_type=shape_type, name=vector_file.stem
+            )
+
+            # Make all column names lowercase.
+            shapes.columns = shapes.columns.str.lower()
+
+            # Keep only columns that are keys in self.input_config.columns (case-insensitive)
+            columns_to_keep = [col for col in shapes.columns if col in columns_input]
+            columns_to_keep += columns_coordinates
+            shapes = cast(gpd.GeoDataFrame, shapes[columns_to_keep])
+
+            # Rename columns from what is in the input file to internal name according to the user
+            # input in columns.
+            columns_rename = {
+                key: value
+                for key, value in self.input_config.columns.items()
+                if isinstance(value, str) and key in shapes.columns
+            }
+            shapes = cast(gpd.GeoDataFrame, shapes.rename(columns=columns_rename))
+
+            # Expand columns to multiple surface types if needed.
+            for column in columns_expand:
+                if column not in shapes.columns:
+                    continue
+                # Convert content of column to expand to lowercase. This would only work on string
+                # and potentially also on object columns. Catch AttributeError if failed. Content
+                # should be int then, float might also work. TODO: Do we need to check this case?
+                try:
+                    shapes[column] = shapes[column].str.lower()
+                except AttributeError:
+                    pass
+                # Apply user defined mapping to a specific surface type member (e.g. "bare_soil").
+                shapes["type"] = shapes[column].map(self.input_config.columns[column])  # type: ignore
+                # Get the surface type (e.g. "vegetation_type" for "bare_soil").
+                shapes["surface_type"] = shapes["type"].map(member_to_type)
+                # Get ID (e.g. 1 for "bare_soil").
+                shapes["type_id"] = shapes["type"].map(member_to_id).astype(pd.Int8Dtype())
+
+                # Create new columns for each surface type in column_to_surface_type.
+                for surface_type in column_to_surface_type.keys():
+                    surface_type_present = shapes["surface_type"] == surface_type
+                    if surface_type_present.any():
+                        shapes[surface_type] = shapes["type_id"].where(surface_type_present)
+
+                shapes = shapes.drop(columns=["surface_type", "type", "type_id", column])
+
+            input_shapes[vector_file] = shapes
+
+        return input_shapes
 
     def _initialize_dimensions(self) -> None:
         """Initialize dimensions."""
         self.x = NCDFDimension(
             name="x",
-            datatype="f4",
+            data_type="f4",
             standard_name="projection_x_coordinate",
             long_name="x",
             units="m",
         )
         self.y = NCDFDimension(
             name="y",
-            datatype="f4",
+            data_type="f4",
             standard_name="projection_y_coordinate",
             long_name="y",
             units="m",
         )
-        self.z = NCDFDimension(name="z", datatype="f4", long_name="z", units="m")
+        self.z = NCDFDimension(name="z", data_type="f4", long_name="z", units="m")
 
-        self.nsurface_fraction = NCDFDimension(name="nsurface_fraction", datatype="i")
+        self.nsurface_fraction = NCDFDimension(name="nsurface_fraction", data_type="i")
 
         self.building_general_par = NCDFDimension(
             name="building_general_par",
-            datatype=str,
+            data_type=str,
             values=_enum_to_str_array(IndexBuildingGeneralPars),
         )
         self.building_indoor_par = NCDFDimension(
             name="building_indoor_par",
-            datatype=str,
+            data_type=str,
             values=_enum_to_str_array(IndexBuildingIndoorPars),
         )
         self.building_surface_layer = NCDFDimension(
             name="building_surface_layer",
-            datatype="i",
+            data_type="i",
             values=np.arange(1, NBUILDING_SURFACE_LAYER + 1),
         )
         self.building_surface_level = NCDFDimension(
             name="building_surface_level",
-            datatype=str,
+            data_type=str,
             values=_enum_to_str_array(IndexBuildingSurfaceLevel),
         )
         self.building_surface_type = NCDFDimension(
             name="building_surface_type",
-            datatype=str,
+            data_type=str,
             values=_enum_to_str_array(IndexBuildingSurfaceType),
         )
 
+        # TODO: Use IndexVegetationPars values when PALM accept that.
         self.nvegetation_pars = NCDFDimension(
-            name="nvegetation_pars", datatype="i", values=ma.arange(0, 12)
+            name="nvegetation_pars", data_type="i", values=ma.arange(0, 12)
         )
-        self.nwater_pars = NCDFDimension(name="nwater_pars", datatype="i", values=np.arange(0, 7))
+        self.nwater_pars = NCDFDimension(name="nwater_pars", data_type="i", values=np.arange(0, 7))
 
-        self.zlad = NCDFDimension(name="zlad", datatype="f4")
+        self.zlad = NCDFDimension(
+            name="zlad",
+            data_type="f4",
+            long_name="z coordinate for resolved vegetation",
+            units="m",
+        )
 
-        self.nuc = NCDFDimension(name="nuc", datatype="i")
-        self.streetdir = NCDFDimension(name="streetdir", datatype="i")
-        self.z_uhl = NCDFDimension(name="z_uhl", datatype="f4")
+        self.nuc = NCDFDimension(name="nuc", data_type="i")
+        self.streetdir = NCDFDimension(name="streetdir", data_type="i")
+        self.z_uhl = NCDFDimension(name="z_uhl", data_type="f4")
 
     def _initialize_variables(self):
         """Initialize variables."""
@@ -645,6 +821,7 @@ class CSDDomain:
             dimensions=(self.nvegetation_pars, self.y, self.x),
             long_name="vegetation_pars",
             units="",
+            mandatory=False,
         )
 
         self.water_pars = self._variable_float(
@@ -727,30 +904,53 @@ class CSDDomain:
         """
         # Geographical coordinate input
 
-        if (
-            self.input_config.file_x_UTM is None
-            or self.input_config.file_y_UTM is None
-            or self.input_config.file_lon is None
-            or self.input_config.file_lat is None
+        if not (
+            "x_utm" in self.input_config.files
+            and "y_utm" in self.input_config.files
+            and "lon" in self.input_config.files
+            and "lat" in self.input_config.files
         ):
             if self.geo_converter is None:
                 logger.critical_raise(
                     f"Not all coordinate inputs provided for domain {self.name}, "
                     + "but target coordinate reference system not defined by EPSG code "
-                    + " to calculate coordinates.",
+                    + "to calculate coordinates.",
                 )
+
+    def overlaps(self, other: "CSDDomain") -> Optional[bool]:
+        """Checks if this domains overlaps with another domain.
+
+        Args:
+            other: Other domain.
+
+        Returns:
+            True if the domains overlap, False if they do not overlap, None if geo_converters are
+            not defined.
+        """
+        if self.geo_converter is None or other.geo_converter is None:
+            return None
+
+        # Boundary boxes considering ghost points
+        self_bbox = self.geo_converter.boundary(nghost_points=NGHOST_POINTS)
+        other_bbox = other.geo_converter.boundary(nghost_points=NGHOST_POINTS)
+
+        # The two domains do not overlap when they are next to each other.
+        return not (
+            self_bbox[2] <= other_bbox[0]  # self_box right of other_box
+            or self_bbox[0] >= other_bbox[2]  # self_box left of other_box
+            or self_bbox[3] <= other_bbox[1]  # self_box below other_box
+            or self_bbox[1] >= other_bbox[3]  # self_box above other_box
+        )
 
     class DefaultMetadataVariable(TypedDict, total=False):
         """Helper dictionary for default metadata in variables."""
 
-        datatype: str
-        """Datatype."""
-        fillvalue: float
+        data_type: str
+        """Data type."""
+        fill_value: float
         """Fill value."""
         file: Path
         """Input/Output file."""
-        res_orig: float
-        """Original resolution."""
         coordinates: str
         """Coordinates."""
         grid_mapping: str
@@ -765,6 +965,7 @@ class CSDDomain:
         standard_name: Optional[str] = None,
         lod: Optional[int] = None,
         add_spatial_metadata: bool = True,
+        mandatory: bool = True,
     ) -> NCDFVariable:
         """Helper function that returns a float variable with some predefined attributes.
 
@@ -775,20 +976,20 @@ class CSDDomain:
             units: Unit.
             standard_name: Standard name. Defaults to None.
             lod: Level of detail. Defaults to None.
-            add_spatial_metadata: Add res_orig, coordinates, grid_mapping. Defaults to True.
+            add_spatial_metadata: Add coordinates, grid_mapping. Defaults to True.
+            mandatory: Whether the variable is mandatory. Defaults to True.
 
         Returns:
             float variable with given and predefined attributes.
         """
         default_values: CSDDomain.DefaultMetadataVariable = {
-            "datatype": "f4",
-            "fillvalue": -9999.0,
+            "data_type": "f4",
+            "fill_value": FillValue.FLOAT,
             "file": self.file_output,
         }
         if add_spatial_metadata:
             default_values.update(
                 {
-                    "res_orig": self.config.pixel_size,
                     "coordinates": "E_UTM N_UTM lon lat",
                     "grid_mapping": "crs",
                 }
@@ -801,6 +1002,7 @@ class CSDDomain:
             standard_name=standard_name,
             units=units,
             lod=lod,
+            mandatory=mandatory,
             **default_values,
         )
 
@@ -813,6 +1015,7 @@ class CSDDomain:
         standard_name: Optional[str] = None,
         lod: Optional[int] = None,
         add_spatial_metadata: bool = True,
+        mandatory: bool = True,
     ) -> NCDFVariable:
         """Helper function that returns an int variables with some predefined attributes.
 
@@ -823,20 +1026,20 @@ class CSDDomain:
             units: Unit.
             standard_name: Standard name. Defaults to None.
             lod: Level of detail. Defaults to None.
-            add_spatial_metadata: Add res_orig, coordinates, grid_mapping. Defaults to True.
+            add_spatial_metadata: Add coordinates, grid_mapping. Defaults to True.
+            mandatory: Whether the variable is mandatory. Defaults to True.
 
         Returns:
             int variable with given and predefined attributes.
         """
         default_values: CSDDomain.DefaultMetadataVariable = {
-            "datatype": "i",
-            "fillvalue": -9999,
+            "data_type": "i",
+            "fill_value": FillValue.INTEGER,
             "file": self.file_output,
         }
         if add_spatial_metadata:
             default_values.update(
                 {
-                    "res_orig": self.config.pixel_size,
                     "coordinates": "E_UTM N_UTM lon lat",
                     "grid_mapping": "crs",
                 }
@@ -849,6 +1052,7 @@ class CSDDomain:
             standard_name=standard_name,
             units=units,
             lod=lod,
+            mandatory=mandatory,
             **default_values,
         )
 
@@ -861,6 +1065,7 @@ class CSDDomain:
         standard_name: Optional[str] = None,
         lod: Optional[int] = None,
         add_spatial_metadata: bool = True,
+        mandatory: bool = True,
     ) -> NCDFVariable:
         """Helper function that returns a byte variables with some predefined attributes.
 
@@ -871,20 +1076,20 @@ class CSDDomain:
             units: Unit.
             standard_name: Standard name. Defaults to None.
             lod: Level of detail. Defaults to None.
-            add_spatial_metadata: Add res_orig, coordinates, grid_mapping. Defaults to True.
+            add_spatial_metadata: Add coordinates, grid_mapping. Defaults to True.
+            mandatory: Whether the variable is mandatory. Defaults to True.
 
         Returns:
             byte variable with given and predefined attributes.
         """
         default_values: CSDDomain.DefaultMetadataVariable = {
-            "datatype": "b",
-            "fillvalue": -127,
+            "data_type": "b",
+            "fill_value": FillValue.BYTE,
             "file": self.file_output,
         }
         if add_spatial_metadata:
             default_values.update(
                 {
-                    "res_orig": self.config.pixel_size,
                     "coordinates": "E_UTM N_UTM lon lat",
                     "grid_mapping": "crs",
                 }
@@ -897,8 +1102,33 @@ class CSDDomain:
             standard_name=standard_name,
             units=units,
             lod=lod,
+            mandatory=mandatory,
             **default_values,
         )
+
+    def is_resolved_vegetation(self) -> Union[np.bool_, npt.NDArray[np.bool_]]:
+        """Array indicating if the grid cell includes resolved vegetation.
+
+        Both, LAD and BAD values are checked.
+
+        Returns:
+            Boolean 3d array with True if grid cell includes resolved vegetation.
+        """
+        is_rv: Union[np.bool_, npt.NDArray[np.bool_]] = np.False_
+        if self.lad.values is not None:
+            is_rv = is_rv | ~self.lad.values.mask
+        if self.bad.values is not None:
+            is_rv = is_rv | ~self.bad.values.mask
+
+        return is_rv
+
+    def is_resolved_vegetation2d(self) -> Union[np.bool_, npt.NDArray[np.bool_]]:
+        """Array indicating if the column above each pixel includes resolved vegetation.
+
+        Returns:
+            Boolean 2d array with True if column above each pixel includes resolved vegetation.
+        """
+        return self.is_resolved_vegetation().any(axis=0)
 
     def remove_existing_output(self) -> None:
         """Remove configured output file if it exists."""
@@ -1180,24 +1410,24 @@ class CSDDomain:
     ) -> NCDFCoordinateReferenceSystem:
         """Read coordinate reference system from a netCDF file.
 
-        The file is openend and closed. If file is None, self.input_config.file_x_UTM is used.
+        The file is openend and closed. If file is None, self.input_config.files["x_utm"] is used.
 
         Args:
             file: Input file. Defaults to None.
             varname: Variable name. Defaults to None.
 
         Raises:
-            ValueError: Both file and input_config.file_x_UTM are None.
+            ValueError: Both file and input_config.files["x_utm"] are None.
 
         Returns:
             Coordinate reference system from file.
         """
         if file is not None:
             from_file = file
-        elif self.input_config.file_x_UTM is not None:
-            from_file = self.input_config.file_x_UTM
+        elif "x_utm" in self.input_config.files:
+            from_file = self.input_config.files["x_utm"][0]
         else:
-            raise ValueError("file or input_config.file_x_UTM needs to be not None")
+            raise ValueError("file or input_config.files['x_utm'] needs to be not None")
 
         try:
             nc_data = Dataset(from_file, "r", format="NETCDF4")
@@ -1261,11 +1491,267 @@ class CSDDomain:
 
         return crs_var
 
-    def read_transform_2d(
+    MaskedArrayOrSeries = TypeVar("MaskedArrayOrSeries", pd.Series, ma.MaskedArray)
+
+    def _validate_and_process_values(
         self,
         name: str,
-        file: Optional[Path] = None,
-        default_min_max: Optional[DefaultMinMax] = None,
+        data: MaskedArrayOrSeries,
+        all_or_none_missing: bool,
+        initialize_default: bool,
+    ) -> MaskedArrayOrSeries:
+        """Validate and process values for a given column or field.
+
+        Args:
+            name: Name of the column or field.
+            data: Data to validate and process, either as a pandas Series or a masked array.
+            all_or_none_missing: If True, all values must be either missing or defined.
+            initialize_default: If True, missing values are replaced by the default value.
+
+        Raises:
+            ValueError: Minimum or maximum are not defined.
+            ValueError: Found values below or above minimum or maximum and
+              replace_invalid_input_values is False.
+            ValueError: Found both missing and defined values in the data when
+              all_or_none_missing is True.
+            ValueError: No default value defined for missing values when
+              initialize_default is True.
+
+        Returns:
+            Checked and processed data, with the same type as the input data.
+        """
+        # Default values and allowed minimum and maximum values
+        matches = [vd for vd in value_defaults.keys() if name.startswith(vd)]
+        if len(matches) == 0:
+            raise ValueError(f"No default values defined for {name}.")
+        if len(matches) > 1:
+            raise ValueError(f"Multiple default values defined for {name}: {matches}.")
+        default_min_max = value_defaults[matches[0]]
+        if default_min_max.minimum is None:
+            raise ValueError(f"Minimum for {name} is not set.")
+        if default_min_max.maximum is None:
+            raise ValueError(f"Maximum for {name} is not set.")
+
+        # In a masked array, ma.masked is assigned to indicate a masked value. In the Series,
+        # missing values should be np.nan for float columns and pd.NA for integer columns. They are
+        # converted to the fitting type. NOTE: The type below will be checked when potentielly
+        # rasterizing the polygons. Adjust there as well.
+        na_value: Union[float, pdtypes.NAType, ma_core.MaskedConstant]
+        astype: Union[pde.ExtensionDtype, npt.DTypeLike]
+        if isinstance(data, ma.MaskedArray):
+            na_value = ma.masked
+        else:
+            if isinstance(default_min_max.minimum, int) and isinstance(
+                default_min_max.maximum, int
+            ):
+                na_value = pd.NA
+                if default_min_max.minimum < -128 or default_min_max.maximum > 127:
+                    astype = pd.Int32Dtype()
+                else:
+                    astype = pd.Int8Dtype()
+            else:
+                na_value = np.nan
+                astype = np.float64
+            data = pd.to_numeric(data).astype(astype)
+
+        below_minimum = data < default_min_max.minimum
+        above_maximum = data > default_min_max.maximum
+        replacement = default_min_max.default if default_min_max.default is not None else na_value
+
+        # Check for values below minimum and above maximum, and deal with them.
+        if below_minimum.any():
+            if not self.replace_invalid_input_values:
+                logger.critical(
+                    f"In {name}, {below_minimum.sum()} values are "
+                    + f"smaller than minimum value {default_min_max.minimum}.\n"
+                    + "Enable replace_invalid_input_values for automatic replacement.\n"
+                    + "Alternatively, adjust the minimum defined in "
+                    + "palm_csd/data/value_defaults.csv."
+                )
+                raise ValueError(f"Invalid input values found in {name}.")
+            logger.warning(
+                f"In {name}, replacing {below_minimum.sum()} values "
+                + f"smaller than minimum value {default_min_max.minimum} "
+                + f"by default {replacement}."
+            )
+            logger.debug_indent(
+                "If this is unintended, disable replace_invalid_input_values or "
+                + "adjust the minimum in palm_csd/data/value_defaults.csv."
+            )
+            data[below_minimum] = replacement
+        if above_maximum.any():
+            if not self.replace_invalid_input_values:
+                logger.critical(
+                    f"In {name}, {above_maximum.sum()} values are "
+                    + f"larger than maximum value {default_min_max.maximum}.\n"
+                    + "Enable replace_invalid_input_values for automatic replacement.\n"
+                    + "Alternatively, adjust the maximum defined in "
+                    + "palm_csd/data/value_defaults.csv."
+                )
+                raise ValueError(f"Invalid input values found in {name}.")
+            logger.warning(
+                f"In {name}, replacing {above_maximum.sum()} values "
+                + f"larger than maximum value {default_min_max.maximum} "
+                + f"by default {replacement}."
+            )
+            logger.debug_indent(
+                "If this is unintended, disable replace_invalid_input_values or "
+                + "adjust the maximum in palm_csd/data/value_defaults.csv."
+            )
+            data[above_maximum] = replacement
+
+        # Check for missing values and deal with them.
+        if isinstance(data, ma.MaskedArray):
+            na_values = data.mask
+        else:
+            na_values = data.isna()
+        if na_values.any():
+            if all_or_none_missing and not na_values.all():
+                logger.critical_raise(
+                    f"Found both missing and defined values in {name}.\n"
+                    + f"Missing values in {name} are only allowed if all values are missing.",
+                )
+            if initialize_default:
+                if default_min_max.default is None:
+                    logger.critical_raise(
+                        f"No default value defined for {name} to replace missing values.\n"
+                        + "Set a default in palm_csd/data/value_defaults.csv.",
+                    )
+                logger.debug(
+                    f"In column {name}, replacing {na_values.sum()} "
+                    + f"missing values by default {default_min_max.default}."
+                )
+                data[na_values] = default_min_max.default
+
+        return data
+
+    def _select_check_vector_data(
+        self,
+        name: str,
+        column_types: List[str],
+        shape_input: Optional[Dict[Path, gpd.GeoDataFrame]] = None,
+        all_or_none_missing_list: Optional[List[bool]] = None,
+        initialize_default_list: Optional[List[bool]] = None,
+        keep_shape_without_data: bool = False,
+        mod_func_before: Optional[Callable[..., gpd.GeoDataFrame]] = None,
+        mod_func_after: Optional[Callable[..., gpd.GeoDataFrame]] = None,
+        **kwargs,
+    ) -> Optional[gpd.GeoDataFrame]:
+        """Process read-in vector data: Select columns, check values, and apply modifications.
+
+        Use the supplied shape_input or the input_polygons from the domain. For each input shape,
+        use only the columns of interest. If keep_shape_without_data is True, shapes (rows) are kept
+        even if all other columns do not have a defined value (e.g. trees are defined by the mere
+        presence of a point element, even if other data in the column is missing). If False, shapes
+        are dropped if all other columns do not have a defined value.
+
+        Minimum and maximum values are checked with the values from defaults. If
+        replace_invalid_input_values is True, out of range values are replaced by the default value.
+        If False, an error is raised. If initialize_default is True, missing values are replaced by
+        the default value.
+
+        Before or after checking the values, a modification function can be applied to the
+        GeoDataFrame.
+
+        Args:
+            name: Variable name.
+            column_types: List of ColumnVectorData enum values to read. These are used to
+              determine the columns to read from the input GeoDataFrame.
+            shape_input: List of input polygons to read. If None, the polygons from the domain's
+              input_config are used. Defaults to None.
+            all_or_none_missing_list: List with elements if true, raise an error if both missing and
+              defined values are found. Defaults to False for each column type.
+            initialize_default_list: List with elements if true, replace masked values by the
+              default. Defaults to False for each column type.
+            keep_shape_without_data: If True, keep shapes (rows) in the input, even if all other
+              columns do not have a defined value. Defaults to False.
+            mod_func_before: Function to modify the data before checking. Defaults to None.
+            mod_func_after: Function to modify the data before checking. Defaults to None.
+            **kwargs: Additional keyword arguments for mod_func_before and mod_func_after.
+
+        Raises:
+            ValueError: geo_converter not set.
+            ValueError: Read data not within range and replace_invalid_input_values is False.
+            ValueError: No default value defined when replacement is necessary.
+
+        Returns:
+            Read and modified 2d raster data.
+        """
+        # If shape_input not explicitely set, use the domain's input polygons.
+        if shape_input is None:
+            if self.input_surface_polygons is None:
+                return None
+            shape_input = self.input_surface_polygons
+
+        # Generate defaults when None is given.
+        if all_or_none_missing_list is None:
+            all_or_none_missing_list = [False] * len(column_types)
+        if initialize_default_list is None:
+            initialize_default_list = [False] * len(column_types)
+
+        # Process the input polygons. Keep only columns of interest and drop NaN rows. Concatenate
+        # to one GeoDataFrame.
+        inputs = []
+        for input_path, input_polygon in shape_input.items():
+            # Columns to get from the input polygon that are present in the input polygon, and
+            # columns including coordinates and geometry.
+            existing_columns = [col for col in column_types if col in input_polygon.columns]
+            columns_coordinates = [
+                col
+                for col in [ColumnGeneral.x_index, ColumnGeneral.y_index, ColumnGeneral.geometry]
+                if col in input_polygon.columns
+            ]
+            columns_to_keep = existing_columns + columns_coordinates
+
+            # If keep_shape_without_data, keep shaped even when only coordinates are present.
+            # Otherwise, at least one of the data columns must be present.
+            if keep_shape_without_data:
+                filtered_polygon = input_polygon.dropna(subset=columns_to_keep, how="all")
+            else:
+                filtered_polygon = input_polygon.dropna(subset=existing_columns, how="all")
+            if not filtered_polygon.empty:
+                self.input_config.add_used_file(input_path)
+                inputs.append(filtered_polygon[columns_to_keep])
+        if not inputs:
+            return None
+        input = pd.concat(inputs, ignore_index=True)
+
+        if not isinstance(input, gpd.GeoDataFrame):
+            raise ValueError(f"Input {name} is not a GeoDataFrame.")
+
+        # Apply modification function if supplied.
+        if mod_func_before is not None:
+            input = mod_func_before(input, **kwargs)
+
+        # Check remaining columns.
+        for column_index in range(len(column_types)):
+            column_type = column_types[column_index]
+
+            # Do not process "name" columns.
+            if column_type.endswith("name"):
+                if column_type not in input.columns:
+                    # Assign missing values to string column.
+                    input[column_type] = pd.Series(dtype=pd.StringDtype())
+                continue
+
+            # Check column. If it is not present, generate a new column with NaN values for the
+            # check function.
+            input[column_type] = self._validate_and_process_values(
+                column_type,
+                input.get(column_type, default=pd.Series([np.nan] * len(input))),
+                all_or_none_missing_list[column_index],
+                initialize_default_list[column_index],
+            )
+
+        # Apply modification function if supplied.
+        if mod_func_after is not None:
+            input = mod_func_after(input, **kwargs)
+
+        return input
+
+    def _read_check_raster_data(
+        self,
+        name: str,
         all_or_none_missing: bool = False,
         initialize_default: bool = False,
         resampling_downscaling: riowp.Resampling = riowp.Resampling.nearest,
@@ -1273,7 +1759,8 @@ class CSDDomain:
         compatibility_resampling_downscaling: Optional[riowp.Resampling] = None,
         compatibility_resampling_upscaling: Optional[riowp.Resampling] = None,
         warning_point_data: bool = False,
-        mod_func: Optional[Callable[..., ma.MaskedArray]] = None,
+        mod_func_before: Optional[Callable[..., ma.MaskedArray]] = None,
+        mod_func_after: Optional[Callable[..., ma.MaskedArray]] = None,
         **kwargs,
     ) -> ma.MaskedArray:
         """Read 2d raster data, and apply geographic transformation and data modification.
@@ -1291,8 +1778,6 @@ class CSDDomain:
 
         Args:
             name: Variable name.
-            file: Input file. Defaults to None.
-            default_min_max: Default, minimum and maximum values. Defaults to None.
             all_or_none_missing: If true, raise an error if both missing and defined values are
               found. Defaults to False.
             initialize_default: If true, replace masked values by the default. Defaults to False.
@@ -1304,8 +1789,9 @@ class CSDDomain:
             compatibility_resampling_upscaling: Masked values of this resampling method should be
               applied to the output when upscaling. Defaults to None.
             warning_point_data: Warn if single point data is reprojected. Defaults to False.
-            mod_func: Function to modify the data. Defaults to None.
-            **kwargs: Additional keyword arguments for mod_func.
+            mod_func_before: Function to modify the data before checking. Defaults to None.
+            mod_func_after: Function to modify the data after checking. Defaults to None.
+            **kwargs: Additional keyword arguments for mod_func_before and mod_func_after.
 
         Raises:
             ValueError: Non netCDF file and geo_converter not set.
@@ -1315,11 +1801,13 @@ class CSDDomain:
         Returns:
             Read and modified 2d raster data.
         """
-        if file is None:
-            file = getattr(self.input_config, f"file_{name}", None)
-
-        if default_min_max is None:
-            default_min_max = defaults[name]
+        # Get file from input_config and mark it as read.
+        file_list = self.input_config.files.get(name)
+        if file_list is not None:
+            file = file_list[0]
+            self.input_config.add_used_file(file)
+        else:
+            file = None
 
         # If input_file is a netcdf file, read it directly; this handles also None.
         if file is None or file.suffix == ".nc":
@@ -1329,7 +1817,7 @@ class CSDDomain:
         else:
             if self.geo_converter is None:
                 raise ValueError("geo_converter not set.")
-            raster_values = self.geo_converter.read_to_dst(
+            raster_values = self.geo_converter.read_raster_to_dst(
                 file,
                 resampling_downscaling=resampling_downscaling,
                 resampling_upscaling=resampling_upscaling,
@@ -1340,8 +1828,8 @@ class CSDDomain:
             )
 
             # Apply modification function if supplied.
-            if mod_func is not None:
-                raster_values = mod_func(raster_values, **kwargs)
+            if mod_func_before is not None:
+                raster_values = mod_func_before(raster_values, **kwargs)
             else:
                 raster_values = raster_values[0, :, :]
 
@@ -1349,447 +1837,273 @@ class CSDDomain:
             raster_values = ma.MaskedArray(np.flipud(raster_values))
 
         # Check values.
-        below_minimum = raster_values < default_min_max.minimum
-        above_maximum = raster_values > default_min_max.maximum
-        replacement = default_min_max.default if default_min_max.default is not None else ma.masked
-        if default_min_max.minimum is not None and ma.any(below_minimum):
-            if not self.replace_invalid_input_values:
-                logger.critical(
-                    f"In {name}, {ma.sum(below_minimum)} values are smaller than "
-                    + f"minimum value {default_min_max.minimum}.\n"
-                    + "Enable replace_invalid_input_values for automatic replacement.\n"
-                    + "Alternatively, adjust the minimum defined in "
-                    + "palm_csd/data/value_defaults.csv."
-                )
-                raise ValueError("Invalid input values found in {name}.")
-            logger.warning(
-                f"In {name}, replacing {ma.sum(below_minimum)} values "
-                + f"smaller than minimum value {default_min_max.minimum} "
-                + f"by default {replacement}."
-            )
-            logger.debug_indent(
-                "If this is unintended, disable replace_invalid_input_values or "
-                + "adjust the minimum in palm_csd/data/value_defaults.csv."
-            )
-            raster_values = ma.where(below_minimum, replacement, raster_values)
-        if default_min_max.maximum is not None and ma.any(above_maximum):
-            if not self.replace_invalid_input_values:
-                logger.critical(
-                    f"In {name}, {ma.sum(above_maximum)} values are larger than "
-                    + f"maximum value {default_min_max.maximum}.\n"
-                    + "Enable replace_invalid_input_values for automatic replacement.\n"
-                    + "Alternatively, adjust the maximum defined in "
-                    + "palm_csd/data/value_defaults.csv."
-                )
-                raise ValueError("Invalid input values found in {name}.")
-            logger.warning(
-                f"In {name}, replacing {ma.sum(above_maximum)} values "
-                + f"larger than maximum value {default_min_max.maximum} "
-                + f"by default {replacement}."
-            )
-            logger.debug_indent(
-                "If this is unintended, disable replace_invalid_input_values or "
-                + "adjust the maximum in palm_csd/data/value_defaults.csv."
-            )
-            raster_values = ma.where(above_maximum, replacement, raster_values)
+        raster_values = self._validate_and_process_values(
+            name,
+            raster_values,
+            all_or_none_missing,
+            initialize_default,
+        )
 
-        if raster_values.mask.any():
-            if all_or_none_missing and not raster_values.mask.all():
-                logger.critical_raise(
-                    "Found both missing and defined values in {name}.\n"
-                    + f"Missing values in {name} are only allowed if all values are missing.",
-                )
-            if initialize_default:
-                if default_min_max.default is None:
-                    logger.critical_raise(
-                        f"No default value defined for {name} to replace missing values.\n"
-                        + "Set a default in palm_csd/data/value_defaults.csv.",
-                    )
-                logger.debug(
-                    f"In {name}, replacing {ma.sum(ma.getmaskarray(raster_values))} missing values "
-                    + f"by default {default_min_max.default}."
-                )
-                raster_values = ma.where(raster_values.mask, default_min_max.default, raster_values)
+        if mod_func_after is not None:
+            raster_values = mod_func_after(raster_values, **kwargs)
 
         return raster_values
 
-    def _read_named_categorical(
+    def _rasterize_columns(
         self,
-        all_or_none_missing: bool = False,
-        initialize_default: bool = False,
-        warning_point_data: bool = False,
-        mod_func: Optional[Callable[..., ma.MaskedArray]] = None,
-        **kwargs,
-    ) -> ma.MaskedArray:
-        """Read categorical raster data.
+        name: str,
+        input: gpd.GeoDataFrame,
+        column_types: List[str],
+    ) -> List[ma.MaskedArray]:
+        if self.geo_converter is None:
+            raise ValueError("geo_converter not set.")
 
-        The resampling methods are meant for categorical data (e.g. building type). For both,
-        downscaling and upscaling, nearest neighbour resampling is used.
+        rasterized: List[ma.MaskedArray] = []
+        dtype_rasterization: npt.DTypeLike
+        for column_type in column_types:
+            if input[column_type].dtype == pd.Int32Dtype():
+                dtype_rasterization = np.int32
+            elif input[column_type].dtype == pd.Int8Dtype():
+                dtype_rasterization = np.int8
+            elif input[column_type].dtype == np.float64:
+                dtype_rasterization = np.float64
+            else:
+                raise ValueError(
+                    f"Unexpected data type {input[column_type].dtype} for column {column_type}."
+                )
+
+            rasterized.append(
+                ma.MaskedArray(
+                    np.flipud(
+                        self.geo_converter.rasterize(
+                            input, column_type, dtype=dtype_rasterization, name=name
+                        )
+                    )
+                )
+            )
+        return rasterized
+
+    def _select_check_rasterize_vector_data(
+        self,
+        name: str,
+        column_types: List[str],
+        initialize_default_list: Optional[List[bool]] = None,
+        mod_func_before: Optional[Callable[..., gpd.GeoDataFrame]] = None,
+        mod_func_after: Optional[Callable[..., gpd.GeoDataFrame]] = None,
+        **kwargs,
+    ) -> Optional[List[ma.MaskedArray]]:
+        """Process read-in vector data and rasterize it.
 
         Args:
-            all_or_none_missing: If true, raise an error if both missing and defined values are
-              found. Defaults to False.
-            initialize_default: If true, replace masked values by the default. Defaults to False.
-            warning_point_data: Warn if single point data is reprojected. Defaults to False.
-            mod_func: Function to modify the data. Defaults to None.
-            **kwargs: Additional keyword arguments for mod_func.
+            name: Name of the variable to read.
+            column_types: List of ColumnVectorData enum values to read. These are used to
+              determine the columns to read from the input GeoDataFrame.
+            initialize_default_list: List of booleans, if true, replace masked values by the
+              default. Defaults to None.
+            mod_func_before: Function to modify the data before checking. Defaults to None.
+            mod_func_after: Function to modify the data after checking. Defaults to None.
+            **kwargs: Additional keyword arguments for mod_func_before and mod_func_after.
 
         Returns:
-            Read and modified 2d raster data.
+            List of rasterized columns as masked arrays, or None if no data is found.
         """
-        variable = _calling_read_variable_name()
-
-        return self.read_transform_2d(
-            name=variable,
-            resampling_downscaling=self.downscaling_method["categorical"],
-            resampling_upscaling=self.upscaling_method["categorical"],
-            compatibility_resampling_downscaling=riowp.Resampling.nearest,
-            compatibility_resampling_upscaling=riowp.Resampling.nearest,
-            all_or_none_missing=all_or_none_missing,
-            initialize_default=initialize_default,
-            warning_point_data=warning_point_data,
-            mod_func=mod_func,
+        vector = self._select_check_vector_data(
+            name=name,
+            column_types=column_types,
+            initialize_default_list=initialize_default_list,
+            mod_func_before=mod_func_before,
+            mod_func_after=mod_func_after,
             **kwargs,
         )
+        if vector is None:
+            return None
+        return self._rasterize_columns(name, vector, column_types)
 
-    def _read_named_continuous(
-        self,
-        all_or_none_missing: bool = False,
-        initialize_default: bool = False,
-        warning_point_data: bool = False,
-        mod_func: Optional[Callable[..., ma.MaskedArray]] = None,
-        **kwargs,
-    ) -> ma.MaskedArray:
-        """Read continuous raster data.
-
-        The resampling methods are meant for (ususally) continuous data (e.g. terrain height). For
-        downscaling, the user defined resampling method is used; for upscaling, the average is used.
+    @staticmethod
+    def _create_ids(df: gpd.GeoDataFrame, id_column: str) -> gpd.GeoDataFrame:
+        """Create unique IDs.
 
         Args:
-            all_or_none_missing: If true, raise an error if both missing and defined values are
-              found. Defaults to False.
-            initialize_default: If true, replace masked values by the default. Defaults to False.
-            warning_point_data: Warn if single point data is reprojected. Defaults to False.
-            mod_func: Function to modify the data. Defaults to None.
-            **kwargs: Additional keyword arguments for mod_func.
+            df: Vector data frame.
+            id_column: Column name for IDs.
 
         Returns:
-            Read and modified 2d raster data.
+            Data frame with unique IDs.
         """
-        variable = _calling_read_variable_name()
+        max_id = df[id_column].max(skipna=True)
+        if pd.isna(max_id):
+            max_id = 0
+        else:
+            max_id = int(max_id)
 
-        return self.read_transform_2d(
-            name=variable,
-            resampling_downscaling=self.downscaling_method["continuous"],
-            resampling_upscaling=self.upscaling_method["continuous"],
-            compatibility_resampling_downscaling=riowp.Resampling.nearest,
-            compatibility_resampling_upscaling=riowp.Resampling.nearest,
-            all_or_none_missing=all_or_none_missing,
-            initialize_default=initialize_default,
-            warning_point_data=warning_point_data,
-            mod_func=mod_func,
-            **kwargs,
-        )
+        nan_indices = df[id_column].isna()
+        df.loc[nan_indices, id_column] = np.arange(max_id + 1, max_id + 1 + nan_indices.sum())
+        return df
 
-    def _read_named_discrete(
-        self,
-        all_or_none_missing: bool = False,
-        initialize_default: bool = False,
-        warning_point_data: bool = True,
-        mod_func: Optional[Callable[..., ma.MaskedArray]] = None,
-        **kwargs,
-    ) -> ma.MaskedArray:
-        """Read discrete raster data.
-
-        The resampling methods are meant for (ususally) discrete data (e.g. single tree data). For
-        downscaling, the user defined resampling method is used; for upscaling, the average is used.
+    def read(self, input_data: str, **kwargs) -> ma.MaskedArray:
+        """Read input data, process it and return it as a masked array.
 
         Args:
-            all_or_none_missing: If true, raise an error if both missing and defined values are
-              found. Defaults to False.
-            initialize_default: If true, replace masked values by the default. Defaults to False.
-            warning_point_data: Warn if single point data is reprojected. Defaults to False.
-            mod_func: Function to modify the data. Defaults to None.
-            **kwargs: Additional keyword arguments for mod_func.
+            input_data: The input data to read.
+            **kwargs: Additional arguments for mod_func.
+
+        Raises:
+            ValueError: If the input data is not a member of InputData.
+            ValueError: If the input data is not supported.
 
         Returns:
-            Read and modified 2d raster data.
+            A masked array containing the read data.
         """
-        variable = _calling_read_variable_name()
+        if input_data == InputData.tree_type_name:
+            raise ValueError(f"{input_data} can only be read in tree vector data.")
 
-        return self.read_transform_2d(
-            name=variable,
-            resampling_downscaling=self.downscaling_method["discrete"],
-            resampling_upscaling=self.upscaling_method["discrete"],
-            compatibility_resampling_downscaling=riowp.Resampling.nearest,
-            compatibility_resampling_upscaling=riowp.Resampling.nearest,
-            all_or_none_missing=all_or_none_missing,
-            initialize_default=initialize_default,
-            warning_point_data=warning_point_data,
-            mod_func=mod_func,
-            **kwargs,
+        if input_data == InputData.lcz:
+
+            def _lcz_raster_to_index(raster: ma.MaskedArray, lcz_types: LCZTypes) -> ma.MaskedArray:
+                """If raster has 3 bands, assume it is a rgb raster and convert it to lcz index."""
+                if len(raster.shape) == 3 and raster.shape[0] >= 3:
+                    # assume rgb values that need to be converted to lcz index
+                    return lcz_types.lcz_rgb_to_index(raster)
+                return raster[0, :, :]
+
+            mod_func_raster_before = _lcz_raster_to_index
+        else:
+            mod_func_raster_before = None
+
+        # input_data could refer to a specific layer or level, e.g. heat_capacity_wall_gfl_3. Get
+        # general reading properties from parent input data, e.g. heat_capacity.
+        parent_input_data = get_parent_input_data(input_data)
+        all_or_none_missing = INPUT_DATA_INFO[parent_input_data].all_or_none_missing
+        interpolation_type = INPUT_DATA_INFO[parent_input_data].type
+        initialize_default = INPUT_DATA_INFO[parent_input_data].initialize_default
+        warning_point_data = INPUT_DATA_INFO[parent_input_data].warning_point_data
+
+        vector_data = self._select_check_rasterize_vector_data(
+            name=input_data,
+            column_types=[input_data],
+            all_or_none_missing_list=[all_or_none_missing],
+            initialize_default_list=[initialize_default],
+        )
+        if vector_data is not None:
+            return vector_data[0]
+        else:
+            return self._read_check_raster_data(
+                name=input_data,
+                resampling_downscaling=self.downscaling_method[interpolation_type],
+                resampling_upscaling=self.upscaling_method[interpolation_type],
+                compatibility_resampling_downscaling=riowp.Resampling.nearest,
+                compatibility_resampling_upscaling=riowp.Resampling.nearest,
+                all_or_none_missing=all_or_none_missing,
+                initialize_default=initialize_default,
+                warning_point_data=warning_point_data,
+                mod_func_before=mod_func_raster_before,
+                **kwargs,
+            )
+
+    def read_buildings(self) -> Optional[List[ma.MaskedArray]]:
+        """Read building shape data.
+
+        Returns:
+            Building data.
+        """
+        return self._select_check_rasterize_vector_data(
+            name="buildings",
+            column_types=[
+                InputData.buildings_2d,
+                InputData.building_id,
+                InputData.building_type,
+            ],
+            initialize_default_list=[False, False, True],
+            mod_func_after=self._create_ids,
+            id_column=InputData.building_id,
         )
 
-    def _read_named_discontinuous(
-        self,
-        all_or_none_missing: bool = False,
-        initialize_default: bool = False,
-        warning_point_data: bool = False,
-        mod_func: Optional[Callable[..., ma.MaskedArray]] = None,
-        **kwargs,
-    ) -> ma.MaskedArray:
-        """Read discontinuous raster data.
-
-        The resampling methods are meant for (ususally) discontinous data (e.g. building height).
-        For downscaling, the user defined resampling method is used; for upscaling, the average is
-        used.
-
-        Args:
-            all_or_none_missing: If true, raise an error if both missing and defined values are
-              found. Defaults to False.
-            initialize_default: If true, replace masked values by the default. Defaults to False.
-            warning_point_data: Warn if single point data is reprojected. Defaults to False.
-            mod_func: Function to modify the data. Defaults to None.
-            **kwargs: Additional keyword arguments for mod_func.
+    def read_bridges(self) -> Optional[List[ma.MaskedArray]]:
+        """Read bridge shape data.
 
         Returns:
-            Read and modified 2d raster data.
+            Bridge data.
         """
-        variable = _calling_read_variable_name()
-
-        return self.read_transform_2d(
-            name=variable,
-            resampling_downscaling=self.downscaling_method["discontinuous"],
-            resampling_upscaling=self.upscaling_method["discontinuous"],
-            compatibility_resampling_downscaling=riowp.Resampling.nearest,
-            compatibility_resampling_upscaling=riowp.Resampling.nearest,
-            all_or_none_missing=all_or_none_missing,
-            initialize_default=initialize_default,
-            warning_point_data=warning_point_data,
-            mod_func=mod_func,
-            **kwargs,
+        return self._select_check_rasterize_vector_data(
+            name="bridges",
+            column_types=[
+                InputData.bridges_2d,
+                InputData.bridges_id,
+            ],
+            initialize_default_list=[False, False],
+            mod_func_after=self._create_ids,
+            id_column=InputData.bridges_id,
         )
 
-    def read_buildings_2d(self) -> ma.MaskedArray:
-        """Read building height.
+    def read_trees(self) -> Optional[gpd.GeoDataFrame]:
+        """Read tree shape data.
 
         Returns:
-            Building height raster data.
+            Tree data.
         """
-        return self._read_named_discontinuous()
+        shape_trees = self._read_vector_data("trees")
+        if shape_trees is None:
+            return None
 
-    def read_building_id(self) -> ma.MaskedArray:
-        """Read building ID.
+        def type_name_to_type(points: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+            """Convert tree type name to tree type.
 
-        Returns:
-            Building ID raster data.
-        """
-        return self._read_named_categorical()
+            Args:
+                points: Tree data.
 
-    def read_building_type(self) -> ma.MaskedArray:
-        """Read building type.
+            Returns:
+                Tree data with tree type.
+            """
+            if InputData.tree_type_name not in points.columns:
+                return points
 
-        Default values are applied if necessary.
+            type_names = points[InputData.tree_type_name].values
+            types = []
 
-        Returns:
-            Building type raster data.
-        """
-        return self._read_named_categorical(initialize_default=True)
+            for type_name in type_names:
+                if pd.isna(type_name) or type_name == "":
+                    types.append(0)
+                    continue
+                type_match = [
+                    index
+                    for index, tree in enumerate(tree_defaults)
+                    if type_name.startswith(tree.species)
+                ]
+                if len(type_match) == 1:
+                    types.append(type_match[0])
+                elif len(type_match) > 1:
+                    logger.debug(
+                        f"Multiple tree types found for {type_name}.\n" + "Using the first one."
+                    )
+                    types.append(type_match[0])
+                elif len(type_match) == 0:
+                    logger.debug(f"No tree type found for {type_name}.\n" + "Using the default.")
+                    types.append(0)
 
-    def read_bridges_2d(self) -> ma.MaskedArray:
-        """Read bridge height.
+            points[InputData.tree_type] = np.where(
+                points[InputData.tree_type].isna(), types, points[InputData.tree_type]
+            )
+            return points
 
-        Returns:
-            Bridge height raster data.
-        """
-        return self._read_named_discontinuous()
-
-    def read_bridges_id(self) -> ma.MaskedArray:
-        """Read bridge ID.
-
-        Returns:
-            Bridge ID raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_lai(self) -> ma.MaskedArray:
-        """Read Leaf Area Index.
-
-        Returns:
-            Leaf Area Index raster data.
-        """
-        return self._read_named_discontinuous()
-
-    def read_tree_crown_diameter(self) -> ma.MaskedArray:
-        """Read tree crown diameter.
-
-        Returns:
-            Tree crown diameter raster data.
-        """
-        return self._read_named_discrete()
-
-    def read_tree_height(self) -> ma.MaskedArray:
-        """Read tree height.
-
-        Returns:
-            Tree height raster data.
-        """
-        return self._read_named_discrete()
-
-    def read_tree_trunk_diameter(self) -> ma.MaskedArray:
-        """Read tree trunk diameter.
-
-        Returns:
-            Tree trunk diameter raster data.
-        """
-        return self._read_named_discrete()
-
-    def read_tree_type(self) -> ma.MaskedArray:
-        """Read tree type.
-
-        Returns:
-            Tree type raster data.
-        """
-        return self._read_named_categorical(warning_point_data=True)
-
-    def read_pavement_type(self) -> ma.MaskedArray:
-        """Read pavement type.
-
-        Returns:
-            Pavement type raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_patch_height(self) -> ma.MaskedArray:
-        """Read vegetation patch height.
-
-        Returns:
-            Vegetation patch height raster data.
-        """
-        return self._read_named_discontinuous()
-
-    def read_patch_type(self) -> ma.MaskedArray:
-        """Read vegetation patch type.
-
-        Returns:
-            Vegetation patch type raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_street_crossings(self) -> ma.MaskedArray:
-        """Read street crossing.
-
-        Returns:
-            Street crossing raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_street_type(self) -> ma.MaskedArray:
-        """Read street type.
-
-        Returns:
-            Street type raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_soil_type(self) -> ma.MaskedArray:
-        """Read soil type.
-
-        Returns:
-            Soil type raster data.
-        """
-        return self._read_named_categorical(initialize_default=True)
-
-    def read_water_temperature(self) -> ma.MaskedArray:
-        """Read water temperature.
-
-        Returns:
-            Water temperature raster data.
-        """
-        return self._read_named_continuous()
-
-    def read_water_type(self) -> ma.MaskedArray:
-        """Read water type.
-
-        Returns:
-            Water type raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_vegetation_height(self) -> ma.MaskedArray:
-        """Read vegetation height.
-
-        Returns:
-            Vegetation height raster data.
-        """
-        return self._read_named_discontinuous()
-
-    def read_vegetation_on_roofs(self) -> ma.MaskedArray:
-        """Read vegetation on roof.
-
-        Returns:
-            Vegetation on roof raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_vegetation_type(self) -> ma.MaskedArray:
-        """Read vegetation type.
-
-        Returns:
-            Vegetation type raster data.
-        """
-        return self._read_named_categorical()
-
-    def read_zt(self) -> ma.MaskedArray:
-        """Read terrain height.
-
-        Returns:
-            Terrain height raster data.
-        """
-        return self._read_named_continuous(
-            all_or_none_missing=True,
-            initialize_default=True,
+        return self._select_check_vector_data(
+            name="trees",
+            shape_input=shape_trees,
+            column_types=[
+                InputData.tree_crown_diameter,
+                InputData.tree_height,
+                InputData.tree_lai,
+                InputData.tree_shape,
+                InputData.tree_trunk_diameter,
+                InputData.tree_type,
+                InputData.tree_type_name,
+            ],
+            keep_shape_without_data=True,
+            mod_func_after=type_name_to_type,
         )
-
-    def read_lcz(self, lcz_types: LCZTypes) -> ma.MaskedArray:
-        """Read Local Climate Zones data.
-
-        If the file has 3 bands, assume it is a rgb raster and convert it to lcz index.
-
-        Args:
-            lcz_types: LCZ types.
-
-        Returns:
-            LCZ index raster data.
-        """
-
-        def lcz_raster_to_index(raster: ma.MaskedArray, lcz_types: LCZTypes) -> ma.MaskedArray:
-            """If `raster` has 3 bands, assume it is a rgb raster and convert it to lcz index."""
-            if len(raster.shape) == 3 and raster.shape[0] >= 3:
-                # assume rgb values that need to be converted to lcz index
-                return lcz_types.lcz_rgb_to_index(raster)
-
-            return raster
-
-        return self._read_named_categorical(
-            mod_func=lcz_raster_to_index,
-            lcz_types=lcz_types,
-        )
-
-
-def _calling_read_variable_name() -> str:
-    """Get the name of to read variable from the calling function.
-
-    Assumes the calling function is named read_<variable_name>.
-
-    Returns:
-        Variable name.
-    """
-    return inspect.stack()[2].function.replace("read_", "")
 
 
 def _enum_to_str_array(enum: Type[Enum]) -> npt.NDArray[np.str_]:
-    """Convert an enumeration to an array of lowercase string values.
+    """Convert an enumeration to an array of string values.
 
     Args:
         enum: The enumeration type to convert.
@@ -1797,7 +2111,7 @@ def _enum_to_str_array(enum: Type[Enum]) -> npt.NDArray[np.str_]:
     Returns:
         Array containing the lowercase string values of the enumeration.
     """
-    return np.array([element.name.lower() for element in enum])
+    return np.array([element.name for element in enum])
 
 
 def _find_variable_name(nc_data: Dataset, ndim: int) -> Variable:

@@ -4352,11 +4352,11 @@
 
 !
 !--       Evaluation of statistics.
-          DO  k = nzb+1, nzt
-             SELECT CASE ( sk_num )
+          SELECT CASE ( sk_num )
 
-                CASE ( 1 )
-                   !$ACC ATOMIC
+             CASE ( 1 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wspts_ws_l(k,tn) = sums_wspts_ws_l(k,tn) +                                 &
                                            ( flux_t(k)                                             &
                                                / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )       &
@@ -4365,8 +4365,11 @@
                                                / ( ABS(w(k,j,i)) + 1.0E-20_wp              )       &
                                                *   ABS(w(k,j,i)  - hom(k,1,3,0)            )       &
                                            ) * weight_substep(intermediate_timestep_count)
-                CASE ( 2 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 2 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wssas_ws_l(k,tn) = sums_wssas_ws_l(k,tn) +                                 &
                                            ( flux_t(k)                                             &
                                                / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )       &
@@ -4375,8 +4378,11 @@
                                                / ( ABS(w(k,j,i)) + 1.0E-20_wp              )       &
                                                *   ABS(w(k,j,i)  - hom(k,1,3,0)            )       &
                                            ) * weight_substep(intermediate_timestep_count)
-                CASE ( 3 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 3 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsqs_ws_l(k,tn)  = sums_wsqs_ws_l(k,tn) +                                  &
                                            ( flux_t(k)                                             &
                                                / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )       &
@@ -4385,8 +4391,11 @@
                                                / ( ABS(w(k,j,i)) + 1.0E-20_wp              )       &
                                                *   ABS(w(k,j,i)  - hom(k,1,3,0)            )       &
                                            ) * weight_substep(intermediate_timestep_count)
-                CASE ( 4 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 4 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsqcs_ws_l(k,tn)  = sums_wsqcs_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4395,8 +4404,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i)  - hom(k,1,3,0)            )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 5 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 5 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsqrs_ws_l(k,tn)  = sums_wsqrs_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4405,8 +4417,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i)  - hom(k,1,3,0)            )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 6 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 6 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsncs_ws_l(k,tn)  = sums_wsncs_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4415,8 +4430,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i)  - hom(k,1,3,0)            )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 7 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 7 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsnrs_ws_l(k,tn)  = sums_wsnrs_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4425,8 +4443,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i)  - hom(k,1,3,0)            )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 8 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 8 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsss_ws_l(k,tn)  = sums_wsss_ws_l(k,tn) +                                  &
                                            ( flux_t(k)                                             &
                                                / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )       &
@@ -4435,8 +4456,11 @@
                                                / ( ABS(w(k,j,i)) + 1.0E-20_wp              )       &
                                                *   ABS(w(k,j,i) - hom(k,1,3,0)             )       &
                                            ) * weight_substep(intermediate_timestep_count)
-                CASE ( 9 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 9 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_salsa_ws_l(k,tn)  = sums_salsa_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4445,8 +4469,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i)  - hom(k,1,3,0)            )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 10 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 10 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsnis_ws_l(k,tn)  = sums_wsnis_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4455,8 +4482,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i) - hom(k,1,3,0)             )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 11 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 11 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsqis_ws_l(k,tn)  = sums_wsqis_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4465,8 +4495,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i) - hom(k,1,3,0)             )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 12 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 12 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsngs_ws_l(k,tn)  = sums_wsngs_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4475,8 +4508,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i) - hom(k,1,3,0)             )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 13 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 13 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsqgs_ws_l(k,tn)  = sums_wsqgs_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4486,8 +4522,11 @@
                                                 *   ABS(w(k,j,i) - hom(k,1,3,0)             )      &
                                             ) * weight_substep(intermediate_timestep_count)
 
-                CASE ( 14 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 14 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsnss_ws_l(k,tn)  = sums_wsnss_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4496,8 +4535,11 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i) - hom(k,1,3,0)             )      &
                                             ) * weight_substep(intermediate_timestep_count)
-                CASE ( 15 )
-                   !$ACC ATOMIC
+                ENDDO
+
+             CASE ( 15 )
+                DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_wsqss_ws_l(k,tn)  = sums_wsqss_ws_l(k,tn) +                                &
                                             ( flux_t(k)                                            &
                                                 / ( w(k,j,i) + SIGN( 1.0E-20_wp, w(k,j,i) ) )      &
@@ -4506,11 +4548,10 @@
                                                 / ( ABS(w(k,j,i)) + 1.0E-20_wp              )      &
                                                 *   ABS(w(k,j,i) - hom(k,1,3,0)             )      &
                                             ) * weight_substep(intermediate_timestep_count)
+                ENDDO
 
+          END SELECT
 
-             END SELECT
-
-          ENDDO
        ENDDO
     ENDDO
 
@@ -5784,6 +5825,7 @@
 !
 !--          Statistical Evaluation of u'u'. The factor has to be applied for right evaluation when
 !--          gallilei_trans = .T. .
+             !$ACC ATOMIC UPDATE
              sums_us2_ws_l(k,tn) = sums_us2_ws_l(k,tn) +                                           &
                                    ( flux_r(k)                                                     &
                                      * ( u_comp(k) - 2.0_wp * hom(k,1,1,0)                   )     &
@@ -5794,6 +5836,7 @@
                                    ) *   weight_substep(intermediate_timestep_count)
 !
 !--          Statistical Evaluation of w'u'.
+             !$ACC ATOMIC UPDATE
              sums_wsus_ws_l(k,tn) = sums_wsus_ws_l(k,tn) +                                         &
                                     ( flux_t(k)                                                    &
                                       * ( w_comp(k) - 2.0_wp * hom(k,1,3,0)                   )    &
@@ -5836,6 +5879,7 @@
 !
 !--          Statistical Evaluation of u'u'. The factor has to be applied for right evaluation when
 !--          gallilei_trans = .T. .
+             !$ACC ATOMIC UPDATE
              sums_us2_ws_l(k,tn) = sums_us2_ws_l(k,tn) +                                           &
                                    ( flux_r(k)                                                     &
                                      * ( u_comp(k) - 2.0_wp * hom(k,1,1,0)                   )     &
@@ -5846,6 +5890,7 @@
                                    ) *   weight_substep(intermediate_timestep_count)
 !
 !--          Statistical Evaluation of w'u'.
+             !$ACC ATOMIC UPDATE
              sums_wsus_ws_l(k,tn) = sums_wsus_ws_l(k,tn) +                                         &
                                     ( flux_t(k)                                                    &
                                       * ( w_comp(k) - 2.0_wp * hom(k,1,3,0)                   )    &
@@ -7045,6 +7090,7 @@
 #endif
 !
 !--          Statistical Evaluation of w'w'.
+             !$ACC ATOMIC UPDATE
              sums_ws2_ws_l(k,tn)  = sums_ws2_ws_l(k,tn) +                                          &
                                     ( flux_t(k)                                                    &
                                       * ( w_comp(k) - 2.0_wp * hom(k,1,3,0)          )             &

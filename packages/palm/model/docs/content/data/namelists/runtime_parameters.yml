@@ -129,7 +129,9 @@ data_output:
 
         Output can be limited in the vertical direction up to a certain grid point via parameter [nz_do3d](#runtime_parameters--nz_do3d).
 
-        Cross sections extend through the total model domain. In the two horizontal directions all grid points with `0 <= i <= nx` and `0 <= j <= ny` are output. Be aware that in case of cyclic boundary conditions the respective opposite borders of the plots do not exactly match. The location(s) of the cross sections can be defined via parameters [section_xy](#runtime_parameters--section_xy), [section_xy_m](#runtime_parameters--section_xy_m), [section_xz](#runtime_parameters--section_xz), [section_xz_m](#runtime_parameters--section_xz_m), [section_yz](#runtime_parameters--section_yz), and [section_yz_m](#runtime_parameters--section_yz_m). Assigning `section_... =` *-1* causes the output data to be averaged along the direction normal to the respective section.
+        Cross sections extend through the total model domain. In the two horizontal directions all grid points with `0 <= i <= nx` and `0 <= j <= ny` are output. Be aware that in case of cyclic boundary conditions the respective opposite borders of the plots do not exactly match. The location(s) of the cross sections can be defined via parameters [section_xy](#runtime_parameters--section_xy), [section_xy_m](#runtime_parameters--section_xy_m), [section_xz](#runtime_parameters--section_xz), [section_xz_m](#runtime_parameters--section_xz_m), [section_yz](#runtime_parameters--section_yz), and [section_yz_m](#runtime_parameters--section_yz_m).
+
+        Assigning `section_... =` *-1* causes the output data to be averaged along the direction normal to the respective section. In case of `section_xy =` *-1* averaging starts at index `k = 1`, because the bottom section at `k = 0` may contain FillValues. Note that this kind of averaging only gives correct results in case of [topography](#initialization_parameters--topography) = *'flat'*.
 
         **Control of output times:**
 
@@ -198,8 +200,7 @@ data_output_masks:
 
         The parameter [skip_time_domask](#runtime_parameters--skip_time_domask) can be used to shift data output activities for a given time interval.
 
-        By default, up to 300 different masks can be assigned (`max_masks = 300`). If you wish to output more masks, change variable `max_masks` in {{ link_palm_repo_file('modules.f90', 'src/modules.f90') }} to the desired value. If `max_masks` exceeds 999, format descriptors in {{ link_palm_repo_file('check_open.f90', 'src/check_open.f90') }} for filename creation need to be further adapted. This case, please contact the PALM developer team.
-
+        By default, up to 300 different masks can be assigned (`max_masks = 300`). If you wish to output more masks, change variable `max_masks` in {{ link_palm_repo_file('modules.f90', 'src/modules.f90') }} to the desired value. If `max_masks` exceeds *999*, format descriptors in {{ link_palm_repo_file('check_open.f90', 'src/check_open.f90') }} for filename creation need to be further adapted. This case, please contact the PALM developer team.
 
 data_output_pr:
   category: Data Output
@@ -297,6 +298,9 @@ disturbance_amplitude:
       Since the perturbation procedure includes two filter operations, the amplitude assigned by [disturbance_amplitude](#runtime_parameters--disturbance_amplitude) is only an approximate value of the real magnitude of the perturbation.
 
       See parameter [create_disturbances](#runtime_parameters--create_disturbances) for how  random perturbations are imposed to the horizontal velocity field.
+      
+      **Note:** <br>
+      The default amplitude of *0.25* is way too large for simulations using the ocean mode.
 
 
 disturbance_energy_limit:
@@ -669,15 +673,6 @@ dt_run_control_spinup:
       Output after each time step of the spinup phase can be achieved via [dt_run_control_spinup](#runtime_parameters--dt_run_control_spinup) = *0.0*.
 
 
-interpolate_to_grid_center:
-  category: Data Output Settings
-  type: L
-  default: .F.
-  description:
-    short: Flag for interpolation of 2D/3D and maskked output on grid center.
-    long: If interpolate_to_grid_center = .T., all 2D-, 3D-, and masked output of non-centered output variables (*u, v, w, wu, wv, wv, wtheta, wq, ws*) is interpolated onto the center of the Arakawa-C grid, where scalars are defined. The wall-neighbouring grid points are interpolated with zero. Due to the changed grid in x-, y- or z-direction, buildings appear to be smaller in the output than they are in the prognostic equations. Please note, in case of a precursor run where the *yz* output data shall be further processed with the preprocessor tool *palm_cti*, [interpolate_to_grid_center](#runtime_parameters--interpolate_to_grid_center) = *.T.* is not allowed.
-
-
 enable_openacc:
   category: parallelization
   type: L
@@ -699,7 +694,7 @@ end_time:
     long: |
       The time to be simulated is starting from the beginning of the initialization run (t = 0), not starting from the beginning of the respective restart run.
 
-      For coupled atmosphere/ocean runs this parameter must be equal in both parameter files [PARIN](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#PARIN) and [PARIN_O](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#PARIN_O).
+      For coupled atmosphere/ocean runs the parameter value must match in both parameter files [PARIN](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#PARIN) (`_p3d`) and [PARIN_O](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#PARIN_O) (`_p3d_O`).
 
 
 force_print_header:
@@ -721,6 +716,15 @@ homogenize_surface_temperature:
     short: Parameter to switch on the homogenization of surface temperature at the beginning of a run.
     long:  |
       See [initialization parameter homogenize_surface_temperature](#initialization_parameters--homogenize_surface_temperature) for further explanations.
+
+
+interpolate_to_grid_center:
+  category: Data Output Settings
+  type: L
+  default: .F.
+  description:
+    short: Flag for interpolation of 2D/3D and maskked output on grid center.
+    long: If interpolate_to_grid_center = .T., all 2D-, 3D-, and masked output of non-centered output variables (*u, v, w, wu, wv, wv, wtheta, wq, ws*) is interpolated onto the center of the Arakawa-C grid, where scalars are defined. The wall-neighbouring grid points are interpolated with zero. Due to the changed grid in x-, y- or z-direction, buildings appear to be smaller in the output than they are in the prognostic equations. Please note, in case of a precursor run where the *yz* output data shall be further processed with the preprocessor tool *palm_cti*, [interpolate_to_grid_center](#runtime_parameters--interpolate_to_grid_center) = *.T.* is not allowed.
 
 
 mask_k_over_surface:
@@ -1235,7 +1239,7 @@ section_xy:
     long: |
       If output of horizontal cross sections is selected (see [data_output](#runtime_parameters--data_output)), [section_xy](#runtime_parameters--section_xy) can be used to define the position(s) of the cross section(s). Up to 100 positions can be selected by assigning [section_xy](#runtime_parameters--section_xy) the corresponding vertical grid level index/indices `k` of the requested cross section(s). The exact location (height level) of the cross section depends on the variable for which the output is requested: `zu(k)` for scalars and horizontal velocities, `zw(k)` for the vertical velocity. Information about the exact location of the cross section in m is contained in the netCDF output file. Parameter [section_xy_m](#runtime_parameters--section_xy_m) can be used instead or in addition to [section_xy](#initialization_runtime--section_xy), to give locations in cartesian coordinates (m) instead of grid indices.
 
-      Assigning [section_xy](#runtime_parameters--section_xy) = *-1* creates the output of horizontal cross sections averaged along `z`. In the netCDF output file these (averaged) cross sections are given the z-coordinate *-1.0*.
+      Assigning [section_xy](#runtime_parameters--section_xy) = *-1* creates the output of horizontal cross sections averaged along `z`. In the netCDF output file these (averaged) cross sections are given the z-coordinate *-1.0*. Averaging starts at index `k = 1`, because the bottom section at `k = 0` may contain FillValues. Note that this kind of averaging only gives correct results in case of [topography](#initialization_parameters--topography) = *'flat'*.
 
       Assignments to [section_xy](#runtime_parameters--section_xy) do not effect the output of horizontal cross sections of variables `us*` and `theta*` and the liquid water path `lwp*`. For these quantities always only one cross section (for `z = zu(1)`) is output.
 
@@ -1265,7 +1269,7 @@ section_xz:
     long: |
       If output of `xz` cross sections is selected (see [data_output](#runtime_parameters--data_output)), this parameter can be used to define the position(s) of the cross section(s). Up to 100 positions of cross sections can be selected by assigning [section_xz](#runtime_parameters--section_xz) the corresponding grid index/indices `j` of the requested cross section(s). The exact location (in y-direction) of the cross section is given by `j*dy` or `(j-0.5)*dy`, depending on which grid the output quantity is defined. However, in the netCDF output file, no distinction is made between the quantities and `j*dy` is used for all positions. Parameter [section_xz_m](#runtime_parameters--section_xz_m) can be used instead or in addition to [section_xz](#runtime_parameters--section_xz), to give locations in cartesian coordinates (m) instead of grid indices.
 
-      Assigning [section_xz](#runtime_parameters--section_xz) = *-1* creates the output of vertical cross sections averaged along `y`. In the netCDF output file these (averaged) cross sections are given the y-coordinate *-1.0*.
+      Assigning [section_xz](#runtime_parameters--section_xz) = *-1* creates the output of vertical cross sections averaged along `y`. In the netCDF output file these (averaged) cross sections are given the y-coordinate *-1.0*.  Note that this kind of averaging only gives correct results in case of [topography](#initialization_parameters--topography) = *'flat'*.
 
 
 section_xz_m:
@@ -1297,7 +1301,7 @@ section_yz:
     long: |
       If output of `yz` cross sections is selected (see [data_output](#runtime_parameters--data_output)), this parameter can be used to define the position(s) of the cross section(s). Up to 100 positions of cross sections can be selected by assigning [section_yz](#runtime_parameters--section_yz) the corresponding grid index/indices `i` of the requested cross section(s). The exact location (in x-direction) of the cross section is given by `i*dx` or `(i-0.5)*dx`, depending on which grid the output quantity is defined. However, in the netCDF output file, no distinction is made between the quantities and `i*dx` is used for all positions.  Parameter [section_yz_m](#runtime_parameters--section_yz_m) can be used instead or in addition to [section_yz](#runtime_parameters--section_yz), to give locations in cartesian coordinates (m) instead of grid indices.
 
-      Assigning [section_yz](#runtime_parameters--section_yz) = *-1* creates the output of vertical cross sections averaged along `x`. In the netCDF output file these (averaged) cross sections are given the x-coordinate *-1.0*.
+      Assigning [section_yz](#runtime_parameters--section_yz) = *-1* creates the output of vertical cross sections averaged along `x`. In the netCDF output file these (averaged) cross sections are given the x-coordinate *-1.0*.  Note that this kind of averaging only gives correct results in case of [topography](#initialization_parameters--topography) = *'flat'*.
 
 
 section_yz_m:
@@ -1450,6 +1454,17 @@ termination_time_needed:
 
       The model aborts anyway, if the string *"restart"* is not given via `palmrun` option `-a`, and if the job has been assigned an insufficient CPU time via `palmrun` option `-t`.
 
+
+use_contiguous_buffer:
+  category: parallelization
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Defines the data structure used for the exchange of ghost points.
+    long: |
+      By default ([use_contiguous_buffer](#runtime_parameters--use_contiguous_buffer) = *.F.*) an MPI-derived data type is used to describe how the ghost points at south/north boundaries are located in memory. Due to the index arrangement `(k,j,i)` these points are not contiguous in memory. The exchange of such non-contiguous data described via an MPI-derived data type gives a very poor performance of ghost point exchange when running PALM on GPUs. Here [use_contiguous_buffer](#runtime_parameters--use_contiguous_buffer) = *.T.* is recommended, which causes the ghost layer data of south/north boundaries to be copied to a temporary (contiguous) 1d buffer array first, which is then exchanged via MPI and copied back to the respective 3d target array.
+ 
 
 wall_heatflux:
   category: Topography

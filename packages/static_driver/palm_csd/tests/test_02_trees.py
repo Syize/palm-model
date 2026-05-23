@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Run tests for the DomainTree class."""
 
@@ -23,53 +23,30 @@ from typing import Generator, List, Optional, Tuple
 import numpy.ma as ma
 import pytest
 
-from palm_csd.csd_config import (
-    CSDConfigDomain,
-    CSDConfigSettings,
-)
-from palm_csd.vegetation import CanopyGenerator, DomainTree
+from palm_csd.csd_config import CSDConfigSettings
+from palm_csd.vegetation import CanopyGenerator, DomainTree, tree_defaults
 
 
 @pytest.fixture(scope="module")
-def config() -> Generator[CSDConfigDomain, None, None]:
-    """Create a domain configuration with remove_low_lai_tree=False.
+def canopy_generator() -> CanopyGenerator:
+    """Create a CanopyGenerator.
 
-    Yields:
-        Domain configuration with remove_low_lai_tree=False. Reset counter in cleanup to not
-        interfere with other tests.
+    Returns:
+        CanopyGenerator.
     """
-    config = CSDConfigDomain(
-        pixel_size=5,
-        input_lower_left_x=2,
-        input_lower_left_y=2,
-        nx=5,
-        ny=5,
-        dz=5,
-        remove_low_lai_tree=False,
-    )
-    yield config
-    CSDConfigDomain._reset_counter()
+    return CanopyGenerator(dz=5, pixel_size=5, lai_tree_lower_threshold=0.5)
 
 
 @pytest.fixture(scope="module")
-def config_remove_low_lai() -> Generator[CSDConfigDomain, None, None]:
-    """Create a domain configuration with remove_low_lai_tree=True.
+def canopy_generator_remove_low_lai() -> CanopyGenerator:
+    """Create a CanopyGenerator that removes low LAI trees.
 
-    Yields:
-        Domain configuration with remove_low_lai_tree=True. Reset counter in cleanup to not
-        interfere with other tests.
+    Returns:
+        CanopyGenerator.
     """
-    config = CSDConfigDomain(
-        pixel_size=5,
-        input_lower_left_x=2,
-        input_lower_left_y=2,
-        nx=5,
-        ny=5,
-        dz=5,
-        remove_low_lai_tree=True,
+    return CanopyGenerator(
+        dz=5, pixel_size=5, lai_tree_lower_threshold=0.5, remove_low_lai_tree=True
     )
-    yield config
-    CSDConfigDomain._reset_counter()
 
 
 @pytest.fixture(scope="module")
@@ -85,27 +62,11 @@ def settings() -> Generator[CSDConfigSettings, None, None]:
 
 
 @pytest.fixture(scope="module")
-def domaintree_defaults() -> Generator[None, None, None]:
-    """Read in default values for trees and reset in cleanup.
-
-    Yields:
-        None. Reset DomainTree defaults in cleanup to not interfere with other tests.
-    """
-    DomainTree.populate_defaults()
-    yield
-    DomainTree.defaults = []
-
-
-@pytest.fixture(scope="module")
-def trees_valid(
-    domaintree_defaults: None, config: CSDConfigDomain, settings: CSDConfigSettings
-) -> List[Optional[DomainTree]]:
+def trees_valid(canopy_generator: CanopyGenerator) -> List[Optional[DomainTree]]:
     """Create different valid trees.
 
     Args:
-        domaintree_defaults: Trigger the fixture to populate the defaults.
-        config: Trigger the fixture to create a domain configuration.
-        settings: Trigger the fixture to create a settings configuration.
+        canopy_generator: Canopy generator.
 
     Returns:
         Valid trees.
@@ -114,7 +75,7 @@ def trees_valid(
 
     # trees with different shapes
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=2,
             j=2,
             type=4,
@@ -123,12 +84,10 @@ def trees_valid(
             lai=4.0,
             crown_diameter=15.0,
             trunk_diameter=ma.masked,
-            settings=settings,
-            config=config,
         )
     )
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=3,
             j=1,
             type=32,
@@ -137,26 +96,22 @@ def trees_valid(
             lai=2.0,
             crown_diameter=ma.masked,
             trunk_diameter=0.5,
-            settings=settings,
-            config=config,
         )
     )
     trees_valid.append(
-        DomainTree.generate_tree(
-            i=5,
-            j=4,
+        canopy_generator.generate_tree(
+            i=2,
+            j=2,
             type=28,
             shape=3,
-            height=6.0,
+            height=15.0,
             lai=ma.masked,
-            crown_diameter=4.5,
+            crown_diameter=10.5,
             trunk_diameter=0.7,
-            settings=settings,
-            config=config,
         )
     )
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=3,
             j=3,
             type=73,
@@ -165,12 +120,10 @@ def trees_valid(
             lai=5.0,
             crown_diameter=10.5,
             trunk_diameter=1.0,
-            settings=settings,
-            config=config,
         )
     )
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=3,
             j=3,
             type=74,
@@ -179,12 +132,10 @@ def trees_valid(
             lai=7.3,
             crown_diameter=14.5,
             trunk_diameter=1.5,
-            settings=settings,
-            config=config,
         )
     )
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=3,
             j=3,
             type=82,
@@ -193,14 +144,12 @@ def trees_valid(
             lai=ma.masked,
             crown_diameter=ma.masked,
             trunk_diameter=ma.masked,
-            settings=settings,
-            config=config,
         )
     )
 
     # tree with only masked input values
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=2,
             j=3,
             type=ma.masked,
@@ -209,14 +158,12 @@ def trees_valid(
             lai=ma.masked,
             crown_diameter=ma.masked,
             trunk_diameter=ma.masked,
-            settings=settings,
-            config=config,
         )
     )
 
     # tree with too low LAI
     trees_valid.append(
-        DomainTree.generate_tree(
+        canopy_generator.generate_tree(
             i=2,
             j=3,
             type=86,
@@ -225,28 +172,21 @@ def trees_valid(
             lai=0.4,
             crown_diameter=ma.masked,
             trunk_diameter=ma.masked,
-            settings=settings,
-            config=config,
         )
     )
 
     # uncomment to update reference file
-    # write_trees_fields_to_file(trees_valid, config)
+    # write_trees_fields_to_file(trees_valid, canopy_generator)
 
     return trees_valid
 
 
 @pytest.fixture(scope="module")
-def trees_none(
-    domaintree_defaults: None, config_remove_low_lai: CSDConfigDomain, settings: CSDConfigSettings
-) -> List[Optional[DomainTree]]:
+def trees_none(canopy_generator_remove_low_lai: CanopyGenerator) -> List[Optional[DomainTree]]:
     """Try to create different invalid trees resulting in None.
 
     Args:
-        domaintree_defaults: Trigger the fixture to populate the defaults.
-        config_remove_low_lai: Trigger the fixture to create a domain configuration with
-          remove_low_lai_tree=True.
-        settings: Trigger the fixture to create a settings configuration.
+        canopy_generator_remove_low_lai: Canopy generator that removes low LAI trees.
 
     Returns:
         Invalid trees resulting in None.
@@ -255,7 +195,7 @@ def trees_none(
 
     # tree_height too low
     trees_none.append(
-        DomainTree.generate_tree(
+        canopy_generator_remove_low_lai.generate_tree(
             i=2,
             j=2,
             type=4,
@@ -264,14 +204,12 @@ def trees_none(
             lai=4.0,
             crown_diameter=15.0,
             trunk_diameter=ma.masked,
-            settings=settings,
-            config=config_remove_low_lai,
         )
     )
 
     # tree_lai too low and remove_low_lai_tree=True
     trees_none.append(
-        DomainTree.generate_tree(
+        canopy_generator_remove_low_lai.generate_tree(
             i=2,
             j=2,
             type=4,
@@ -280,8 +218,6 @@ def trees_none(
             lai=4.0,
             crown_diameter=15.0,
             trunk_diameter=ma.masked,
-            settings=settings,
-            config=config_remove_low_lai,
         )
     )
 
@@ -289,9 +225,9 @@ def trees_none(
 
 
 @pytest.fixture(scope="module")
-def trees_fields_reference() -> (
-    Tuple[List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray]]
-):
+def trees_fields_reference() -> Tuple[
+    List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray]
+]:
     """Read in trees fields reference from file.
 
     Returns:
@@ -306,13 +242,13 @@ def trees_fields_reference() -> (
 
 
 def calculate_fields_for_trees(
-    trees: List[DomainTree], config: CSDConfigDomain
+    trees: List[DomainTree], cg: CanopyGenerator
 ) -> Tuple[List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray]]:
     """Generate fields for trees.
 
     Args:
         trees: Input trees.
-        config: Input domain configuration.
+        cg: Canopy generator to use.
 
     Returns:
         Tree LADs, BADs, tree IDs and tree types.
@@ -324,17 +260,15 @@ def calculate_fields_for_trees(
     tree_types: List[ma.MaskedArray] = []
 
     # single tree 3d fields
-    dimensions = (7, config.ny, config.nx)
+    dimensions = (7, 5, 5)
     lad = ma.masked_all(dimensions)
     bad = ma.masked_all(dimensions)
     tree_id = ma.masked_all(dimensions)
     tree_type = ma.masked_all(dimensions)
 
-    canopy_generator = CanopyGenerator()
-
     for tree in trees:
         # single tree 3d fields
-        canopy_generator.add_tree_to_3d_fields(tree, lad, bad, tree_id, tree_type, config)
+        cg.add_tree_to_3d_fields(tree, lad, bad, tree_id, tree_type)
 
         # append to lists
         lads.append(lad.copy())
@@ -351,14 +285,14 @@ def calculate_fields_for_trees(
     return lads, bads, tree_ids, tree_types
 
 
-def write_trees_fields_to_file(trees: List[DomainTree], config: CSDConfigDomain) -> None:
+def write_trees_fields_to_file(trees: List[DomainTree], cg: CanopyGenerator) -> None:
     """Write the trees fields to a file.
 
     Args:
         trees: Input trees.
-        config: Input domain configuration.
+        cg: Canopy generator to use.
     """
-    lads, bads, tree_ids, tree_types = calculate_fields_for_trees(trees, config)
+    lads, bads, tree_ids, tree_types = calculate_fields_for_trees(trees, cg)
 
     with lzma.open("tests/02_trees/output/trees.pkl.xz", "wb", preset=9) as f:
         pickle.dump(lads, f)
@@ -367,11 +301,10 @@ def write_trees_fields_to_file(trees: List[DomainTree], config: CSDConfigDomain)
         pickle.dump(tree_types, f)
 
 
-@pytest.mark.usefixtures("domaintree_defaults")
 def test_defaults() -> None:
     """Test default values for trees."""
     # 86 species + 1 default
-    assert len(DomainTree.defaults) == 87
+    assert len(tree_defaults) == 87
 
 
 def test_valid_tree_objects(trees_valid: List[Optional[DomainTree]]) -> None:
@@ -399,9 +332,9 @@ def test_valid_tree_objects(trees_valid: List[Optional[DomainTree]]) -> None:
     assert tree is not None
     assert tree.type == 28
     assert tree.shape == 3
-    assert tree.height == 6.0
+    assert tree.height == 15.0
     assert tree.lai == 3.0
-    assert tree.crown_diameter == 4.5
+    assert tree.crown_diameter == 10.5
     assert tree.trunk_diameter == 0.7
 
     tree = trees_valid[3]
@@ -451,9 +384,7 @@ def test_valid_tree_objects(trees_valid: List[Optional[DomainTree]]) -> None:
     assert tree.trunk_diameter == 0.4
 
 
-def test_none_tree_objects(
-    trees_none: List[Optional[DomainTree]], config: CSDConfigDomain, settings: CSDConfigSettings
-) -> None:
+def test_none_tree_objects(trees_none: List[Optional[DomainTree]]) -> None:
     """Test that invalid trees are set to None. Try to create trees that raise errors."""
     for tree in trees_none:
         assert tree is None
@@ -461,13 +392,13 @@ def test_none_tree_objects(
 
 def test_trees_fields_generator(
     trees_valid: List[DomainTree],
-    config: CSDConfigDomain,
+    canopy_generator: CanopyGenerator,
     trees_fields_reference: Tuple[
         List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray], List[ma.MaskedArray]
     ],
 ):
     """Test the fields generator."""
-    lads, bads, tree_ids, tree_types = calculate_fields_for_trees(trees_valid, config)
+    lads, bads, tree_ids, tree_types = calculate_fields_for_trees(trees_valid, canopy_generator)
 
     (
         lads_reference,
@@ -484,6 +415,7 @@ def test_trees_fields_generator(
     assert len(tree_types) == length
 
     for i in range(length):
+        assert ma.allclose((lads[i].sum(axis=0) * canopy_generator.dz).mean(), trees_valid[i].lai)
         assert ma.allclose(lads[i], lads_reference[i], rtol=1e-14, atol=1e-14)
         assert ma.allclose(bads[i], bads_reference[i], rtol=1e-14, atol=1e-14)
         assert ma.allclose(tree_ids[i], tree_ids_reference[i], rtol=1e-14, atol=1e-14)

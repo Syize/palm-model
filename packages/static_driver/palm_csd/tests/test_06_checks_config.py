@@ -11,14 +11,15 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Test the CSDConfig classes."""
 
 import copy
 import os
 import tempfile
+from pathlib import Path
 from typing import Dict, Generator, List, Tuple, Type, Union
 
 import pytest
@@ -27,8 +28,13 @@ import yaml
 from pydantic import ValidationError
 
 from palm_csd import csd_config
-from palm_csd.csd_config import (
+from palm_csd.constants import (
     NBUILDING_SURFACE_LAYER,
+    IndexBuildingSurfaceLevel,
+    IndexBuildingSurfaceType,
+    InputData,
+)
+from palm_csd.csd_config import (
     CSDConfig,
     CSDConfigAttributes,
     CSDConfigDomain,
@@ -36,8 +42,6 @@ from palm_csd.csd_config import (
     CSDConfigInput,
     CSDConfigOutput,
     CSDConfigSettings,
-    IndexBuildingSurfaceLevel,
-    IndexBuildingSurfaceType,
     _expand_parslike,
     _expand_scaling,
     _upscaling_method_default,
@@ -47,8 +51,8 @@ from palm_csd.csd_config import (
 from palm_csd.csd_domain import CSDDomain
 from tests.tools import modify_configuration
 
-test_folder = "tests/99_full_application/"
-test_configuration = test_folder + "berlin_tiergarten.yml"
+test_folder = Path("tests/99_full_application/")
+test_configuration = test_folder / "berlin_tiergarten.yml"
 
 
 @pytest.fixture
@@ -57,7 +61,7 @@ def valid_configuration() -> dict:
     with open(test_configuration, "r", encoding="utf-8") as file:
         conf = yaml.safe_load(file)
     # add input and domain section
-    conf["input"] = conf["input_01"]
+    conf["input"] = conf["input_15m"]
     conf["domain"] = conf["domain_root"]
     return conf
 
@@ -68,18 +72,18 @@ TO_SET = List[Tuple[List[str], Union[str, float]]]
 
 @pytest.fixture
 def domain_wrong_range_tree_trunk_diameter(
-    request,
+    request: pytest.FixtureRequest,
 ) -> Generator[Tuple[CSDDomain, bool], None, None]:
     """Generate a CSDDomain with the tree trunk diameter wrong range input file."""
     config_in = test_configuration
 
     to_set: TO_SET = [
         (
-            ["input_01", "file_tree_trunk_diameter"],
+            ["input_15m", "files", "tree_trunk_diameter"],
             "Berlin_trees_trunk_clean_15m_DLR_wrong_range.nc",
         ),
         (
-            ["input_02", "file_tree_trunk_diameter"],
+            ["input_3m", "files", "tree_trunk_diameter"],
             "Berlin_trees_trunk_clean_3m_DLR_wrong_range.nc",
         ),
         (["settings", "replace_invalid_input_values"], request.param),
@@ -124,13 +128,21 @@ def test_invalid_settings(valid_configuration: dict, csdconfig_class: Type[CSDCo
         # TODO: remove once warning is removed
         if variable == "bridge_depth" and csdconfig_class == CSDConfigSettings:
             continue
-        # vegetation_on_roofs is both a boolean domain setting and a float input
-        # TODO: deal with this in a better way
-        if variable == "vegetation_on_roofs":
+        # pixel_size in CSDConfigInput is not used anymore
+        # TODO: remove once warning is removed
+        if variable == "pixel_size" and csdconfig_class == CSDConfigInput:
             continue
-        if variable in csd_config.defaults:
-            minimum = csd_config.defaults[variable].minimum
-            maximum = csd_config.defaults[variable].maximum
+        # lai_roof_extensive in CSDConfigInput is not used anymore
+        # TODO: remove once warning is removed
+        if variable == "lai_roof_extensive" and csdconfig_class == CSDConfigSettings:
+            continue
+        # lai_roof_intensive in CSDConfigInput is not used anymore
+        # TODO: remove once warning is removed
+        if variable == "lai_roof_intensive" and csdconfig_class == CSDConfigSettings:
+            continue
+        if variable in csd_config.value_defaults:
+            minimum = csd_config.value_defaults[variable].minimum
+            maximum = csd_config.value_defaults[variable].maximum
             if minimum is not None:
                 configuration_invalid = copy.deepcopy(configuration_valid)
                 # for list variables, the ranges for the list elements are checked
@@ -168,12 +180,12 @@ def test_invalid_input_values(domain_wrong_range_tree_trunk_diameter: Tuple[CSDD
 
     if replace_invalid:
         # no default tree trunk value so invalid values masked
-        tree_trunk = domain.read_tree_trunk_diameter()
+        tree_trunk = domain.read(InputData.tree_trunk_diameter)
         assert tree_trunk.mask.all() >= 0
     else:
         # error when invalid values are found and not to be replaced
         with pytest.raises(ValueError):
-            domain.read_tree_trunk_diameter()
+            domain.read(InputData.tree_trunk_diameter)
 
 
 def test_paths() -> None:
@@ -212,31 +224,30 @@ def test_paths() -> None:
 
     # CSDConfigInput successful
 
-    pixel_size = 3
     file_zt = "Berlin_terrain_height_15m_DLR.nc"
     path = "tests/99_full_application/input"
     # path and file
-    CSDConfigInput(path=path, file_zt=file_zt, pixel_size=pixel_size)  # type: ignore
+    CSDConfigInput(path=path, files={"zt": file_zt})  # type: ignore
     CSDConfigInput._reset_counter()
     # only file
-    CSDConfigInput(file_zt=path + "/" + file_zt, pixel_size=pixel_size)  # type: ignore
+    CSDConfigInput(files={"zt": path + "/" + file_zt})  # type: ignore
     CSDConfigInput._reset_counter()
     # path with ~ and file
     path_relative_home = "~/" + os.path.relpath(path, os.path.expanduser("~"))
-    CSDConfigInput(path=path_relative_home, file_zt=file_zt, pixel_size=pixel_size)  # type: ignore
+    CSDConfigInput(path=path_relative_home, files={"zt": file_zt})  # type: ignore
     CSDConfigInput._reset_counter()
     # only file with ~
-    CSDConfigInput(file_zt=path_relative_home + "/" + file_zt, pixel_size=pixel_size)  # type: ignore
+    CSDConfigInput(files={"zt": path_relative_home + "/" + file_zt})  # type: ignore
     CSDConfigInput._reset_counter()
 
     # CSDConfigInput failure
 
     with pytest.raises(ValidationError, match="type=path_not_directory"):
         # path does not exist
-        CSDConfigInput(path=tmpdirname, file_zt=file_out, pixel_size=pixel_size)  # type: ignore
+        CSDConfigInput(path=tmpdirname, files={"zt": file_out})  # type: ignore
     with pytest.raises(ValidationError, match="type=path_not_file"):
         # file does not exist
-        CSDConfigInput(file_zt=tmpdirname + "/" + file_zt, pixel_size=pixel_size)  # type: ignore
+        CSDConfigInput(files={"zt": tmpdirname + "/" + file_zt})  # type: ignore
 
 
 def test_expand_validate_scaling() -> None:
@@ -551,16 +562,17 @@ def test_expand_parslike() -> None:
 
 @pytest.fixture
 def configuration_dict_one_input() -> Generator[Dict, None, None]:
-    """Generate a configuration dictionary without pixel_size and only one input section.
+    """Generate a configuration with only one input section.
 
     Returns:
         Configuration dictionary.
     """
     to_delete = [
         [
-            "input_02",
+            "input_3m",
         ],
-        ["input_01", "pixel_size"],
+        ["domain_root", "input"],
+        ["domain_N02", "input"],
     ]
 
     yield modify_configuration(config_in=test_configuration, to_delete=to_delete)
@@ -573,24 +585,18 @@ def test_one_input(configuration_dict_one_input: Dict):
     config = CSDConfig(configuration_dict_one_input)
     for domain_name in ["root", "N02"]:
         input = config.input_of_domain(domain_name)
-        assert input == config.input_dict["01"]
+        assert input == config.input_dict["15m"]
 
 
 @pytest.fixture
 def configuration_dict_named_input() -> Generator[Dict, None, None]:
-    """Generate a configuration dictionary without pixel_size and name input in domain sections.
+    """Generate a configuration dictionary with named input in domain sections.
 
     Returns:
         Configuration dictionary.
     """
-    to_delete = [["input_01", "pixel_size"], ["input_02", "pixel_size"]]
-
-    to_set = [
-        (["domain_root", "input"], "01"),
-        (["domain_N02", "input"], "02"),
-    ]
-
-    yield modify_configuration(config_in=test_configuration, to_set=to_set, to_delete=to_delete)
+    with open(test_configuration, "r", encoding="utf-8") as file:
+        yield yaml.safe_load(file)
 
     reset_all_config_counters()
 
@@ -598,36 +604,7 @@ def configuration_dict_named_input() -> Generator[Dict, None, None]:
 def test_named_input(configuration_dict_named_input: Dict):
     """Test the configuration with named input section."""
     config = CSDConfig(configuration_dict_named_input)
-    input_name = {"root": "01", "N02": "02"}
+    input_name = {"root": "15m", "N02": "3m"}
     for domain_name in ["root", "N02"]:
         input = config.input_of_domain(domain_name)
         assert input == config.input_dict[input_name[domain_name]]
-
-
-@pytest.fixture
-def configuration_dict_named_equal_input() -> Generator[Dict, None, None]:
-    """Generate a configuration dictionary without pixel_size and named equal input.
-
-    Returns:
-        Configuration dictionary.
-    """
-    to_delete = [["input_01", "pixel_size"], ["input_02", "pixel_size"]]
-
-    to_rename = [
-        (["input_01"], "input_root"),
-        (["input_02"], "input_N02"),
-    ]
-
-    yield modify_configuration(
-        config_in=test_configuration, to_rename=to_rename, to_delete=to_delete
-    )
-
-    reset_all_config_counters()
-
-
-def test_named_equal_input(configuration_dict_named_equal_input: Dict):
-    """Test the configuration with named input section."""
-    config = CSDConfig(configuration_dict_named_equal_input)
-    for domain_name in ["root", "N02"]:
-        input = config.input_of_domain(domain_name)
-        assert input == config.input_dict[domain_name]

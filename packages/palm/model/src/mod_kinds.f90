@@ -27,28 +27,34 @@
 !--------------------------------------------------------------------------------------------------!
  MODULE kinds
 
+    USE, INTRINSIC ::  ISO_FORTRAN_ENV,                                                            &
+        ONLY:  INT8,                                                                               &
+               INT32,                                                                              &
+               INT64,                                                                              &
+               REAL32,                                                                             &
+               REAL64
 
     IMPLICIT NONE
 
 !
 !-- Floating point kinds
-    INTEGER, PARAMETER ::  sp = 4           !< single precision (32 bit)
-    INTEGER, PARAMETER ::  dp = 8           !< double precision (64 bit)
+    INTEGER, PARAMETER ::  sp = REAL32   !< single precision (32 bit)
+    INTEGER, PARAMETER ::  dp = REAL64   !< double precision (64 bit)
 
 !
 !-- Integer kinds
-    INTEGER, PARAMETER ::  ibp = SELECTED_INT_KIND(  2 )   !< byte precision (8 bit)
-    INTEGER, PARAMETER ::  isp = SELECTED_INT_KIND(  9 )   !< single precision (32 bit)
-    INTEGER, PARAMETER ::  idp = SELECTED_INT_KIND( 14 )   !< double precision (64 bit)
+    INTEGER, PARAMETER ::  ibp = INT8    !< byte precision (8 bit)
+    INTEGER, PARAMETER ::  isp = INT32   !< single precision (32 bit)
+    INTEGER, PARAMETER ::  idp = INT64   !< double precision (64 bit)
 
 !
 !-- Set kinds to be used as defaults
 #if defined( __single_precision )
-    INTEGER, PARAMETER ::   wp =  sp          !< default real kind
+    INTEGER, PARAMETER ::   wp =  sp     !< default real kind
 #else
-    INTEGER, PARAMETER ::   wp =  dp          !< default real kind
+    INTEGER, PARAMETER ::   wp =  dp     !< default real kind
 #endif
-    INTEGER, PARAMETER ::  iwp = isp          !< default integer kind
+    INTEGER, PARAMETER ::  iwp = isp     !< default integer kind
 
     SAVE
 

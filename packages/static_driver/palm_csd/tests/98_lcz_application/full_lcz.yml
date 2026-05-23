@@ -13,18 +13,18 @@ settings:
   rotation_angle: 0.
   season: "summer"
 
-input_01:
+input:
   path: tests/98_lcz_application/
-  pixel_size: 150.0
-  file_zt: zt.tif
-  file_lcz: lcz.tif
+  files:
+    zt: zt.tif
+    lcz: lcz.tif
 
 output:
   path: tests/98_lcz_application/
   file_out: lcz
   version: 1
 
-domain_root:
+domain:
   pixel_size: 150.0
   origin_lon: 13.004
   origin_lat: 51.984

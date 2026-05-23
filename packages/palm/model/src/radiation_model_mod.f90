@@ -964,9 +964,10 @@
     END TYPE
 !
 !-- Arrays storing the values of USM
-    INTEGER(iwp) ::  ndsidir  !< number of apparent solar directions used
-    INTEGER(iwp) ::  nmrtbl   !< No. of local grid boxes for which MRT is calculated
-    INTEGER(iwp) ::  nmrtf    !< number of MRT factors for local processor
+    INTEGER(iwp) ::  dsidir_last  !< last used discretized solar position
+    INTEGER(iwp) ::  ndsidir      !< number of apparent solar directions used
+    INTEGER(iwp) ::  nmrtbl       !< No. of local grid boxes for which MRT is calculated
+    INTEGER(iwp) ::  nmrtf        !< number of MRT factors for local processor
 
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  dsidir_rev  !< dsidir_rev[ielev,iazim] = i for dsidir or -1 if not present
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  mrtbl       !< coordinates of i-th local MRT box - surfl[:,i] = [z, y, x]
@@ -9133,8 +9134,14 @@
        i = MODULO( NINT( solar_azim / 360.0_wp * REAL( raytrace_discrete_azims, KIND = wp )        &
                          - 0.5_wp, iwp ), raytrace_discrete_azims )
        isd = dsidir_rev(j, i)
+       IF ( isd < 0 )  THEN
 !
-!-- TODO: check if isd = -1 to report that this solar position is not precalculated
+!--        This extremely rare occurence may only happen very closely to the last visited solar
+!--        bin, so it may be safely reused.
+           isd = dsidir_last
+       ELSE
+           dsidir_last = isd
+       ENDIF
        !$OMP PARALLEL DO PRIVATE (i, j, d, isurf)  REDUCTION(+:pinswl) SCHEDULE (STATIC)
        DO  isurf = 1, nsurfl
           j = surfl(iy,isurf)
@@ -10066,8 +10073,14 @@
        i = MODULO( NINT( solar_azim / 360.0_wp * REAL( raytrace_discrete_azims, KIND = wp )        &
                          - 0.5_wp, iwp ), raytrace_discrete_azims )
        isd = dsidir_rev(j, i)
+       IF ( isd < 0 )  THEN
 !
-!--    TODO: check if isd = -1 to report that this solar position is not precalculated
+!--        This extremely rare occurence may only happen very closely to the last visited solar
+!--        bin, so it may be safely reused.
+           isd = dsidir_last
+       ELSE
+           dsidir_last = isd
+       ENDIF
        !$OMP PARALLEL DO PRIVATE (i, j, d, isurf)  REDUCTION(+:pinswl) SCHEDULE (STATIC)
        DO  isurf = 1, nsurfl
           j = surfl(iy,isurf)
@@ -15664,28 +15677,41 @@
 
     IMPLICIT NONE
 
-    INTEGER(iwp) ::  it, i, j  !< loop indices
+    INTEGER(iwp) ::  it, i, j                                 !< loop indices
 
-    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  dsidir_tmp  !< dsidir_tmp[:,i] = unit vector of i-th
-                                                          !< appreant solar direction
+    REAL(wp)                              ::  dt_presimulate  !< timestep for visiting all bins
+    REAL(wp), DIMENSION(:,:), ALLOCATABLE ::  dsidir_tmp      !< dsidir_tmp[:,i] = unit vector of
+                                                              !< i-th appreant solar direction
+
+    REAL(wp), PARAMETER ::  per_bin = 24.0_wp * 3600.0_wp / 2000.0_wp
+
 
     ALLOCATE( dsidir_rev(0:raytrace_discrete_elevs/2-1,0:raytrace_discrete_azims-1) )
     dsidir_rev(:,:) = -1
     ALLOCATE( dsidir_tmp(3, raytrace_discrete_elevs/2*raytrace_discrete_azims) )
     ndsidir = 0
+    dsidir_last = -1
     sun_direction = .TRUE.
 
 !
+!-- Because actual radiation calls are not in precise dt_radiation steps due to varying main
+!-- timestep, we calculate a step that ensures that the sun visits all possible discretized bins
+!-- on the sky.
+    dt_presimulate = MIN( 1.0_wp,                                                                  &
+                          per_bin / REAL( MAX ( raytrace_discrete_azims,                           &
+                                                raytrace_discrete_elevs * 2 ), wp ),               &
+                          dt_radiation )
+!
 !-- Process spinup time if configured.
     IF ( spinup_time > 0.0_wp )  THEN
-       DO  it = 0, CEILING( spinup_time / dt_radiation )
-          CALL simulate_pos( it * dt_radiation - spinup_time )
+       DO  it = 0, CEILING( spinup_time / dt_presimulate )
+          CALL simulate_pos( it * dt_presimulate - spinup_time )
        ENDDO
     ENDIF
 !
 !-- Process simulation time
-    DO  it = 0, CEILING( ( end_time - spinup_time ) / dt_radiation )
-       CALL simulate_pos( it * dt_radiation )
+    DO  it = 0, CEILING( ( end_time - spinup_time ) / dt_presimulate )
+       CALL simulate_pos( it * dt_presimulate )
     ENDDO
 !
 !-- Allocate global vars which depend on ndsidir
@@ -16402,6 +16428,9 @@
        CASE ( 'dt_radiation' )
           READ( 13 )  dt_radiation
 
+       CASE ( 'dsidir_last' )
+          READ( 13 )  dsidir_last
+
        CASE ( 'emissivity_eff' )
           READ( 13 )  emissivity_eff
 
@@ -16428,6 +16457,7 @@
 
     CALL rrd_mpi_io( 'albedo_eff',     albedo_eff     )
     CALL rrd_mpi_io( 'dt_radiation',   dt_radiation   )
+    CALL rrd_mpi_io( 'dsidir_last',    dsidir_last    )
     CALL rrd_mpi_io( 'emissivity_eff', emissivity_eff )
     CALL rrd_mpi_io( 't_rad_eff',      t_rad_eff      )
     CALL rrd_mpi_io( 'time_radiation', time_radiation )
@@ -19991,6 +20021,9 @@ SUBROUTINE radiation_define_netcdf_grid( variable, found, grid_x, grid_y, grid_z
        CALL wrd_write_string( 'dt_radiation' )
        WRITE( 14 )  dt_radiation
 
+       CALL wrd_write_string( 'dsidir_last' )
+       WRITE( 14 )  dsidir_last
+
        CALL wrd_write_string( 'emissivity_eff' )
        WRITE( 14 )  emissivity_eff
 
@@ -20004,6 +20037,7 @@ SUBROUTINE radiation_define_netcdf_grid( variable, found, grid_x, grid_y, grid_z
 
        CALL wrd_mpi_io( 'albedo_eff',     albedo_eff     )
        CALL wrd_mpi_io( 'dt_radiation',   dt_radiation   )
+       CALL wrd_mpi_io( 'dsidir_last',    dsidir_last    )
        CALL wrd_mpi_io( 'emissivity_eff', emissivity_eff )
        CALL wrd_mpi_io( 't_rad_eff',      t_rad_eff      )
        CALL wrd_mpi_io( 'time_radiation', time_radiation )

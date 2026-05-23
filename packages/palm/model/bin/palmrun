@@ -47,7 +47,7 @@
  typeset -x -i  memory=0   # HAS TO BE EXPORTED HERE, OTHERWISE AN UNKNOWN SIDE
                            # SIDE EFFECT MAY CAUSE DATA LOSS WHEN GETOPTS IS READING THE
                            # SCRIPT-OPTION ARGUMENTS
- typeset -i  cores cputime cpu_hours cpu_minutes cpu_seconds i ii iia iii iio
+ typeset -i  cores cputime cpu_hours cpu_minutes cpu_seconds i ii
  typeset -i  icycle inode ival maxcycle mpi_tasks
  typeset -i  nodes remaining_cores run_number tasks_per_node threads_per_task
 
@@ -59,9 +59,6 @@
  compiler_options=""
  configuration_identifier="default"
  cores=1
- cores_atmos=0
- cores_ocean=0
- coupled_dist=""
  cpp_options=""
  cpumax=0
  create_batch_job=false
@@ -92,7 +89,7 @@
     prc=`echo $prc | cut -f2- -d"/"`
  done
  module_calls=""
- palm_version_string="PALM 25.04"  # AUTOMATICALLY SET FOR RELEASE (DO NOT CHANGE THIS LINE)
+ palm_version_string="PALM 25.10-rc.1"  # AUTOMATICALLY SET FOR RELEASE (DO NOT CHANGE THIS LINE)
  palmrun_memory=""
  palmrun_script_name=$prc
  openmp=false
@@ -106,7 +103,6 @@
  remote_username=""
  running_in_batch_mode=false
  running_in_test_mode=false
- run_coupled_model=false
  run_id=""
  run_id_number=""
  run_identifier=test
@@ -160,7 +156,7 @@
 
     # READ SHELLSCRIPT-OPTIONS AND REBUILD THE PALMRUN-COMMAND STRING (prc),
     # WHICH WILL BE USED TO START RESTART-JOBS
- while  getopts  :a:A:bBc:CFG:i:jkm:M:O:q:r:R:s:t:T:u:U:vVw:W:xX:yY:zZ option
+ while  getopts  :a:A:bBc:CFG:i:jkm:M:O:q:r:R:s:t:T:u:U:vVw:W:xX:zZ option
  do
    case  $option  in
        (a)   activation_string_list=$OPTARG; prc="$prc -a'$OPTARG'";;
@@ -191,8 +187,6 @@
        (W)   previous_job=$OPTARG;;
        (x)   do_trace=true;set -x; prc="$prc -x";;
        (X)   palmrun_cores=$OPTARG; prc="$prc -X$OPTARG";;
-       (y)   ocean_file_appendix=true; prc="$prc -y";;
-       (Y)   run_coupled_model=true; coupled_dist=$OPTARG; prc="$prc -Y'$OPTARG'";;
        (z)   running_in_test_mode=true;;
        (Z)   combine_plot_fields=false; prc="$prc -Z";;
        (\?)  printf "\n  +++ unknown option $OPTARG \n"
@@ -212,9 +206,9 @@ try:
     h = dict()
     h['Content-Type'] = 'application/json'
     h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-    h['Authorization'] = f'basic cGFsbXJ1bl92MjUuMDQ6RlNvZ0ZCZytLQklhYUg5NVlGND0='
+    h['Authorization'] = f'basic cGFsbXJ1bl92MjUuMTAtcmMuMTpHbEFHSXp0RFdBd3NDMlo4V1FaMFB5RmxkZz09'
     q = '''query palmrun($current: String!) { check_version(input: {current: $current}) { show message } }'''
-    v = {'current': 'v25.04'}
+    v = {'current': 'v25.10-rc.1'}
     c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
     c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
     r = c.getresponse()
@@ -285,11 +279,6 @@ palmrun_check_updates
     printf "\n        -W    name of job to wait for                  ---"
     printf "\n        -x    tracing of palmrun for debug purposes    ---"
     printf "\n        -X    # of processors (on parallel machines)   1"
-    printf "\n        -y    add appendix \"_O\" to all local output"
-    printf "\n              files (ocean precursor runs followed by"
-    printf "\n              coupled atmosphere-ocean runs)           ---"
-    printf "\n        -Y    run coupled model, \"#1 #2\" with" 
-    printf "\n              #1 atmosphere and #2 ocean processors    \"#/2 #/2\" depending on -X"
     printf "\n        -Z    skip combine_plot_fields at the end of      "
     printf "\n              the simulation                           ---"
     printf "\n "
@@ -406,7 +395,7 @@ palmrun_check_updates
           # CONFIGURATION-FILE.
        if [[ "$(eval echo \$$var)" = ""  ||  "$(eval echo \$$var)" = "0" ]]
        then
-          eval  export  $var="\$value"
+          eval  $var="\$value"
 
              # TERMINAL OUTPUT OF ENVIRONMENT-VARIABLES, IF TRACEBACK IS SWITCHED on
           if [[ $do_trace = true ]]
@@ -509,6 +498,19 @@ palmrun_check_updates
  fi
 
 
+    # ANALYSE CPP-OPTIONS
+ if [[ $(echo $cpp_options | grep -c "__rrtmg") != 0 ]]
+ then
+       # ADD RRTMG INCLUDE AND LIBRARY SETTINGS TO COMPILER- AND LINKER-OPTIONS
+       # ONLY IF GIVEN COMPILER OR LINKER OPTIONS DO NOT REFER TO AN ALREADY INSTALLED RRTMG LIBRARY
+    if [[ $(echo $compiler_options | grep -c "rrtmg") = 0  &&  $(echo $linker_options | grep -c "rrtmg") = 0 ]]
+    then
+       compiler_options=$compiler_options" -I rrtmg"
+       linker_options=$linker_options" rrtmg/rrtmg.so"
+    fi
+ fi
+
+
     # DETERMINE THE CALL STATUS
  if [[ "$return_address" != "" ]]
  then
@@ -554,7 +556,7 @@ palmrun_check_updates
  fi
 
 
-           # CHECK IF A REMOTE USER NAME HAS BEEN SET
+    # CHECK IF A REMOTE USER NAME HAS BEEN SET
  if [[ $create_batch_job = true  &&  "$local_username" = "" ]]
  then
     printf "\n\n  +++ no local_username has been set in the configuration file"
@@ -761,27 +763,6 @@ palmrun_check_updates
  [[ "$max_par_io_str" != "" ]]  &&  maximum_parallel_io_streams=$max_par_io_str
  [[ "$palmrun_tasks_per_node" != "" ]]  &&  tasks_per_node=$palmrun_tasks_per_node
 
-
-
-      # EVALUATE MODEL COUPLING FEATURES (OPTION -Y)
- if [[ $run_coupled_model = true ]] 
- then
-
-    cores_atmos=`echo $coupled_dist | cut -d" " -s -f1`
-    cores_ocean=`echo $coupled_dist | cut -d" " -s -f2`
-
-    if (( $cores_ocean + $cores_atmos != $cores ))
-    then
-
-       printf "\n  +++ number of processors does not fit to specification by \"-Y\"."
-       printf "\n      PEs (total)     : $cores"
-       printf "\n      PEs (atmosphere): $cores_atmos"
-       printf "\n      PEs (ocean)     : $cores_ocean"
-       locat=coupling; exit
-
-    fi
-
- fi
 
 
     # IF I AM IN BATCH MODE, CHECK IF EXECUTABLE AND OTHER REQUIRED FILES
@@ -1531,12 +1512,7 @@ palmrun_check_updates
 
  if [[ -n $cores ]]
  then
-    if [[ $run_coupled_model = false ]]
-    then
-       column1="number of cores:"; column2=$cores
-    else
-       column1="number of cores:"; column2="$cores  (atmosphere: $cores_atmos, ocean: $cores_ocean)"
-    fi
+    column1="number of cores:"; column2=$cores
     printf "| %-25s%-45s | \n" "$column1" "$column2"
  fi
  if [[ -n $tasks_per_node ]]
@@ -1649,11 +1625,6 @@ palmrun_check_updates
  printf "| %-25s%-45s | \n" "$column1" "$column2"
  column1="activation string list:"; column2=$(echo $activation_string_list)
  printf "| %-25s%-45s | \n" "$column1" "$column2"
-
- if [[ "$ocean_file_appendix" = true ]]
- then
-    printf "| %-35s%-35s | \n" "suffix \"_O\" is added to local files" " "
- fi
 
  if [[ "$source_list" != "" ]]
  then
@@ -2121,7 +2092,7 @@ palmrun_check_updates
 
        # NOW COPY FILES (*.f90, *.o, config files, etc.) FROM SOURCES_FOR_RUN_... TO THE TEMPORARY
        # WORKING DIRECTORY
-    cp  ${fast_io_catalog}/${sources_for_run_catalog}/{*,.[!.]*}  $tempdir
+    cp -r  ${fast_io_catalog}/${sources_for_run_catalog}/{*,.[!.]*}  $tempdir
 
 
        # EXECUTE INPUT-COMMANDS GIVEN IN THE CONFIGURATION FILE
@@ -2223,33 +2194,16 @@ EOF
     fi
 
 
-       # PROVIDE DATA FOR ATMOSPHERE OCEAN COUPLING
-    if [[ $run_coupled_model = false ]]
-    then
-       if [[ "$ocean_file_appendix" = true ]]
-       then
-          echo "precursor_ocean"  >  coupling_steering
-       else
-          echo "precursor_atmos"  >  coupling_steering
-      fi
-    else
-       (( iia = $cores_atmos / $threads_per_task ))
-       (( iio = $cores_ocean / $threads_per_task ))
-       printf "\n      coupled run ($iia atmosphere, $iio ocean)"
-       printf "\n\n"
-       echo "coupled_run $iia $iio"  >  coupling_steering
-    fi
-
     printf "\n  *** execute command:"
     printf "\n      \"$execute_command\" \n\n"
 
 
     if [[ $progress_bar_disabled = true ]]
     then
-       $execute_command  <  coupling_steering  &> >(grep -v --line-buffered -e '^STOP 1$' -e '^1$' &> >(tee STDOUT) )
+       $execute_command  &> >(grep -v --line-buffered -e '^STOP 1$' -e '^1$' &> >(tee STDOUT) )
        exit_code=${PIPESTATUS[0]}
     else
-       $execute_command  <  coupling_steering  &> >(tee STDOUT)
+       $execute_command  &> >(tee STDOUT)
        exit_code=${PIPESTATUS[0]}
     fi
 
@@ -2846,8 +2800,6 @@ EOF
     [[ $use_openmp = true ]]  &&  palmrun_com=${palmrun_com}" -O $threads_per_task"
     [[ $tasks_per_node != 0 ]]  &&  palmrun_com=${palmrun_com}" -T $tasks_per_node"
     [[ $delete_temporary_catalog = false ]]  &&  palmrun_com=${palmrun_com}" -B"
-    [[ "$ocean_file_appendix" = true ]]  &&  palmrun_com=${palmrun_com}" -y"
-    [[ $run_coupled_model = true ]]  &&  palmrun_com=${palmrun_com}" -Y \"$coupled_dist\""
     [[ "$combine_plot_fields" = false ]]  &&  palmrun_com=${palmrun_com}" -Z"
     [[ "$max_par_io_str" != "" ]]  &&  palmrun_com=${palmrun_com}" -w $max_par_io_str"
     [[ "$project_account" != "" ]]  &&  palmrun_com=${palmrun_com}" -A $project_account"

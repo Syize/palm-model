@@ -54,18 +54,12 @@
                dy
 
     USE indices,                                                                                   &
-        ONLY:  mg_loc_ind,                                                                         &
-               nnx,                                                                                &
+        ONLY:  nnx,                                                                                &
                nny,                                                                                &
                nnz,                                                                                &
                nx,                                                                                 &
-               nxl_mg,                                                                             &
-               nxr_mg,                                                                             &
                ny,                                                                                 &
-               nyn_mg,                                                                             &
-               nys_mg,                                                                             &
                nzt,                                                                                &
-               nzt_mg,                                                                             &
                topo_top_ind
 #if defined( __parallel )
     USE indices,                                                                                   &
@@ -114,12 +108,32 @@
         ONLY:  atmosphere_ocean_coupled_run,                                                       &
                nesting_bounds,                                                                     &
                nesting_datatransfer_mode,                                                          &
-               nesting_mode
+               nesting_mode,                                                                       &
+               synchronize_timestep
 
 #else
     USE pmc_interface,                                                                             &
         ONLY:  atmosphere_ocean_coupled_run
 #endif
+
+    USE poismg_mod,                                                                                &
+        ONLY:  cycle_mg,                                                                           &
+               maximum_grid_level,                                                                 &
+               maximum_grid_level_default,                                                         &
+               max_mg_grid_levels,                                                                 &
+               mg_cycles,                                                                          &
+               mg_loc_ind,                                                                         &
+               mg_switch_to_pe0_level,                                                             &
+               ngsrb,                                                                              &
+               ngsrb_initial,                                                                      &
+               ngsrb_initial_timesteps,                                                            &
+               nxl_mg,                                                                             &
+               nxr_mg,                                                                             &
+               nyn_mg,                                                                             &
+               nys_mg,                                                                             &
+               nzt_mg,                                                                             &
+               poismg_filtered_holes,                                                              &
+               residual_limit
 
     USE surface_mod,                                                                               &
         ONLY:  surf_def
@@ -331,10 +345,12 @@
           ENDIF
           WRITE ( io, 601 )  TRIM( nesting_bounds ), TRIM( nesting_mode ),                         &
                              TRIM( nesting_communication ), TRIM( nesting_datatransfer_mode )
+          IF ( .NOT. synchronize_timestep )  WRITE ( io, 602 )
        ENDIF
 
        CALL pmc_get_model_info( ncpl = ncpl, cpl_id = my_cpl_id )
 
+       WRITE ( io, 603 )
        DO  n = 1, ncpl
           CALL pmc_get_model_info( request_for_cpl_id = n, cpl_name = cpl_name,                    &
                                    cpl_parent_id = cpl_parent_id,                                  &
@@ -347,12 +363,12 @@
           ELSE
              char1 = ' '
           ENDIF
-          WRITE ( io, 602 )  TRIM( char1 ), n, cpl_parent_id, npe_total, lower_left_coord_x,       &
+          WRITE ( io, 604 )  TRIM( char1 ), n, cpl_parent_id, npe_total, lower_left_coord_x,       &
                              lower_left_coord_y, lower_coord_z, TRIM( cpl_name )
        ENDDO
 !
 !--    Newly added child.
-       IF ( init_child_id /= -1 )  WRITE ( io, 603 )  init_child_id
+       IF ( init_child_id /= -1 )  WRITE ( io, 605 )  init_child_id
 
     ENDIF
 #endif
@@ -380,7 +396,8 @@
     ELSEIF ( psolver == 'sor' )  THEN
        WRITE ( io, 112 )  nsor_ini, nsor, omega_sor
     ELSEIF ( psolver(1:9) == 'multigrid' )  THEN
-       WRITE ( io, 135 )  TRIM( psolver ), cycle_mg, maximum_grid_level, ngsrb
+       WRITE ( io, 135 )  TRIM( psolver ), cycle_mg, maximum_grid_level, ngsrb, ngsrb_initial,     &
+                          ngsrb_initial_timesteps
        IF ( mg_cycles == -1 )  THEN
           WRITE ( io, 140 )  residual_limit
        ELSE
@@ -396,7 +413,16 @@
                              nxr_mg(1)-nxl_mg(1)+1, nyn_mg(1)-nys_mg(1)+1,                         &
                              nzt_mg(1)
        ENDIF
-       IF ( psolver == 'multigrid_noopt'  .AND.  masking_method )  WRITE ( io, 144 )
+       IF ( ANY( poismg_filtered_holes /= 0 ) )  THEN
+          WRITE ( io, 146 )
+          DO  i = maximum_grid_level, 1, -1
+             IF ( poismg_filtered_holes(i) /= 0 )  WRITE ( io, 147 )  i, poismg_filtered_holes(i)
+          ENDDO
+       ENDIF
+       IF ( psolver(1:9) == 'multigrid'  .AND.  masking_method )  WRITE ( io, 144 )
+       IF ( maximum_grid_level_default > max_mg_grid_levels )  THEN
+          WRITE ( io, 145 )  max_mg_grid_levels, maximum_grid_level_default
+       ENDIF
     ENDIF
     IF ( call_psolver_at_all_substeps  .AND.  timestep_scheme(1:5) == 'runge' )  THEN
        WRITE ( io, 142 )
@@ -468,6 +494,7 @@
           WRITE ( io, 152 )  dpdxy, dp_level_b, '.'
        ENDIF
     ENDIF
+    IF ( wp == sp )  WRITE ( io, 120 )
     WRITE ( io, 99 )
 
 !
@@ -847,7 +874,7 @@
     ELSEIF ( ibc_pt_b == 1 )  THEN
        r_lower = TRIM( r_lower ) // ' pt(0)     = pt(1)'
     ELSEIF ( ibc_pt_b == 2 )  THEN
-       r_lower = TRIM( r_lower ) // ' pt(0)     = from coupled model'
+       r_lower = TRIM( r_lower ) // ' pt(0)     = from coupled ocean model'
     ELSEIF ( ibc_pt_b == 3 )  THEN
        r_lower = TRIM( r_lower ) // ' pt interpolated from parent'
     ENDIF
@@ -893,6 +920,8 @@
        IF ( ibc_q_b == 0 )  THEN
           IF ( land_surface )  THEN
              r_lower = 'q(0)     = from soil model'
+          ELSEIF ( atmosphere_run_coupled_to_ocean )  THEN
+             r_lower = 'q(0)     = saturation value at pt(0) (atmosphere-ocean coupling)'
           ELSE
              r_lower = 'q(0)     = q_surface'
           ENDIF
@@ -1673,6 +1702,7 @@
 119 FORMAT (' --> Galilei-Transform applied to horizontal advection:'/                             &
             '     translation velocity = ',A/                                                      &
             '     distance advected ',A,':  ',F8.3,' km(x)  ',F8.3,' km(y)')
+120 FORMAT (' --> running with 32-bit single precision')
 121 FORMAT (' --> Use the ',A,' approximation for the model equations.')
 122 FORMAT (' --> Time differencing scheme: ',A)
 123 FORMAT (' --> Rayleigh-Damping active, starts ',A,' z = ',F8.2,' m'/                           &
@@ -1686,8 +1716,9 @@
             '     which may appear in results as (small) artificial source of passive scalars.')
 134 FORMAT (' --> Additional prognostic equation for a passive scalar')
 135 FORMAT (' --> Solve perturbation pressure via ',A,' method (',A,'-cycle)'/                     &
-            '     number of grid levels:                   ',I2/                                   &
-            '     Gauss-Seidel red/black iterations:       ',I2)
+            '     number of grid levels:                    ',I2/                                  &
+            '     Gauss-Seidel red/black iterations:       ',I3/                                   &
+            '                      at initial start:       ',I3,'   until timestep ',I3)
 136 FORMAT ('     gridpoints of coarsest subdomain (x,y,z): (',I3,',',I3,',', I3,')')
 137 FORMAT ('     level data gathered on PE0 at level:     ',I2/                                   &
             '     gridpoints of coarsest subdomain (x,y,z): (',I3,',',I3,',', I3,')'/              &
@@ -1695,10 +1726,14 @@
 138 FORMAT ('     Negative scalar values due to dispersion errors are permitted!')
 139 FORMAT (' --> Loop optimization method: ',A)
 140 FORMAT ('     maximum residual allowed:                ',E10.3)
-141 FORMAT ('     fixed number of multigrid cycles:        ',I4)
+141 FORMAT ('     fixed number of multigrid cycles:       ',I4)
 142 FORMAT ('     perturbation pressure is calculated at every Runge-Kutta ','step')
 143 FORMAT ('     Euler/upstream scheme is used for the SGS turbulent ','kinetic energy')
 144 FORMAT ('     masking method is used')
+145 FORMAT ('     number of grid levels restricted by max_mg_grid_levels to ', I2/                 &
+            '     possible maximum number of levels:                        ', I2)
+146 FORMAT ('     single grid point holes are filtered:')
+147 FORMAT ('                     grid level ',I2,':     ',I5,' holes filtered')
 150 FORMAT (' --> Volume flow at the right and north boundary will be ','conserved'/               &
             '     using the ',A,' mode')
 151 FORMAT ('     with u_bulk = ',F7.3,' m/s and v_bulk = ',F7.3,' m/s')
@@ -1979,11 +2014,12 @@
             ' Nesting boundary conditions:      ',A/                                               &
             ' Nesting mode:                     ',A/                                               &
             ' Nesting-datatransfer mode:        ',A/                                               &
-            ' Nesting communication:            ',A//                                              &
-            ' Nest id  parent  number       lower left coordinates         name'/                  &
+            ' Nesting communication:            ',A)
+602 FORMAT (' Timestep values of models are not synchronized')
+603 FORMAT (/' Nest id  parent  number       lower left coordinates         name'/                 &
             ' (*=me)     id    of PEs      x (m)     y (m)     z (m)')
-602 FORMAT (2X,A1,1X,I2.2,6X,I2.2,5X,I5,5X,F8.2,2X,F8.2,2X,F8.2,5X,A)
-603 FORMAT (/' Nest id ',I2.2,' has been newly added to this run.')
+604 FORMAT (2X,A1,1X,I2.2,6X,I2.2,5X,I5,5X,F8.2,2X,F8.2,2X,F8.2,5X,A)
+605 FORMAT (/' Nest id ',I2.2,' has been newly added to this run.')
 #endif
 
  END SUBROUTINE header

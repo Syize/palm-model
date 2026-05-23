@@ -106,10 +106,12 @@
                nudging,                                                                            &
                ocean_mode,                                                                         &
                plant_canopy,                                                                       &
+               psolver,                                                                            &
                salsa,                                                                              &
                slurb,                                                                              &
                surface_output,                                                                     &
                syn_turb_gen,                                                                       &
+               traffic,                                                                            &
                turbulent_inflow,                                                                   &
                urban_surface,                                                                      &
                uv_radiation,                                                                       &
@@ -371,8 +373,8 @@
                pcm_wrd_global,                                                                     &
                pcm_wrd_local
 
-    USE poismg_noopt_mod,                                                                          &
-        ONLY:  poismg_noopt_init
+    USE poismg_mod,                                                                                &
+        ONLY:  poismg_init
 
     USE radiation_model_mod,                                                                       &
         ONLY:  radiation,                                                                          &
@@ -429,7 +431,6 @@
                slurb_parin,                                                                        &
                slurb_swap_timelevel,                                                               &
                slurb_rrd_local,                                                                    &
-               slurb_timestep,                                                                     &
                slurb_wrd_local
 
     USE spectra_mod,                                                                               &
@@ -449,6 +450,19 @@
                stg_parin,                                                                          &
                stg_rrd_global,                                                                     &
                stg_wrd_global
+
+    USE traffic_mod,                                                                               &
+        ONLY:  trm_3d_data_averaging,                                                              &
+               trm_actions,                                                                        &
+               trm_check_parameters,                                                               &
+               trm_check_data_output,                                                              &
+               trm_data_output_3d,                                                                 &
+               trm_define_netcdf_grid,                                                             &
+               trm_init_arrays,                                                                    &
+               trm_last_actions,                                                                   &
+               trm_parin,                                                                          &
+               trm_rrd_local,                                                                      &
+               trm_wrd_local
 
     USE turbulence_closure_mod,                                                                    &
         ONLY:  tcm_3d_data_averaging,                                                              &
@@ -766,6 +780,7 @@
     CALL slurb_parin
     CALL spectra_parin
     CALL stg_parin
+    CALL trm_parin
     CALL turbulent_inflow_parin
     CALL usm_parin
     CALL uv_radiation_parin
@@ -814,6 +829,7 @@
     IF ( slurb )                CALL slurb_check_parameters
     IF ( calculate_spectra )    CALL spectra_check_parameters
     IF ( syn_turb_gen )         CALL stg_check_parameters
+    IF ( traffic )              CALL trm_check_parameters
     IF ( turbulent_inflow )     CALL turbulent_inflow_check_parameters
     IF ( urban_surface )        CALL usm_check_parameters
     IF ( uv_radiation )         CALL uv_radiation_check_parameters
@@ -1025,6 +1041,11 @@
        CALL uv_radiation_check_data_output( variable, unit, j )
     ENDIF
 
+    IF ( unit == 'illegal'  .AND.  traffic )  THEN
+       unit = ''
+       CALL trm_check_data_output( variable, unit )
+    ENDIF
+
     IF ( debug_output )  CALL debug_message( 'checking module-specific data output 2d/3d', 'end' )
 
 
@@ -1094,6 +1115,10 @@
 
     IF ( unit == 'illegal'  .AND.  salsa )  THEN
        CALL salsa_check_data_output( variable, unit )
+    ENDIF
+
+    IF ( unit == 'illegal'  .AND.  traffic )  THEN
+       CALL trm_check_data_output( variable, unit )
     ENDIF
 
     IF ( unit == 'illegal'  .AND.  user_module_enabled )  THEN
@@ -1170,6 +1195,7 @@
     IF ( slurb                  )  CALL slurb_init_arrays
     IF ( turbulent_inflow       )  CALL turbulent_inflow_init_arrays
     IF ( urban_surface          )  CALL usm_init_arrays
+    IF ( traffic                )  CALL trm_init_arrays
     IF ( wind_turbine           )  CALL wtm_init_arrays
     IF ( user_module_enabled    )  CALL user_init_arrays
 
@@ -1192,6 +1218,11 @@
        CALL debug_message( 'module-specific initialization before pressure solver', 'start' )
     ENDIF
 
+    IF ( psolver == 'multigrid' )  THEN
+       CALL poismg_init( even_odd_decomposition = .TRUE. )
+    ELSEIF ( psolver == 'multigrid_noopt' )  THEN
+       CALL poismg_init( even_odd_decomposition = .FALSE. )
+    ENDIF
     IF ( cut_cell_topography )  CALL cct_init
     IF ( nesting_offline     )  CALL nesting_offl_init
     IF ( turbulent_inflow    )  CALL turbulent_inflow_init
@@ -1264,10 +1295,6 @@
 !-- allocate and initialize the respective index arrays, and set the respective start and end
 !-- indices at each (j,i)-location.
     CALL init_surface_grid_information
-!
-!-- Calculate wall flag arrays for the multigrid method.
-!-- Please note, wall flags are only applied in the non-optimized version.
-    CALL poismg_noopt_init
 
  END SUBROUTINE module_interface_init_numerics
 
@@ -1393,6 +1420,7 @@
     IF ( ocean_mode             )  CALL ocean_actions( location )
     IF ( salsa                  )  CALL salsa_actions( location )
     IF ( syn_turb_gen           )  CALL stg_actions( location )
+    IF ( traffic                )  CALL trm_actions( location )
     IF ( wind_turbine           )  CALL wtm_actions( location )
     IF ( user_module_enabled    )  CALL user_actions( location )
     IF ( uv_radiation           )  CALL uv_radiation_actions( location )
@@ -1426,6 +1454,7 @@
     IF ( gust_module_enabled    )  CALL gust_actions( i, j, location )
     IF ( ocean_mode             )  CALL ocean_actions( i, j, location )
     IF ( salsa                  )  CALL salsa_actions( i, j, location )
+    IF ( traffic                )  CALL trm_actions( i, j, location )
     IF ( wind_turbine           )  CALL wtm_actions( i, j, location )
 
     IF ( user_module_enabled )  CALL user_actions( i, j, location )
@@ -1644,6 +1673,7 @@
     IF ( radiation             )  CALL radiation_3d_data_averaging( mode, variable )
     IF ( salsa                 )  CALL salsa_3d_data_averaging( mode, variable )
     IF ( slurb                 )  CALL slurb_3d_data_averaging( mode, variable )
+    IF ( traffic               )  CALL trm_3d_data_averaging( mode, variable )
     IF ( urban_surface         )  CALL usm_3d_data_averaging( mode, variable )
 
     IF ( user_module_enabled   )  CALL user_3d_data_averaging( mode, variable )
@@ -1864,6 +1894,10 @@
 
     IF ( .NOT. found  .AND.  user_module_enabled )  THEN
        CALL user_data_output_3d( av, variable, found, local_pf, resorted, nzb_do, nzt_do )
+    ENDIF
+
+    IF ( .NOT. found  .AND.  traffic )  THEN
+       CALL trm_data_output_3d( av, variable, found, local_pf, resorted, nzb_do, nzt_do )
     ENDIF
 
     IF ( debug_output_timestep )  CALL debug_message( 'module-specific 3d data output', 'end' )
@@ -2198,6 +2232,14 @@
                                               tmp_2d, found                                        &
                                             )
 
+    IF ( .NOT. found )  CALL trm_rrd_local( map_index,                                             &
+                                                  nxlf, nxlc, nxl_on_file,                         &
+                                                  nxrf, nxrc, nxr_on_file,                         &
+                                                  nynf, nync, nyn_on_file,                         &
+                                                  nysf, nysc, nys_on_file,                         &
+                                                  tmp_3d, found                                    &
+                                                ) ! ToDo: change interface to pass variable
+
     IF ( .NOT. found )  CALL usm_rrd_local( map_index,                                             &
                                             nxlf, nxlc, nxl_on_file,                               &
                                             nxrf, nxr_on_file,                                     &
@@ -2248,6 +2290,7 @@
     IF ( radiation )            CALL radiation_rrd_local
     IF ( salsa )                CALL salsa_rrd_local
     IF ( slurb )                CALL slurb_rrd_local
+    IF ( traffic   )            CALL trm_rrd_local
     IF ( urban_surface )        CALL usm_rrd_local
 
     IF ( user_module_enabled )  CALL user_rrd_local
@@ -2318,6 +2361,7 @@
     IF ( radiation )            CALL radiation_wrd_local
     IF ( salsa )                CALL salsa_wrd_local
     IF ( slurb )                CALL slurb_wrd_local
+    IF ( traffic )              CALL trm_wrd_local
     IF ( urban_surface )        CALL usm_wrd_local
 
     IF ( user_module_enabled )  CALL user_wrd_local
@@ -2366,6 +2410,7 @@
 
     CALL dynamics_last_actions
     IF ( particle_advection )   CALL lpm_last_actions
+    IF ( traffic   )            CALL trm_last_actions
     IF ( user_module_enabled )  CALL user_last_actions
 
     IF ( debug_output )  CALL debug_message( 'module-specific last actions', 'end' )

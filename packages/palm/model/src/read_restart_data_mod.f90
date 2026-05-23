@@ -117,6 +117,13 @@
     USE pmc_interface,                                                                             &
         ONLY:  nesting_coupling_time
 
+    USE poismg_mod,                                                                                &
+        ONLY:  cycle_mg,                                                                           &
+               mg_cycles,                                                                          &
+               mg_switch_to_pe0_level,                                                             &
+               ngsrb,                                                                              &
+               residual_limit
+
     USE radiation_model_mod,                                                                       &
         ONLY:  time_radiation
 

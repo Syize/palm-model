@@ -27,6 +27,13 @@ compiler:
       - "-pedantic"
       - "-Wno-format"
       - "-Wno-unused-result"
+  rrtmg_options:
+    default:
+      - "-cpp"
+      - "-Ofast"
+    debug:
+      - "-cpp"
+      - "-O0"
   options:
     default:
       - "-cpp"
@@ -60,11 +67,9 @@ compiler:
   includes:
     - "{{GNU.include.netcdf}}"
     - "{{GNU.include.fftw}}"
-    - "{{GNU.include.rrtmg}}"
 
 linker:
   options:
     - "-fopenmp"
     - "{{GNU.lib.netcdf}}"
     - "{{GNU.lib.fftw}}"
-    - "{{GNU.lib.rrtmg}}"

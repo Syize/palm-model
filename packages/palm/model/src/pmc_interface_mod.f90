@@ -320,9 +320,9 @@
     IMPLICIT NONE
 
 !
-!-- The module default privacy is set to PRIVATE, but note that in the end of this declaration 
+!-- The module default privacy is set to PRIVATE, but note that in the end of this declaration
 !-- block, there are separate PUBLIC declarations for those variables that are needed by other
-!-- modules. This could be made more transparent by using PUBLIC-attributes instead. 
+!-- modules. This could be made more transparent by using PUBLIC-attributes instead.
     PRIVATE
 !
 !-- Constants
@@ -1173,7 +1173,8 @@
           child_y_south(m) = child_coord_y(-nbgp)
           child_y_north(m) = child_coord_y(ny_child+nbgp)
 
-          IF ( .NOT. nesting_bounds_vertical_only  .AND.  .NOT. atmosphere_ocean_coupled_run )  THEN
+          IF ( .NOT. nesting_bounds_vertical_only  .AND.  .NOT. atmosphere_ocean_coupled_run  .AND.&
+               nesting_mode == 'two-way' )  THEN
 !
 !--          Note that the msib-loop is executed only if ( m > 1 ).
 !--          Also note that the tests have to be done both ways (m vs msib and msib vs m) in order
@@ -1390,7 +1391,7 @@
                 ilist = ilist + 1
 !
 !--             Index i of parent array. Please note that in this context the addressing starts
-!--             with 1. In PALM, 3d and 3d are allocated with boundaries, therefore the indexing
+!--             with 1. In PALM, 2d and 3d are allocated with boundaries, therefore the indexing
 !--             has to be adjusted with + 1 + nbgp.
                 index_list(1,ilist) = ip - ( pex * nrx ) + 1 + nbgp
 !
@@ -3863,7 +3864,7 @@
 ! Description:
 ! ------------
 !> Child-domain initialization using 1d interpolation of domain-averaged profiles from the
-!> parent domain. 
+!> parent domain.
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE pmci_interp_1d( child_array, parent_profile, kct, kfl, kfu )
 
@@ -4629,13 +4630,13 @@
 
           dt_max_pmci = dt_3d
 
-          CALL cpu_log( log_point_s(104), 'pmci_synchronize_barrier', 'start' )
+          CALL cpu_log( log_point_s(107), 'pmci_synchronize_barrier', 'start' )
 
           CALL MPI_BARRIER( MPI_COMM_WORLD, ierr )
           CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_max_pmci, 1, MPI_REAL, MPI_MAX, MPI_COMM_WORLD,     &
                               ierr )
 
-          CALL cpu_log( log_point_s(104), 'pmci_synchronize_barrier', 'stop' )
+          CALL cpu_log( log_point_s(107), 'pmci_synchronize_barrier', 'stop' )
 
           nesting_coupling_time = time_since_reference_point + dt_max_pmci
 !
@@ -6511,10 +6512,10 @@
 !-- Define the index bounds ipl_anterp, ipr_anterp, jps_anterp and jpn_anterp.
 !-- Note that kpb_anterp is defined beforehand in pmci_compute_kpb_anterp and kpt_anterp depends
 !-- on kct which enters here as a parameter and it is determined in pmci_define_index_mapping.
-!-- Note that the grid points directly used also for interpolation (from parent to child) 
+!-- Note that the grid points directly used also for interpolation (from parent to child)
 !-- are always excluded from anterpolation, e.g. anterpolation is maximally only from 0:kct-1,
-!-- since kct is directly used for interpolation. Similar restriction is applied to the lateral 
-!-- boundaries as well. An additional buffer is also applied (default value for 
+!-- since kct is directly used for interpolation. Similar restriction is applied to the lateral
+!-- boundaries as well. An additional buffer is also applied (default value for
 !-- anterpolation_buffer_width = 2) in order to avoid unphysical accumulation of kinetic energy.
     ipl_anterp = ipl
     ipr_anterp = ipr
@@ -7201,20 +7202,22 @@
        DO   j = nys, nyn
           DO  k = nzt, nzt + 1
              w(k,j,i) = w(k,j,i) + w_corr_top *                                                    &
-                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 1 ) )
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 3 ) )
           ENDDO
        ENDDO
     ENDDO
+    IF ( .NOT. synchronize_timestep  .AND.  child_domain )  w_p(nzt:nzt+1,:,:) = w(nzt:nzt+1,:,:)
 !
 !-- Correct the bottom-boundary value of w.
     DO   i = nxl, nxr
        DO   j = nys, nyn
           DO  k = nzb, nzb
              w(k,j,i) = w(k,j,i) - w_corr_top *                                                    &
-                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 1 ) )
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 3 ) )
           ENDDO
        ENDDO
     ENDDO
+    IF ( .NOT. synchronize_timestep  .AND.  child_domain )  w_p(nzb,:,:) = w(nzb,:,:)
 !
 !-- Correct the left-boundary value of u.
     IF ( bc_dirichlet_l )  THEN
@@ -7226,6 +7229,7 @@
              ENDDO
           ENDDO
        ENDDO
+       IF ( .NOT. synchronize_timestep  .AND.  child_domain )  u_p(:,:,nxl-1:nxl) = u(:,:,nxl-1:nxl)
     ENDIF
 !
 !-- Correct the right-boundary value of u.
@@ -7238,6 +7242,7 @@
              ENDDO
           ENDDO
        ENDDO
+       IF ( .NOT. synchronize_timestep  .AND.  child_domain )  u_p(:,:,nxr+1) = u(:,:,nxr+1)
     ENDIF
 !
 !-- Correct the south-boundary value of v.
@@ -7250,6 +7255,7 @@
              ENDDO
           ENDDO
        ENDDO
+       IF ( .NOT. synchronize_timestep  .AND.  child_domain )  v_p(:,nys-1:nys,:) = v(:,nys-1:nys,:)
     ENDIF
 !
 !-- Correct the north-boundary value of v.
@@ -7262,6 +7268,7 @@
              ENDDO
           ENDDO
        ENDDO
+       IF ( .NOT. synchronize_timestep  .AND.  child_domain )  v_p(:,nyn+1,:) = v(:,nyn+1,:)
     ENDIF
 
  END SUBROUTINE pmci_ensure_nest_mass_conservation

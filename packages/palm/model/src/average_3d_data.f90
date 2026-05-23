@@ -31,6 +31,11 @@
                doav_n,                                                                             &
                varnamelength
 
+#if defined( _OPENACC )
+    USE control_parameters,                                                                        &
+        ONLY:  enable_openacc
+#endif
+
     USE cpulog,                                                                                    &
         ONLY:  cpu_log,                                                                            &
                log_point
@@ -147,6 +152,8 @@
 
           CASE ( 'p' )
              IF ( ALLOCATED( p_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxlg, nxrg
                    DO  j = nysg, nyng
                       DO  k = nzb, nzt+1
@@ -192,17 +199,6 @@
                 DO  i = nxl, nxr
                    DO  j = nys, nyn
                       pres_drag_y_av(j,i) = pres_drag_y_av(j,i) / REAL( average_count_3d, KIND=wp )
-                   ENDDO
-                ENDDO
-             ENDIF
-
-          CASE ( 'theta' )
-             IF ( ALLOCATED( pt_av ) )  THEN
-                DO  i = nxlg, nxrg
-                   DO  j = nysg, nyng
-                      DO  k = nzb, nzt+1
-                         pt_av(k,j,i) = pt_av(k,j,i) / REAL( average_count_3d, KIND=wp )
-                      ENDDO
                    ENDDO
                 ENDDO
              ENDIF
@@ -344,6 +340,30 @@
                 CALL exchange_horiz_2d( ts_av )
              ENDIF
 
+          CASE ( 'theta' )
+             IF ( ALLOCATED( pt_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+                DO  i = nxlg, nxrg
+                   DO  j = nysg, nyng
+                      DO  k = nzb, nzt+1
+                         pt_av(k,j,i) = pt_av(k,j,i) / REAL( average_count_3d, KIND=wp )
+                      ENDDO
+                   ENDDO
+                ENDDO
+             ENDIF
+
+          CASE ( 'thetav' )
+             IF ( ALLOCATED( vpt_av ) )  THEN
+                DO  i = nxlg, nxrg
+                   DO  j = nysg, nyng
+                      DO  k = nzb, nzt+1
+                         vpt_av(k,j,i) = vpt_av(k,j,i) / REAL( average_count_3d, KIND=wp )
+                      ENDDO
+                   ENDDO
+                ENDDO
+             ENDIF
+
          CASE ( 'tsurf*' )
              IF ( ALLOCATED( tsurf_av ) )  THEN
                 DO  i = nxlg, nxrg
@@ -356,6 +376,8 @@
 
           CASE ( 'u' )
              IF ( ALLOCATED( u_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxlg, nxrg
                    DO  j = nysg, nyng
                       DO  k = nzb, nzt+1
@@ -377,6 +399,8 @@
 
           CASE ( 'v' )
              IF ( ALLOCATED( v_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxlg, nxrg
                    DO  j = nysg, nyng
                       DO  k = nzb, nzt+1
@@ -386,19 +410,10 @@
                 ENDDO
              ENDIF
 
-          CASE ( 'thetav' )
-             IF ( ALLOCATED( vpt_av ) )  THEN
-                DO  i = nxlg, nxrg
-                   DO  j = nysg, nyng
-                      DO  k = nzb, nzt+1
-                         vpt_av(k,j,i) = vpt_av(k,j,i) / REAL( average_count_3d, KIND=wp )
-                      ENDDO
-                   ENDDO
-                ENDDO
-             ENDIF
-
           CASE ( 'w' )
              IF ( ALLOCATED( w_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxlg, nxrg
                    DO  j = nysg, nyng
                       DO  k = nzb, nzt+1

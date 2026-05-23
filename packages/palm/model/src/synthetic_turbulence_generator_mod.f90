@@ -204,6 +204,7 @@
                                                          !< no time correlation to the timestep before should be considered
     LOGICAL ::  compute_velocity_seeds_local  = .FALSE.  !< switch to decide whether velocity seeds are computed locally
                                                          !< or if computation is distributed over several processes
+    LOGICAL ::  disturb_theta                 = .FALSE.  !< namelist parameter used to switch-on/off temperature perturbations
     LOGICAL ::  parametrize_inflow_turbulence = .FALSE.  !< flag indicating that inflow turbulence is either read from file
                                                          !< (.FALSE.) or if it parametrized
     LOGICAL ::  file_stg_exist                = .FALSE.  !< flag indicating whether parameter file for Reynolds stress and length scales exist
@@ -223,6 +224,7 @@
     REAL(wp) ::  scale_l                           !< scaling parameter used for turbulence parametrization - Obukhov length
     REAL(wp) ::  scale_us                          !< scaling parameter used for turbulence parametrization - friction velocity
     REAL(wp) ::  scale_wm                          !< scaling parameter used for turbulence parametrization - momentum scale
+    REAL(wp) ::  theta_amplitude = 0.1_wp          !< maximum amplitude of temperature perturbations
     REAL(wp) ::  time_stg_adjust = 0.0_wp          !< time counter for adjusting turbulence information
     REAL(wp) ::  time_stg_call = 0.0_wp            !< time counter for calling generator
     REAL(wp) ::  zi                                !< boundary-layer depth used for turbulence parametrization
@@ -389,18 +391,18 @@
           .AND.  INDEX( initializing_actions, 'read_restart_data' ) == 0 )  THEN
              message_string = 'using synthetic turbulence generator requires ' //                  &
                               '%initializing_actions = "set_constant_profiles" or ' //             &
-                              ' "read_restart_data", if not offline nesting is applied'
+                              ' "read_restart_data", if no offline nesting is applied'
              CALL message( 'stg_check_parameters', 'STG0004', 1, 2, 0, 6, 0 )
           ENDIF
 
           IF ( bc_lr /= 'dirichlet/radiation' )  THEN
              message_string = 'using synthetic turbulence generator requires &bc_lr = ' //         &
-                              ' "dirichlet/radiation", if not offline nesting is applied'
+                              ' "dirichlet/radiation", if no offline nesting is applied'
              CALL message( 'stg_check_parameters', 'STG0005', 1, 2, 0, 6, 0 )
           ENDIF
           IF ( bc_ns /= 'cyclic' )  THEN
              message_string = 'using synthetic turbulence generator requires &bc_ns = ' //         &
-                              ' "cyclic", if not offline nesting is applied'
+                              ' "cyclic", if no offline nesting is applied'
              CALL message( 'stg_check_parameters', 'STG0006', 1, 2, 0, 6, 0 )
           ENDIF
 !
@@ -414,6 +416,15 @@
              CALL message( 'stg_check_parameters', 'STG0007', 1, 2, 0, 6, 0 )
           ENDIF
 
+       ENDIF
+!
+!--    A 1d-decomposition along x or y is not allowed in combination with the STG if
+!--    perturbations are added on all lateral boundaries. In case of an idealized inflow from
+!--    the left, a 1d-decomposition along x or y is still allowed.
+       IF ( ( nesting_offline  .OR.  ( child_domain .AND.  rans_mode_parent  .AND.              &
+            .NOT.  rans_mode ) )  .AND.  ( npex == 1  .OR.  npey == 1 ) )  THEN
+          message_string = 'illegal domain decomposition to be used with the STG'
+          CALL message( 'stg_check_parameters', 'STG0013', 1, 2, 0, 6, 0 )
        ENDIF
 !
 !--    In case of neutral runs, either an STG_PROFILES file is required, or turbulence is
@@ -453,6 +464,22 @@
           ENDIF
        ENDIF
 #endif
+
+       IF ( disturb_theta )  THEN
+!
+!--       Temperature perturbations are only allowed in non-neutral simulations.
+          IF ( neutral )  THEN
+             message_string = 'disturb_theta = .T. not allowed for neutral setups'
+             CALL message( 'stg_check_parameters', 'STG0014', 1, 2, 0, 6, 0 )
+          ENDIF
+!
+!--       Temperature perturbations require values of theta_amplitude > 0.0.
+          IF ( theta_amplitude <= 0.0_wp )  THEN
+             WRITE( message_string, '(A,F5.2)' )  'illegal value of theta_amplitude = ',           &
+                                                  theta_amplitude
+             CALL message( 'stg_check_parameters', 'STG0015', 1, 2, 0, 6, 0 )
+          ENDIF
+       ENDIF
 
     ENDIF
 
@@ -822,7 +849,7 @@
 
 !
 !-- In case of restart, calculate velocity seeds fu, fv, fw from former time step.
-!   Bug: fu, fv, fw are different in those heights where a11, a22, a33 are 0 compared to the prerun.
+!-- Bug: fu, fv, fw are different in those heights where a11, a22, a33 are 0 compared to the prerun.
 !-- This is mostly for k=nzt+1.
     IF ( TRIM( initializing_actions ) == 'read_restart_data' )  THEN
        IF ( myidx == id_stg_left  .OR.  myidx == id_stg_right )  THEN
@@ -1084,9 +1111,11 @@
 
     NAMELIST /stg_par/  boundary_layer_depth,                                                      &
                         compute_velocity_seeds_local,                                              &
+                        disturb_theta,                                                             &
                         dt_stg_adjust,                                                             &
                         dt_stg_call,                                                               &
-                        switch_off_module
+                        switch_off_module,                                                         &
+                        theta_amplitude
 
 
 !
@@ -1250,9 +1279,13 @@
 
     LOGICAL  ::  stg_call = .FALSE.  !< control flag indicating whether turbulence was updated or only restored from last call
 
-    REAL(wp) ::  dt_stg  !< time interval the STG is called
+    REAL(wp) ::  dist_pt  !< local disturbance imposed onto theta
+    REAL(wp) ::  dt_stg   !< time interval the STG is called
 
-    REAL(wp), DIMENSION(3) ::  mc_factor_l  !< local mass flux correction factor
+
+    REAL(wp), DIMENSION(3)         ::  mc_factor_l    !< local mass flux correction factor
+    REAL(wp), DIMENSION(nzb:nzt+1) ::  max_dist_w_xz  !< maximum disturbance added onto w-component on north/south boundaries
+    REAL(wp), DIMENSION(nzb:nzt+1) ::  max_dist_w_yz  !< maximum disturbance added onto w-component on left/right boundaries
 
     IF ( debug_output_timestep )  CALL debug_message( 'stg_main', 'start' )
 !
@@ -1415,9 +1448,22 @@
                        MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(nzb:nzt,nysv:nyn,i), 2 ) ) )
           mc_factor_l(3) = SUM( dist_yz(nzb:nzt,nys:nyn,3) *                                       &
                        MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(nzb:nzt,nys:nyn,i), 3 ) ) )
+!
+!--       Also determine maximum disturbance amplitude on w-component. This is used to scale
+!--       temperature perturbations accordingly.
+          IF ( disturb_theta )  THEN
+             DO  k = nzb, nzt+1
+                max_dist_w_yz(k) = MAXVAL( ABS( dist_yz(k,nys:nyn,3) ) )
+             ENDDO
+          ENDIF
 
 #if defined( __parallel )
           CALL MPI_ALLREDUCE( mc_factor_l, mc_factor, 3, MPI_REAL, MPI_SUM, comm1dy, ierr )
+
+          IF ( disturb_theta )  THEN
+             CALL MPI_ALLREDUCE( MPI_IN_PLACE, max_dist_w_yz, SIZE( max_dist_w_yz ), MPI_REAL,     &
+                                 MPI_MAX, comm1dy, ierr )
+          ENDIF
 #else
           mc_factor   = mc_factor_l
 #endif
@@ -1481,6 +1527,24 @@
                                    MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,-1), 2 ) )
                    ENDDO
                 ENDDO
+!
+!--             Optionally add perturbations to theta. These are spatially correlated to the
+!--             w-component, featuring the same length and time-scales. Moreover, the local
+!--             amplitude of temperature perturbations correlates with the local amplitude of
+!--             w perturbations, with the maximum temperature amplitude given by the parameter
+!--             theta_amplitude. The location of the maximum amplitude at a given height coincides
+!--             with the location of the maximum amplitude in the w-component. Tests have shown
+!--             that adding temperature perturbations significantly reduces the adjustment fetch.
+                IF ( disturb_theta )  THEN
+                   DO  j = nys, nyn
+                      DO  k = nzb+1, nzt
+                         dist_pt = MIN( 1.0_wp, ABS( dist_yz(k,j,3) )                              &
+                                               / ( max_dist_w_yz(k) + 1E-10_wp ) ) * theta_amplitude
+                         pt(k,j,-1) = pt(k,j,-1) + SIGN( dist_pt, dist_yz(k,j,3) )                 &
+                                      * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,-1), 0 ) )
+                      ENDDO
+                   ENDDO
+                ENDIF
              ENDIF
           ENDIF
 !
@@ -1500,6 +1564,17 @@
                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,nxr+1), 2 ) )
                 ENDDO
              ENDDO
+
+             IF ( disturb_theta )  THEN
+                DO  j = nys, nyn
+                   DO  k = nzb+1, nzt
+                      dist_pt = MIN( 1.0_wp, ABS( dist_yz(k,j,3) )                                 &
+                                               / ( max_dist_w_yz(k) + 1E-10_wp ) ) * theta_amplitude
+                      pt(k,j,nxr+1) = pt(k,j,nxr+1) + SIGN( dist_pt, dist_yz(k,j,3) )              &
+                                      * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,nxr+1), 0 ) )
+                   ENDDO
+                ENDDO
+             ENDIF
           ENDIF
        ENDIF
     ENDIF
@@ -1597,9 +1672,22 @@
                            MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(nzb:nzt,j,nxlu:nxr), 1 ) ) )
           mc_factor_l(3) = SUM( dist_xz(nzb:nzt,nxl:nxr,3) *                                       &
                            MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(nzb:nzt,j,nxl:nxr), 3 ) ) )
+!
+!--       Also determine maximum disturbance amplitude on w-component. This is used to scale
+!--       temperature perturbations accordingly.
+          IF ( disturb_theta )  THEN
+             DO  k = nzb, nzt+1
+                max_dist_w_xz(k) = MAXVAL( ABS( dist_xz(k,nxl:nxr,3) ) )
+             ENDDO
+          ENDIF
 
 #if defined( __parallel )
           CALL MPI_ALLREDUCE( mc_factor_l, mc_factor, 3, MPI_REAL, MPI_SUM, comm1dx, ierr )
+
+          IF ( disturb_theta )  THEN
+             CALL MPI_ALLREDUCE( MPI_IN_PLACE, max_dist_w_xz, SIZE( max_dist_w_xz ), MPI_REAL,     &
+                                 MPI_MAX, comm1dx, ierr )
+          ENDIF
 #else
           mc_factor   = mc_factor_l
 #endif
@@ -1639,6 +1727,25 @@
                                * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,-1,i), 1 ) )
                 ENDDO
              ENDDO
+!
+!--          Optionally add perturbations to theta. These are spatially correlated to the
+!--          w-component, featuring the same length and time-scales. Moreover, the local
+!--          amplitude of temperature perturbations correlates with the local amplitude of
+!--          w perturbations, with the maximum temperature amplitude given by the parameter
+!--          theta_amplitude. The location of the maximum amplitude at a given height coincides
+!--          with the location of the maximum amplitude in the w-component. Tests have shown
+!--          that adding temperature perturbations significantly reduces the adjustment fetch.
+             IF ( disturb_theta )  THEN
+                DO  i = nxl, nxr
+                   DO  k = nzb+1, nzt
+                      dist_pt = MIN( 1.0_wp, ABS( dist_xz(k,i,3) )                                 &
+                                             / ( max_dist_w_xz(k) + 1E-10_wp ) ) * theta_amplitude
+                      pt(k,-1,i) = pt(k,-1,i) + SIGN( dist_pt, dist_xz(k,i,3) )                    &
+                                   * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,-1,i), 0 ) )
+                   ENDDO
+                ENDDO
+             ENDIF
+
           ENDIF
 !
 !--       Add disturbances on the northern domain boundary.
@@ -1658,6 +1765,17 @@
                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,nyn+1,i), 1 ) )
                 ENDDO
              ENDDO
+
+             IF ( disturb_theta )  THEN
+                DO  i = nxl, nxr
+                   DO  k = nzb+1, nzt
+                      dist_pt = MIN( 1.0_wp, ABS( dist_xz(k,i,3) )                                 &
+                                             / ( max_dist_w_xz(k) + 1E-10_wp ) ) * theta_amplitude
+                      pt(k,nyn+1,i) = pt(k,nyn+1,i) + SIGN( dist_pt, dist_xz(k,i,3) )              &
+                                      * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,nyn+1,i), 0 ) )
+                   ENDDO
+                ENDDO
+             ENDIF
           ENDIF
        ENDIF
     ENDIF
@@ -2137,7 +2255,6 @@
        nuz(k) = MAX( INT( length_scale_vert * ddzw(k) ), 1 )
        nvz(k) = MAX( INT( length_scale_vert * ddzw(k) ), 1 )
        nwz(k) = MAX( INT( length_scale_vert * ddzw(k) ), 1 )
-
     ENDDO
 !
 !-- Above boundary-layer top length- and timescales as well as reynolds-stress components are

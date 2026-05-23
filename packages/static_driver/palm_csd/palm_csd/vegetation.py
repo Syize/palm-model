@@ -11,31 +11,31 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Module for resolved vegetation."""
 
 import logging
-from importlib.resources import open_text
+from importlib.resources import files
 from math import pi
-from typing import Callable, ClassVar, Final, List, Tuple, Union, cast
+from typing import Callable, Final, List, Optional, Tuple, Union, cast
 
 import numpy as np
 import numpy.ma as ma
 import numpy.ma.core as ma_core
+import pandas.api.typing as pdtypes
 import scipy
 import scipy.integrate as integrate
 from pydantic import BaseModel, Field, field_validator
 
 from palm_csd import StatusLogger
 from palm_csd.csd_config import (
-    CSDConfigDomain,
-    CSDConfigSettings,
     _check_string,
     _default_not_none,
-    defaults,
+    value_defaults,
 )
+from palm_csd.tools import is_missing
 
 # TODO Python 3.11 supports Self in typing
 # from typing import Self
@@ -49,8 +49,8 @@ class Tree(BaseModel, validate_assignment=True):
     """A tree object with size parameters."""
 
     shape: int = Field(
-        ge=defaults["tree_shape"].minimum,
-        le=defaults["tree_shape"].maximum,
+        ge=value_defaults["tree_shape"].minimum,
+        le=value_defaults["tree_shape"].maximum,
     )
     """General shape of the tree:
     1 sphere or ellipsoid
@@ -61,45 +61,45 @@ class Tree(BaseModel, validate_assignment=True):
     6 inverted paraboloid (inverted rounded cone)
     """
     crown_ratio: float = Field(
-        ge=defaults["tree_crown_ratio"].minimum,
-        le=defaults["tree_crown_ratio"].maximum,
+        ge=value_defaults["tree_crown_ratio"].minimum,
+        le=value_defaults["tree_crown_ratio"].maximum,
     )
     """Ratio of maximum crown height to maximum crown diameter."""
     crown_diameter: float = Field(
-        ge=defaults["tree_crown_diameter"].minimum,
-        le=defaults["tree_crown_diameter"].maximum,
+        ge=value_defaults["tree_crown_diameter"].minimum,
+        le=value_defaults["tree_crown_diameter"].maximum,
     )
     """Crown diameter (m)."""
     height: float = Field(
-        ge=defaults["tree_height"].minimum,
-        le=defaults["tree_height"].maximum,
+        ge=value_defaults["tree_height"].minimum,
+        le=value_defaults["tree_height"].maximum,
     )
     """Total height of the tree including trunk (m)."""
     bad_scale: float = Field(
-        ge=defaults["bad_scale"].minimum,
-        le=defaults["bad_scale"].maximum,
+        ge=value_defaults["bad_scale"].minimum,
+        le=value_defaults["bad_scale"].maximum,
     )
     """Ratio of basal area in the crown area to the leaf area."""
     trunk_diameter: float = Field(
-        ge=defaults["tree_trunk_diameter"].minimum,
-        le=defaults["tree_trunk_diameter"].maximum,
+        ge=value_defaults["tree_trunk_diameter"].minimum,
+        le=value_defaults["tree_trunk_diameter"].maximum,
     )
     """Trunk diameter at breast height (1.4 m) (m)."""
 
     z_max_rel: float = Field(
-        ge=defaults["lad_z_max_rel"].minimum,
-        le=defaults["lad_z_max_rel"].maximum,
+        ge=value_defaults["lad_z_max_rel"].minimum,
+        le=value_defaults["lad_z_max_rel"].maximum,
     )
     """Height where the leaf area density is maximum relative to total tree height, only used with
     Lalic and Mihailovic (2004) method."""
     alpha: float = Field(
-        ge=defaults["lad_alpha"].minimum,
-        le=defaults["lad_alpha"].maximum,
+        ge=value_defaults["lad_alpha"].minimum,
+        le=value_defaults["lad_alpha"].maximum,
     )
     """LAD profile parameter alpha only used with Markkanen et al. (2003) method."""
     beta: float = Field(
-        ge=defaults["lad_beta"].minimum,
-        le=defaults["lad_beta"].maximum,
+        ge=value_defaults["lad_beta"].minimum,
+        le=value_defaults["lad_beta"].maximum,
     )
     """LAD profile parameter alpha only used with Markkanen et al. (2003) method."""
 
@@ -110,13 +110,13 @@ class ReferenceTree(Tree):
     species: str
     """Species."""
     lai_summer: float = Field(
-        ge=defaults["lai"].minimum,
-        le=defaults["lai"].maximum,
+        ge=value_defaults["lai"].minimum,
+        le=value_defaults["lai"].maximum,
     )
     """Default leaf area index fully leafed."""
     lai_winter: float = Field(
-        ge=defaults["lai"].minimum,
-        le=defaults["lai"].maximum,
+        ge=value_defaults["lai"].minimum,
+        le=value_defaults["lai"].maximum,
     )
     """Default winter-time leaf area index."""
 
@@ -125,241 +125,65 @@ class DomainTree(Tree):
     """A tree object with all the necessary parameters to calculate the LAD and BAD fields."""
 
     lai: float = Field(
-        ge=defaults["lai"].minimum,
-        le=defaults["lai"].maximum,
+        ge=value_defaults["lai"].minimum,
+        le=value_defaults["lai"].maximum,
     )
     """Actual leaf area index."""
     i: int = Field(
         ge=0,
-        le=defaults["nx"].maximum,
+        le=value_defaults["nx"].maximum,
     )
     """x coordinate of the tree."""
     j: int = Field(
         ge=0,
-        le=defaults["ny"].maximum,
+        le=value_defaults["ny"].maximum,
     )
     """y coordinate of the tree."""
     id: int = Field(
-        ge=defaults["tree_id"].minimum,
-        le=defaults["tree_id"].maximum,
+        ge=value_defaults["tree_id"].minimum,
+        le=value_defaults["tree_id"].maximum,
     )
     """ID of the tree."""
     type: int = Field(
-        ge=defaults["tree_type"].minimum,
-        le=defaults["tree_type"].maximum,
+        ge=value_defaults["tree_type"].minimum,
+        le=value_defaults["tree_type"].maximum,
     )
     """Type of the tree."""
 
-    defaults: ClassVar[List[ReferenceTree]] = []
-    """Table of default values."""
 
-    sphere_extinction: ClassVar[float] = 0.6
-    """Sphere extinction coefficient of the LAD/BAD generator; experimental."""
-    cone_extinction: ClassVar[float] = 0.2
-    """Cone extinction coefficient of the LAD/BAD generator; experimental."""
-
-    ml_n_low: ClassVar[float] = 0.5
-    """Lalic and Mihailovic (2004) parameter."""
-    ml_n_high: ClassVar[float] = 6.0
-    """Lalic and Mihailovic (2004) parameter."""
-
-    shallow_tree_count: ClassVar[int] = 0
-    """Counter of trees with height < 1/2 dz."""
-    low_lai_count: ClassVar[int] = 0
-    """Counter of trees with low LAI."""
-    mod_count: ClassVar[int] = 0
-    """Counter of modified trees."""
-    id_count: ClassVar[int] = 0
-    """Tree ID counter."""
-
-    @classmethod
-    def generate_tree(
-        cls,
-        i,
-        j,
-        type: Union[int, ma_core.MaskedConstant],
-        shape: Union[int, ma_core.MaskedConstant],
-        height: Union[float, ma_core.MaskedConstant],
-        lai: Union[float, ma_core.MaskedConstant],
-        crown_diameter: Union[float, ma_core.MaskedConstant],
-        trunk_diameter: Union[float, ma_core.MaskedConstant],
-        config: CSDConfigDomain,
-        settings: CSDConfigSettings,
-    ):  # -> Optional[Self]:  # TODO add with Python 3.11
-        """Generate a tree object.
-
-        Input values are checked and default values are used if necessary. Depending on the set-up,
-        trees with too low tree_height or tree_lai are removed.
-        """
-        # Increase the tree ID counter.
-        cls.id_count += 1
-
-        # Check for missing data in the input and set default values if needed.
-        if type is ma.masked:
-            if defaults["tree_type"].default is None:
-                raise ValueError("Tree type default must be defined.")
-            type_checked = int(defaults["tree_type"].default)
-        else:
-            type_checked = int(type)
-
-        if shape is ma.masked:
-            shape_checked = cls.defaults[type_checked].shape
-        else:
-            shape_checked = int(shape)
-
-        if height is ma.masked:
-            height_checked = cls.defaults[type_checked].height
-        else:
-            height_checked = float(height)
-
-        if lai is ma.masked:
-            if settings.season == "summer":
-                lai_checked = cls.defaults[type_checked].lai_summer
-            elif settings.season == "winter":
-                lai_checked = cls.defaults[type_checked].lai_winter
-            else:
-                raise ValueError(
-                    f"Season must either be 'summer' or 'winter' instead of {settings.season}"
-                )
-        else:
-            lai_checked = float(lai)
-
-        if crown_diameter is ma.masked:
-            crown_diameter_checked = cls.defaults[type_checked].crown_diameter
-        else:
-            crown_diameter_checked = float(crown_diameter)
-
-        if trunk_diameter is ma.masked:
-            trunk_diameter_checked = cls.defaults[type_checked].trunk_diameter
-        else:
-            trunk_diameter_checked = float(trunk_diameter)
-
-        # Very small trees are ignored.
-        if height_checked <= (0.5 * config.dz):
-            cls.shallow_tree_count += 1
-            logger.debug_indent(
-                f"Removed low tree with height = {height_checked:0.1f} at ({i}, {j})."
-            )
-            return None
-
-        # Check tree_lai.
-        # Tree LAI lower than threshold?
-        if lai_checked < settings.lai_tree_lower_threshold:
-            # Deal with low lai tree
-            cls.mod_count += 1
-            if config.remove_low_lai_tree:
-                # Skip this tree
-                logger.debug_indent(f"Removed tree with LAI = {lai_checked:0.3f} at ({i}, {j}).")
-                return None
-            else:
-                # Use type specific default
-                if settings.season == "summer":
-                    lai_checked = cls.defaults[type_checked].lai_summer
-                elif settings.season == "winter":
-                    lai_checked = cls.defaults[type_checked].lai_winter
-                else:
-                    raise ValueError(
-                        f"Season must either be 'summer' or 'winter' instead of {settings.season}."
-                    )
-                logger.debug_indent(f"Adjusted tree to LAI = {lai_checked:0.3f} at ({i}, {j}).")
-
-        # Warn about a tree with lower LAI than we would expect in winter.
-        if lai_checked < cls.defaults[type_checked].lai_winter:
-            cls.low_lai_count += 1
-            logger.debug_indent(
-                f"Found tree with LAI = {lai_checked:0.3f} (tree-type specific default winter LAI "
-                + f"of {cls.defaults[type_checked].lai_winter:0.2}) at ({i}, {j})."
-            )
-
-        # Assign values that are not defined as user input from lookup table.
-        crown_ratio_checked = cls.defaults[type_checked].crown_ratio
-        z_max_rel_checked = cls.defaults[type_checked].z_max_rel
-        alpha_checked = cls.defaults[type_checked].alpha
-        beta_checked = cls.defaults[type_checked].beta
-        bad_scale_checked = cls.defaults[type_checked].bad_scale
-
-        return cls(
-            type=type_checked,
-            shape=shape_checked,
-            crown_ratio=crown_ratio_checked,
-            crown_diameter=crown_diameter_checked,
-            height=height_checked,
-            z_max_rel=z_max_rel_checked,
-            alpha=alpha_checked,
-            beta=beta_checked,
-            bad_scale=bad_scale_checked,
-            trunk_diameter=trunk_diameter_checked,
-            lai=lai_checked,
-            i=i,
-            j=j,
-            id=cls.id_count,
+def _populate_defaults() -> List[ReferenceTree]:
+    """Read default tree species data from file."""
+    with files("palm_csd.data").joinpath("tree_defaults.csv").open() as tree_csv:
+        tree_data = np.genfromtxt(
+            tree_csv,
+            delimiter=",",
+            dtype=None,
+            names=True,
+            skip_header=12,
+            encoding="utf-8",
         )
-
-    @classmethod
-    def reset_counter(cls) -> None:
-        """Reset the tree counters."""
-        cls.shallow_tree_count = 0
-        cls.low_lai_count = 0
-        cls.mod_count = 0
-        cls.id_count = 0
-
-    @classmethod
-    def check_counter(cls, config: CSDConfigDomain, settings: CSDConfigSettings) -> None:
-        """Print a summary of the tree and tree LAI adjustments.
-
-        Args:
-            config: Domain configuration
-            settings: Settings configuration
-        """
-        if cls.shallow_tree_count > 0:
-            logger.warning(f"Removed {cls.shallow_tree_count} low trees with height < 1/2 dz.")
-        if cls.mod_count > 0:
-            if config.remove_low_lai_tree:
-                logger.warning(f"Removed {cls.mod_count} trees due to low LAI.")
-            else:
-                logger.warning(
-                    f"Adjusted LAI of {cls.mod_count} trees below lai_tree_lower_threshold "
-                    + f"using tree-type specific default {settings.season} LAI."
-                )
-        if cls.low_lai_count > 0:
-            logger.warning(
-                f"Found {cls.low_lai_count} trees with LAI lower then the "
-                + "tree-type specific default winter LAI."
+    defaults = []
+    for tree in tree_data:
+        defaults.append(
+            ReferenceTree(
+                species=tree["species"],
+                shape=tree["shape"],
+                crown_ratio=tree["crown_ratio"],
+                crown_diameter=tree["crown_diameter"],
+                height=tree["height"],
+                lai_summer=tree["lai_summer"],
+                lai_winter=tree["lai_winter"],
+                z_max_rel=tree["z_max_rel"],
+                alpha=tree["alpha"],
+                beta=tree["beta"],
+                bad_scale=tree["bad_scale"],
+                trunk_diameter=tree["trunk_diameter"],
             )
-            logger.info_indent(
-                "Consider adjusting lai_tree_lower_threshold and remove_low_lai_tree."
-            )
+        )
+    return defaults
 
-    @classmethod
-    def populate_defaults(cls) -> None:
-        """Read default tree species data from file."""
-        # Read csv from palm_csd.data. Use files instead of open_text for Python >=3.9.
-        with open_text("palm_csd.data", "tree_defaults.csv") as tree_csv:
-            tree_data = np.genfromtxt(
-                tree_csv,
-                delimiter=",",
-                dtype=None,
-                names=True,
-                skip_header=12,
-                encoding="utf-8",
-            )
-        for tree in tree_data:
-            cls.defaults.append(
-                ReferenceTree(
-                    species=tree["species"],
-                    shape=tree["shape"],
-                    crown_ratio=tree["crown_ratio"],
-                    crown_diameter=tree["crown_diameter"],
-                    height=tree["height"],
-                    lai_summer=tree["lai_summer"],
-                    lai_winter=tree["lai_winter"],
-                    z_max_rel=tree["z_max_rel"],
-                    alpha=tree["alpha"],
-                    beta=tree["beta"],
-                    bad_scale=tree["bad_scale"],
-                    trunk_diameter=tree["trunk_diameter"],
-                )
-            )
+
+tree_defaults = _populate_defaults()
 
 
 class CanopyGenerator(BaseModel):
@@ -375,24 +199,29 @@ class CanopyGenerator(BaseModel):
     N_ABOVE_Z_MAX_LM2004: Final = 0.5
     """Exponent above z_max in Lalic and Mihailovic (2004)."""
 
+    dz: float
+    """Grid spacing in z direction."""
+    pixel_size: float
+    """Pixel size in m."""
+
     method: str = "Metal2003"
     """Method to calculate the LAD profile."""
     alpha_Metal2003: float = Field(
         default=_default_not_none("lad_alpha"),
-        ge=defaults["lad_alpha"].minimum,
-        le=defaults["lad_alpha"].maximum,
+        ge=value_defaults["lad_alpha"].minimum,
+        le=value_defaults["lad_alpha"].maximum,
     )
     """LAD profile parameter alpha for Markkanen et al. (2003)."""
     beta_Metal2003: float = Field(
         default=_default_not_none("lad_beta"),
-        ge=defaults["lad_beta"].minimum,
-        le=defaults["lad_beta"].maximum,
+        ge=value_defaults["lad_beta"].minimum,
+        le=value_defaults["lad_beta"].maximum,
     )
     """LAD profile parameter beta for Markkanen et al. (2003)."""
     z_max_rel_LM2004: float = Field(
         default=_default_not_none("lad_z_max_rel"),
-        ge=defaults["lad_z_max_rel"].minimum,
-        le=defaults["lad_z_max_rel"].maximum,
+        ge=value_defaults["lad_z_max_rel"].minimum,
+        le=value_defaults["lad_z_max_rel"].maximum,
     )
     """Height of maximum LAD divided by patch height for Lalic and Mihailovic (2004)."""
 
@@ -403,6 +232,38 @@ class CanopyGenerator(BaseModel):
     """Function to calculate maximum normalized LAD (LAD_max / LAI * h)."""
     _z_max_rel_fun: Callable[..., float]
     """Function to calculate height of maximum LAD divided by patch height."""
+
+    season: str = "summer"
+    """Season for which the LAI is used."""
+
+    height_rel_resolved_vegetation_lower_threshold: float = Field(
+        default=_default_not_none("height_rel_resolved_vegetation_lower_threshold"),
+        ge=value_defaults["height_rel_resolved_vegetation_lower_threshold"].minimum,
+        le=value_defaults["height_rel_resolved_vegetation_lower_threshold"].maximum,
+    )
+    """Lower threshold for relative tree height below which trees are ignored."""
+    lai_tree_lower_threshold: float = Field(
+        default=_default_not_none("lai_tree_lower_threshold"),
+        ge=value_defaults["lai_tree_lower_threshold"].minimum,
+        le=value_defaults["lai_tree_lower_threshold"].maximum,
+    )
+    """Lower threshold for tree LAI below which trees are ignored."""
+    remove_low_lai_tree: bool = False
+    """Remove trees with low LAI."""
+
+    shallow_tree_count: int = 0
+    """Counter of trees with height < 1/2 dz."""
+    low_lai_count: int = 0
+    """Counter of trees with low LAI."""
+    mod_count: int = 0
+    """Counter of modified trees."""
+    id_count: int = 0
+    """Tree ID counter."""
+
+    tree_sphere_extinction: float = 0.6
+    """Sphere extinction coefficient of the LAD/BAD generator; experimental."""
+    tree_cone_extinction: float = 0.2
+    """Cone extinction coefficient of the LAD/BAD generator; experimental."""
 
     @field_validator("method")
     @classmethod
@@ -416,6 +277,20 @@ class CanopyGenerator(BaseModel):
             Validated value.
         """
         _check_string(value, ["Metal2003", "LM2004"])
+        return value
+
+    @field_validator("season")
+    @classmethod
+    def _check_season(cls, value: str) -> str:
+        """Check if the season is valid.
+
+        Args:
+            value: Value to check.
+
+        Returns:
+            Validated value.
+        """
+        _check_string(value, ["summer", "winter"])
         return value
 
     def __init__(self, **kwargs) -> None:
@@ -487,6 +362,12 @@ class CanopyGenerator(BaseModel):
     def _lad_norm_LM2004(self, z_rel: ma.MaskedArray, **kwargs: float) -> ma.MaskedArray:
         """Calculate normalized 3D LAD for vegetation patches following Lalic and Mihailovic (2004).
 
+        The Lalic and Mihailovic (2004) LAD profile is assumed from height 0 to z_rel. The LAD of
+        the highest, likely not completely filled grid cell is distributed over the whole grid cell.
+        For example, for a grid spacing of 3m and a patch height of 10m, the LAD of the height 9m
+        (z_rel=0.9) to 10m (z_rel=0.9) is distributed over the whole 9m (z_rel=0.9) to 12m
+        (z_rel=1.2) grid cell.
+
         The calculated values are normalized by LAI and patch height (LAD / LAI * h). The average
         LAD of a grid cell is calculated by integrating the LAD profile over the height of this cell
         and dividing by the cell height. Thus, the LAD is proportional to the integral of (1) of
@@ -505,10 +386,14 @@ class CanopyGenerator(BaseModel):
         # Use z_max_rel from input or instance default.
         z_max_rel = kwargs.get("z_max_rel", self.z_max_rel_LM2004)
 
-        # Size of vertical grid cells
+        # Size of vertical grid cells. Here, the full grid cell height is calculated. This is
+        # relevant for the highest grid point with z_rel>=1.0, i.e. the upper grid cell level is
+        # potentially above the patch height.
         dz_rel = z_rel[1:, ...] - z_rel[:-1, ...]
         # Limit z_rel to 1.0.
-        # 1.0 should only be reached for the top grid points.
+        # 1.0 should only be reached for the top grid points. This ensures that the profile is
+        # calculated correctly. The normalization by dz_rel below ensures that the LAD is
+        # distributed correctly over the whole grid cell.
         z_rel = ma.where(z_rel > 1.0, 1.0, z_rel)
 
         # Prepare pdf integral array.
@@ -517,7 +402,7 @@ class CanopyGenerator(BaseModel):
         # Different factor n in LAD PDF above and below zm.
         below_z_max_rel = z_rel < z_max_rel
         above_z_max_rel = ~below_z_max_rel & ~z_rel.mask
-        below_z_max_rel = below_z_max_rel & ~z_rel.mask
+        below_z_max_rel = below_z_max_rel & ~z_rel.mask  # type: ignore
         pdf_int[below_z_max_rel] = self._integral_LM2004(
             z_rel[below_z_max_rel], self.N_BELOW_Z_MAX_LM2004
         )
@@ -554,6 +439,12 @@ class CanopyGenerator(BaseModel):
     def _lad_norm_Metal2003(self, z_rel: ma.MaskedArray, **kwargs: float) -> ma.MaskedArray:
         """Calculate normalized 3D LAD for vegetation patches following Markkanen et al. (2003).
 
+        The Markkanen et al. (2003) LAD profile is assumed from height 0 to z_rel. The LAD of the
+        highest, likely not completely filled grid cell is distributed over the whole grid cell. For
+        example, for a grid spacing of 3m and a patch height of 10m, the LAD of the height 9m
+        (z_rel=0.9) to 10m (z_rel=0.9) is distributed over the whole 9m (z_rel=0.9) to 12m
+        (z_rel=1.2) grid cell.
+
         The calculated values are normalized by LAI and patch height (LAD / LAI * h). The average
         LAD of a grid cell is calculated by integrating the LAD profile over the height of this cell
         and dividing by the cell height. Thus, the LAD is proportional to the integral of (1) of
@@ -571,10 +462,14 @@ class CanopyGenerator(BaseModel):
         alpha = kwargs.get("alpha", self.alpha_Metal2003)
         beta = kwargs.get("beta", self.beta_Metal2003)
 
-        # size of vertical grid cells
+        # Size of vertical grid cells. Here, the full grid cell height is calculated. This is
+        # relevant for the highest grid point with z_rel>=1.0, i.e. the upper grid cell level is
+        # potentially above the patch height.
         dz_rel = z_rel[1:, ...] - z_rel[:-1, ...]
         # Limit z_rel to 1.0.
-        # 1.0 should only be reached for the top grid points.
+        # 1.0 should only be reached for the top grid points. This ensures that the profile is
+        # calculated correctly. The normalization by dz_rel below ensures that the LAD is
+        # distributed correctly over the whole grid cell.
         z_rel = ma.where(z_rel > 1.0, 1.0, z_rel)
 
         # Prepare output array.
@@ -665,15 +560,18 @@ class CanopyGenerator(BaseModel):
 
     def process_patch(
         self,
-        dz: float,
         patch_height: ma.MaskedArray,
         patch_type_2d: ma.MaskedArray,
         patch_lai: ma.MaskedArray,
     ) -> Tuple[ma.MaskedArray, ma.MaskedArray, ma.MaskedArray]:
         """Calculate 3D leaf area density for vegetation patches according to the chosen method.
 
+        The LAD profiles are assumed from height 0m to patch height. The LAD of the highest, likely
+        not completely filled grid cell is distributed over the whole grid cell. For example, for a
+        grid spacing of 3m and a patch height of 10m, the LAD of the height 9m to 10m is distributed
+        over the whole 9m to 12m grid cell.
+
         Args:
-            dz: Grid spacing in z direction.
             patch_height: Vegetation patch height.
             patch_type_2d: Vegetation patch type.
             patch_lai: Vegetation patch leaf area index.
@@ -681,22 +579,19 @@ class CanopyGenerator(BaseModel):
         Returns:
             3d leaf area density, patch id, and patch type.
         """
-        # Mask vegetation patches with height < 0.5 * dz.
-        patch_height = ma.masked_where(patch_height < 0.5 * dz, patch_height, copy=False)
-
         # Maximum canopy height in patch and outside, and corresponding vertical grid indices
         canopy_height_max = ma.max(patch_height)
-        iz_1d = np.arange(0, np.ceil(canopy_height_max / dz) + 1, dtype="int")
+        iz_1d = np.arange(0, np.ceil(canopy_height_max / self.dz) + 1, dtype="int")
 
         # Array of number of vertical grid points in vegetation patch
-        iz_max = ma.ceil(patch_height / dz).astype("int")
+        iz_max = ma.ceil(patch_height / self.dz).astype("int")
 
         # Broadcast iz_1d to 3D array and mask values larger than iz_max.
         iz = np.broadcast_to(iz_1d[:, np.newaxis, np.newaxis], iz_1d.shape + patch_height.shape)
         iz = ma.masked_where(iz[:, :, :] > iz_max[np.newaxis, :, :], iz, copy=False)
 
         # Grid point height divided by patch height.
-        z_rel = iz * dz / patch_height[np.newaxis, :, :]
+        z_rel = iz * self.dz / patch_height[np.newaxis, :, :]
 
         # Calculate normalized LAD with chosen method.
         lad_3d = self._lad_norm_fun(z_rel)
@@ -730,6 +625,138 @@ class CanopyGenerator(BaseModel):
         """
         return self._lad_max_norm_fun()
 
+    def generate_tree(
+        self,
+        i,
+        j,
+        type: Union[float, ma_core.MaskedConstant, pdtypes.NAType],
+        shape: Union[float, ma_core.MaskedConstant, pdtypes.NAType],
+        height: Union[float, ma_core.MaskedConstant, pdtypes.NAType],
+        lai: Union[float, ma_core.MaskedConstant, pdtypes.NAType],
+        crown_diameter: Union[float, ma_core.MaskedConstant, pdtypes.NAType],
+        trunk_diameter: Union[float, ma_core.MaskedConstant, pdtypes.NAType],
+    ) -> Optional[DomainTree]:
+        """Generate a tree object.
+
+        Input values are checked and default values are used if necessary. Depending on the set-up,
+        trees with too low tree_height or tree_lai are removed.
+        """
+        # Check for missing data in the input and set default values if needed.
+        if is_missing(type):
+            if value_defaults["tree_type"].default is None:
+                raise ValueError("Tree type default must be defined.")
+            type_checked = int(value_defaults["tree_type"].default)
+        else:
+            type_checked = int(type)  # type: ignore
+
+        if is_missing(shape):
+            shape_checked = tree_defaults[type_checked].shape
+        else:
+            shape_checked = int(shape)  # type: ignore
+
+        if is_missing(height):
+            height_checked = tree_defaults[type_checked].height
+        else:
+            height_checked = float(height)  # type: ignore
+
+        if is_missing(lai):
+            lai_checked = getattr(tree_defaults[type_checked], f"lai_{self.season}")
+        else:
+            lai_checked = float(lai)  # type: ignore
+
+        if is_missing(crown_diameter):
+            crown_diameter_checked = tree_defaults[type_checked].crown_diameter
+        else:
+            crown_diameter_checked = float(crown_diameter)  # type: ignore
+
+        if is_missing(trunk_diameter):
+            trunk_diameter_checked = tree_defaults[type_checked].trunk_diameter
+        else:
+            trunk_diameter_checked = float(trunk_diameter)  # type: ignore
+
+        # Very small trees are ignored.
+        if height_checked <= (self.height_rel_resolved_vegetation_lower_threshold * self.dz):
+            self.shallow_tree_count += 1
+            logger.debug_indent(
+                f"Removed low tree with height = {height_checked:0.1f} at ({i}, {j})."
+            )
+            return None
+
+        # Check tree_lai.
+        # Tree LAI lower than threshold?
+        if lai_checked < self.lai_tree_lower_threshold:
+            # Deal with low lai tree
+            self.mod_count += 1
+            if self.remove_low_lai_tree:
+                # Skip this tree
+                logger.debug_indent(f"Removed tree with LAI = {lai_checked:0.3f} at ({i}, {j}).")
+                return None
+            else:
+                # Use type specific default
+                lai_checked = getattr(tree_defaults[type_checked], f"lai_{self.season}")
+                logger.debug_indent(f"Adjusted tree to LAI = {lai_checked:0.3f} at ({i}, {j}).")
+
+        # Warn about a tree with lower LAI than we would expect in winter.
+        if lai_checked < tree_defaults[type_checked].lai_winter:
+            self.low_lai_count += 1
+            logger.debug_indent(
+                f"Found tree with LAI = {lai_checked:0.3f} (tree-type specific default winter LAI "
+                + f"of {tree_defaults[type_checked].lai_winter:0.2}) at ({i}, {j})."
+            )
+
+        # Assign values that are not defined as user input from lookup table.
+        crown_ratio_checked = tree_defaults[type_checked].crown_ratio
+        z_max_rel_checked = tree_defaults[type_checked].z_max_rel
+        alpha_checked = tree_defaults[type_checked].alpha
+        beta_checked = tree_defaults[type_checked].beta
+        bad_scale_checked = tree_defaults[type_checked].bad_scale
+
+        # Increase the tree ID counter.
+        self.id_count += 1
+
+        return DomainTree(
+            type=type_checked,
+            shape=shape_checked,
+            crown_ratio=crown_ratio_checked,
+            crown_diameter=crown_diameter_checked,
+            height=height_checked,
+            z_max_rel=z_max_rel_checked,
+            alpha=alpha_checked,
+            beta=beta_checked,
+            bad_scale=bad_scale_checked,
+            trunk_diameter=trunk_diameter_checked,
+            lai=lai_checked,
+            i=i,
+            j=j,
+            id=self.id_count,
+        )
+
+    def check_tree_counters(self) -> None:
+        """Print a summary of the tree and tree LAI adjustments.
+
+        Args:
+            config: Domain configuration
+            settings: Settings configuration
+        """
+        if self.shallow_tree_count > 0:
+            logger.warning(f"Removed {self.shallow_tree_count} low trees with height < 1/2 dz.")
+        if self.mod_count > 0:
+            if self.remove_low_lai_tree:
+                logger.warning(f"Removed {self.mod_count} trees due to low LAI.")
+            else:
+                logger.warning(
+                    f"Adjusted LAI of {self.mod_count} trees below lai_tree_lower_threshold "
+                    + f"using tree-type specific default {self.season} LAI."
+                )
+        if self.low_lai_count > 0:
+            logger.warning(
+                f"Found {self.low_lai_count} trees with LAI lower then the "
+                + "tree-type specific default winter LAI."
+            )
+            logger.info_indent(
+                "Consider adjusting lai_tree_lower_threshold and remove_low_lai_tree."
+            )
+
     def add_tree_to_3d_fields(
         self,
         tree: DomainTree,
@@ -737,7 +764,6 @@ class CanopyGenerator(BaseModel):
         bad_global: ma.MaskedArray,
         id_global: ma.MaskedArray,
         type_global: ma.MaskedArray,
-        config: CSDConfigDomain,
     ) -> None:
         """Generate and store the LAD and BAD profile for a single tree.
 
@@ -750,7 +776,6 @@ class CanopyGenerator(BaseModel):
             bad_global: Global 3D basal area density.
             id_global: Global 3D tree id.
             type_global: Global 3D tree type.
-            config: Domain configuration.
 
         Raises:
             ValueError: Unknown tree shape.
@@ -767,14 +792,18 @@ class CanopyGenerator(BaseModel):
 
         # Calculate the maximum LAD after Lalic and Mihailovic (2004).
         lad_max_part_1 = integrate.quad(
-            lambda z: ((tree.height - z_lad_max) / (tree.height - z)) ** tree.ml_n_high
-            * np.exp(tree.ml_n_high * (1.0 - (tree.height - z_lad_max) / (tree.height - z))),
+            lambda z: ((tree.height - z_lad_max) / (tree.height - z)) ** self.N_BELOW_Z_MAX_LM2004
+            * np.exp(
+                self.N_BELOW_Z_MAX_LM2004 * (1.0 - (tree.height - z_lad_max) / (tree.height - z))
+            ),
             0.0,
             z_lad_max,
         )
         lad_max_part_2 = integrate.quad(
-            lambda z: ((tree.height - z_lad_max) / (tree.height - z)) ** tree.ml_n_low
-            * np.exp(tree.ml_n_low * (1.0 - (tree.height - z_lad_max) / (tree.height - z))),
+            lambda z: ((tree.height - z_lad_max) / (tree.height - z)) ** self.N_ABOVE_Z_MAX_LM2004
+            * np.exp(
+                self.N_ABOVE_Z_MAX_LM2004 * (1.0 - (tree.height - z_lad_max) / (tree.height - z))
+            ),
             z_lad_max,
             tree.height,
         )
@@ -782,20 +811,20 @@ class CanopyGenerator(BaseModel):
         lad_max = tree.lai / (lad_max_part_1[0] + lad_max_part_2[0])
 
         # Define position of tree and its output domain.
-        nx = int(tree.crown_diameter / config.pixel_size) + 2
-        nz = int(tree.height / config.dz) + 2
+        nx = int(tree.crown_diameter / self.pixel_size) + 2
+        nz = int(tree.height / self.dz) + 2
 
         # Add one grid point if diameter is an odd value.
         if (tree.crown_diameter % 2.0) != 0.0:
             nx = nx + 1
 
         # Create local domain of the tree's LAD.
-        x = np.arange(0, nx * config.pixel_size, config.pixel_size)
-        x[:] = x[:] - 0.5 * config.pixel_size
+        x = np.arange(0, nx * self.pixel_size, self.pixel_size)
+        x[:] = x[:] - 0.5 * self.pixel_size
         y = x
 
-        z = np.arange(0, nz * config.dz, config.dz)
-        z[1:] = z[1:] - 0.5 * config.dz
+        z = np.arange(0, nz * self.dz, self.dz)
+        z[1:] = z[1:] - 0.5 * self.dz
 
         # Define center of the tree position inside the local LAD domain.
         location_x = x[int(nx / 2)]
@@ -808,9 +837,9 @@ class CanopyGenerator(BaseModel):
 
         for k in range(1, nz - 1):
             if (z[k] > 0.0) & (z[k] < z_lad_max):
-                n = tree.ml_n_high
+                n = self.N_BELOW_Z_MAX_LM2004
             else:
-                n = tree.ml_n_low
+                n = self.N_ABOVE_Z_MAX_LM2004
 
             lad_profile[k] = (
                 lad_max
@@ -839,15 +868,15 @@ class CanopyGenerator(BaseModel):
                         )
                         if r_test <= 1.0:
                             lad_local[k, j, i] = lad_max * np.exp(
-                                -tree.sphere_extinction * (1.0 - r_test)
+                                -self.tree_sphere_extinction * (1.0 - r_test)
                             )
                         else:
                             lad_local[k, j, i] = ma.masked
 
         # Branch for cylinder shapes
         elif tree.shape == 2:
-            k_min = int((crown_center - crown_height * 0.5) / config.dz)
-            k_max = int((crown_center + crown_height * 0.5) / config.dz)
+            k_min = int((crown_center - crown_height * 0.5) / self.dz)
+            k_max = int((crown_center + crown_height * 0.5) / self.dz)
             for i in range(0, nx):
                 for j in range(0, nx):
                     for k in range(k_min, k_max):
@@ -860,15 +889,15 @@ class CanopyGenerator(BaseModel):
                                 (z[k] - crown_center) ** 2 / (crown_height * 0.5) ** 2
                             )
                             lad_local[k, j, i] = lad_max * np.exp(
-                                -tree.sphere_extinction * (1.0 - max(r_test, r_test3))
+                                -self.tree_sphere_extinction * (1.0 - max(r_test, r_test3))
                             )
                         else:
                             lad_local[k, j, i] = ma.masked
 
         # Branch for cone shapes
         elif tree.shape == 3:
-            k_min = int((crown_center - crown_height * 0.5) / config.dz)
-            k_max = int((crown_center + crown_height * 0.5) / config.dz)
+            k_min = int((crown_center - crown_height * 0.5) / self.dz)
+            k_max = int((crown_center + crown_height * 0.5) / self.dz)
             for i in range(0, nx):
                 for j in range(0, nx):
                     for k in range(k_min, k_max):
@@ -888,7 +917,7 @@ class CanopyGenerator(BaseModel):
                                 (z[k] - crown_center) ** 2 / (crown_height * 0.5) ** 2
                             )
                             lad_local[k, j, i] = lad_max * np.exp(
-                                -tree.cone_extinction
+                                -self.tree_cone_extinction
                                 * (1.0 - max((r_test + 1.0), r_test2, r_test3))
                             )
                         else:
@@ -897,8 +926,8 @@ class CanopyGenerator(BaseModel):
         # Branch for inverted cone shapes.
         # TODO: what is r_test2 and r_test3 used for? Debugging needed!
         elif tree.shape == 4:
-            k_min = int((crown_center - crown_height * 0.5) / config.dz)
-            k_max = int((crown_center + crown_height * 0.5) / config.dz)
+            k_min = int((crown_center - crown_height * 0.5) / self.dz)
+            k_max = int((crown_center + crown_height * 0.5) / self.dz)
             for i in range(0, nx):
                 for j in range(0, nx):
                     for k in range(k_min, k_max):
@@ -917,14 +946,16 @@ class CanopyGenerator(BaseModel):
                             r_test3 = np.sqrt(
                                 (z[k] - crown_center) ** 2 / (crown_height * 0.5) ** 2
                             )
-                            lad_local[k, j, i] = lad_max * np.exp(-tree.cone_extinction * (-r_test))
+                            lad_local[k, j, i] = lad_max * np.exp(
+                                -self.tree_cone_extinction * (-r_test)
+                            )
                         else:
                             lad_local[k, j, i] = ma.masked
 
         # Branch for paraboloid shapes
         elif tree.shape == 5:
-            k_min = int((crown_center - crown_height * 0.5) / config.dz)
-            k_max = int((crown_center + crown_height * 0.5) / config.dz)
+            k_min = int((crown_center - crown_height * 0.5) / self.dz)
+            k_max = int((crown_center + crown_height * 0.5) / self.dz)
             for i in range(0, nx):
                 for j in range(0, nx):
                     for k in range(k_min, k_max):
@@ -933,14 +964,16 @@ class CanopyGenerator(BaseModel):
                             (x[i] - location_x) ** 2 + (y[j] - location_y) ** (2)
                         ) * crown_height / (tree.crown_diameter * 0.5) ** 2 - z[k_rel]
                         if r_test <= 0.0:
-                            lad_local[k, j, i] = lad_max * np.exp(-tree.cone_extinction * (-r_test))
+                            lad_local[k, j, i] = lad_max * np.exp(
+                                -self.tree_cone_extinction * (-r_test)
+                            )
                         else:
                             lad_local[k, j, i] = ma.masked
 
         # Branch for inverted paraboloid shapes
         elif tree.shape == 6:
-            k_min = int((crown_center - crown_height * 0.5) / config.dz)
-            k_max = int((crown_center + crown_height * 0.5) / config.dz)
+            k_min = int((crown_center - crown_height * 0.5) / self.dz)
+            k_max = int((crown_center + crown_height * 0.5) / self.dz)
             for i in range(0, nx):
                 for j in range(0, nx):
                     for k in range(k_min, k_max):
@@ -949,7 +982,9 @@ class CanopyGenerator(BaseModel):
                             (x[i] - location_x) ** 2 + (y[j] - location_y) ** (2)
                         ) * crown_height / (tree.crown_diameter * 0.5) ** 2 - z[k_rel]
                         if r_test <= 0.0:
-                            lad_local[k, j, i] = lad_max * np.exp(-tree.cone_extinction * (-r_test))
+                            lad_local[k, j, i] = lad_max * np.exp(
+                                -self.tree_cone_extinction * (-r_test)
+                            )
                         else:
                             lad_local[k, j, i] = ma.masked
 
@@ -966,20 +1001,12 @@ class CanopyGenerator(BaseModel):
                 if ma.any(~ma.getmaskarray(lad_local)[:, j, i]):
                     lad_local[0, j, i] = 0.0
 
-        # Normalize the LAD profile so that the vertically integrated Lalic and Mihailovic (2004) is
-        # reproduced by the LAD array. Deactivated for now.
-        # for i in range(0,nx):
-        # for j in range(0,nx):
-        # lad_clean = np.where(lad_loc[:,j,i] == fillvalues["tree_data"],0.0,lad_loc[:,j,i])
-        # lai_from_int = integrate.simps (lad_clean, z)
-        # print(lai_from_int)
-        # for k in range(0,nz):
-        # if ( np.any(lad_loc[k,j,i] > 0.0) ):
-        # lad_loc[k,j,i] = np.where(
-        #     (lad_loc[k,j,i] != fillvalues["tree_data"]),
-        #     lad_loc[k,j,i] / lai_from_int * lad_profile[k],
-        #     lad_loc[k,j,i]
-        #     )
+        # Normalize according to LAI input. Calculate the average LAI, which should be tree.lai.
+        # Correct accordingly.
+        lai_avg = (lad_local.sum(axis=0) * self.dz).mean()
+        if lai_avg == 0.0:
+            return
+        lad_local = lad_local * tree.lai / lai_avg
 
         # Create BAD array and populate.
         # TODO: revise as low LAD inside the foliage does not result in low BAD values.
@@ -993,14 +1020,14 @@ class CanopyGenerator(BaseModel):
                     if z[k] <= crown_center:
                         r_test = np.sqrt((x[i] - location_x) ** 2 + (y[j] - location_y) ** 2)
                         if r_test == 0.0:
-                            if tree.trunk_diameter <= config.pixel_size:
+                            if tree.trunk_diameter <= self.pixel_size:
                                 bad_local[k, j, i] = radius**2 * pi
                             else:
                                 # WORKAROUND: divide remaining circle area over the 8 surrounding
                                 # valid_pixels
                                 bad_local[k, j - 1 : j + 2, i - 1 : i + 2] = radius**2 * pi / 8.0
                                 # for the central pixel fill the pixel
-                                bad_local[k, j, i] = config.pixel_size**2
+                                bad_local[k, j, i] = self.pixel_size**2
                         # elif ( r_test <= radius ):
                         # TODO: calculate circle segment of grid points cut by the grid
 
@@ -1024,6 +1051,8 @@ class CanopyGenerator(BaseModel):
         out_r_x = len(x) - 1 + ind_r_x - (tree.i + lad_loc_nx - 1 + odd_x)
         out_r_y = len(y) - 1 + ind_r_y - (tree.j + lad_loc_ny - 1 + odd_y)
 
+        is_tree = ~ma.getmaskarray(lad_local) | ~ma.getmaskarray(bad_local)
+
         lad_global[0:lad_loc_nz, ind_l_y : ind_r_y + 1, ind_l_x : ind_r_x + 1] = ma.where(
             ~ma.getmaskarray(lad_local)[0:lad_loc_nz, out_l_y : out_r_y + 1, out_l_x : out_r_x + 1],
             lad_local[0:lad_loc_nz, out_l_y : out_r_y + 1, out_l_x : out_r_x + 1],
@@ -1035,12 +1064,12 @@ class CanopyGenerator(BaseModel):
             bad_global[0:lad_loc_nz, ind_l_y : ind_r_y + 1, ind_l_x : ind_r_x + 1],
         )
         id_global[0:lad_loc_nz, ind_l_y : ind_r_y + 1, ind_l_x : ind_r_x + 1] = ma.where(
-            ~ma.getmaskarray(lad_local)[0:lad_loc_nz, out_l_y : out_r_y + 1, out_l_x : out_r_x + 1],
+            is_tree[0:lad_loc_nz, out_l_y : out_r_y + 1, out_l_x : out_r_x + 1],
             tree.id,
             id_global[0:lad_loc_nz, ind_l_y : ind_r_y + 1, ind_l_x : ind_r_x + 1],
         )
         type_global[0:lad_loc_nz, ind_l_y : ind_r_y + 1, ind_l_x : ind_r_x + 1] = ma.where(
-            ~ma.getmaskarray(lad_local)[0:lad_loc_nz, out_l_y : out_r_y + 1, out_l_x : out_r_x + 1],
+            is_tree[0:lad_loc_nz, out_l_y : out_r_y + 1, out_l_x : out_r_x + 1],
             tree.type,
             type_global[0:lad_loc_nz, ind_l_y : ind_r_y + 1, ind_l_x : ind_r_x + 1],
         )

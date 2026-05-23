@@ -73,7 +73,7 @@
 !-- Interface to chem_emis_vsrc_mod.
     INTEGER(iwp)                                          ::  num_vsrc_pos     !< # volume sources
     INTEGER(iwp),             ALLOCATABLE, DIMENSION(:)   ::  vsrc_nc_index    !< location on nc file
-    REAL(KIND=dp),            ALLOCATABLE, DIMENSION(:,:) ::  vsrc_emis_value  !< volume source volues
+    REAL(KIND=wp),            ALLOCATABLE, DIMENSION(:,:) ::  vsrc_emis_value  !< volume source volues
     TYPE(chem_emis_vsrc_pos), ALLOCATABLE, DIMENSION(:)   ::  vsrc_pos         !< volume source positions
 
 !

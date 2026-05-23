@@ -689,7 +689,7 @@ Stage: DO istage = 1, ros_S
    END DO
    Err  = SQRT(Err/N)
 
-   ros_ErrorNorm = max(err, 1.0d-10)
+   ros_ErrorNorm = max(err, 1.0e-10_dp)
 
   END FUNCTION ros_ErrorNorm
 

@@ -109,6 +109,9 @@
 ! readable by ISO2D-software (cross-sections) and by AVS (3D-data).
 !------------------------------------------------------------------------------!
 
+    USE kinds,                                                                                     &
+        ONLY: wp
+
 #if defined( __netcdf )
     USE netcdf
 #endif
@@ -125,7 +128,8 @@
 
     CHARACTER (LEN=2000), DIMENSION(0:1) ::  var_list
 
-    INTEGER, PARAMETER ::  iwp = 4, spk = SELECTED_REAL_KIND( 6 ), wp = 8
+!    INTEGER, PARAMETER ::  iwp = 4, spk = SELECTED_REAL_KIND( 6 ), wp = 8
+    INTEGER, PARAMETER ::  iwp = 4, spk = SELECTED_REAL_KIND( 6 )
 
     INTEGER(iwp) ::  av, danz, i, id, j, k, model, models, nc_stat,            &
                      nxa, nxe, nya, nye,               &

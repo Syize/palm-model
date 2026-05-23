@@ -110,11 +110,11 @@
     LOGICAL ::  update_emissions       !< timestamp control, emission update
     LOGICAL ::  vsrc_has_pcbl_mapping  !< volume source radiation for the first time step
 
-    REAL(dp), ALLOCATABLE, DIMENSION(:,:) ::  ef_def_pft       !< default emission potentials for pft from data file
-    REAL(dp), ALLOCATABLE, DIMENSION(:,:) ::  ef_pft           !< emission potentials for pft from namelist
-    REAL(dp), ALLOCATABLE, DIMENSION(:,:) ::  ef_def_tree      !< default emission potentials for tree types from data file
-    REAL(dp), ALLOCATABLE, DIMENSION(:,:) ::  ef_tree          !< emission potentials for trees from namelist
-    REAL(dp), ALLOCATABLE, DIMENSION(:,:) ::  vsrc_emis_value  !< volume source value
+    REAL(wp), ALLOCATABLE, DIMENSION(:,:) ::  ef_def_pft       !< default emission potentials for pft from data file
+    REAL(wp), ALLOCATABLE, DIMENSION(:,:) ::  ef_pft           !< emission potentials for pft from namelist
+    REAL(wp), ALLOCATABLE, DIMENSION(:,:) ::  ef_def_tree      !< default emission potentials for tree types from data file
+    REAL(wp), ALLOCATABLE, DIMENSION(:,:) ::  ef_tree          !< emission potentials for trees from namelist
+    REAL(wp), ALLOCATABLE, DIMENSION(:,:) ::  vsrc_emis_value  !< volume source value
 
     REAL(wp) ::  current_time       = 0.0_wp !< timestamp control, current time
     REAL(wp) ::  current_second     = 0.0_wp !< timestamp control, current seconds
@@ -788,9 +788,9 @@
     INTEGER(iwp), DIMENSION(1) ::  i_pft         !< counter for pft type
     INTEGER(iwp), DIMENSION(1) ::  i_tree        !< counter for tree type
 
-    REAL(KIND=dp) ::  base_emis                  !< emission potentials from namelist or default
-    REAL(KIND=dp) ::  correction_factor          !< correction of emissions from various environmental factors
-    REAL(KIND=dp) ::  emis_biogenic              !< output emission factor
+    REAL(KIND=wp) ::  base_emis                  !< emission potentials from namelist or default
+    REAL(KIND=wp) ::  correction_factor          !< correction of emissions from various environmental factors
+    REAL(KIND=wp) ::  emis_biogenic              !< output emission factor
 
     REAL(wp) ::  lad_g_per_m3                    !< conversion factor from m2/m3 to g/m3
     REAL(wp) ::  radi_sw                         !< total (dir + diffu) radiation at the current grid cell
@@ -911,7 +911,7 @@
     REAL(wp) ::  gam_tisop_r   !< return result of temperature  effect algorithm
     REAL(wp) ::  gam_tnisop_r  !< return result of light independent algorithm
 
-    REAL(KIND=dp) ::  gamma  !< output emission correction factor
+    REAL(KIND=wp) ::  gamma  !< output emission correction factor
 
     gam_p_r      = gamma_p( radi_sw1 )
     gam_tisop_r  = gamma_tisop( temp_leaf1 )
@@ -1316,7 +1316,7 @@
 
     INTEGER,  INTENT(IN) ::  k_spcs  !< bvoc spcs
 
-    REAL(KIND=dp) ::  grams2moles    !< conversion from grams moles
+    REAL(KIND=wp) ::  grams2moles    !< conversion from grams moles
 
     REAL(wp) ::  mwt  !< molecular weight of the bvoc
 

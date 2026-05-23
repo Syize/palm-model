@@ -1,0 +1,36 @@
+---
+attributes:
+  author: Sebastian Schubert
+
+settings:
+  epsg: 25833
+
+input_01:
+  # The following would not work, here just to satisfy the check
+  path: tests/99_full_application/input
+  files:
+    zt: Berlin_terrain_height_15m_DLR.nc
+
+output:
+  path: tests/96_domains/
+  file_out: low_clearance
+
+domain_root:
+  pixel_size: 2.0
+  input_lower_left_x: 150
+  input_lower_left_y: 150
+  nx: 99
+  ny: 199
+  dz: 2.0
+  origin_x: 386890.0
+  origin_y: 5818570.0
+
+
+domain_N02:
+  pixel_size: 1.0
+  input_lower_left_x: 150
+  input_lower_left_y: 150
+  nx: 9
+  ny: 19
+  dz: 1.0
+  domain_parent: root

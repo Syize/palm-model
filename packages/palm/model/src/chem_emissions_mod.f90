@@ -639,6 +639,10 @@ SUBROUTINE chem_emissions_match( emt_att,len_index )
 !--    Set molecule masses  (in kg/mol)
        ALLOCATE( chem_emis_att%xm(n_matched_vars) )
 
+!
+!--    Set mole masses for possible compounds.
+!--    TODO: The list of below compounds may need to be extended depending on the chemical mechanism.
+!--         Best solution would be to include setting of mole masses into kpp4palm.
        DO  ispec = 1, n_matched_vars
           SELECT CASE ( TRIM( spc_names(match_spec_model(ispec)) ) )
              CASE ( 'SO2'  );  chem_emis_att%xm(ispec) = xm_S + xm_O * 2
@@ -650,8 +654,23 @@ SUBROUTINE chem_emissions_match( emt_att,len_index )
              CASE ( 'CO2'  );  chem_emis_att%xm(ispec) = xm_C + xm_O * 2
              CASE ( 'CH4'  );  chem_emis_att%xm(ispec) = xm_C + xm_H * 4
              CASE ( 'HNO3' );  chem_emis_att%xm(ispec) = xm_H + xm_N + xm_O*3
+             CASE ( 'HCHO' );  chem_emis_att%xm(ispec) = xm_H * 2 + xm_C + xm_O
+             CASE ( 'HONO' );  chem_emis_att%xm(ispec) = xm_H * 2 + xm_N + xm_O
+             CASE ( 'ALD2' );  chem_emis_att%xm(ispec) = xm_H * 3 + xm_C * 2 + xm_O
+             CASE ( 'PAR'  );  chem_emis_att%xm(ispec) = xm_H * 3 + xm_C
+             CASE ( 'OLE'  );  chem_emis_att%xm(ispec) = xm_H * 3 + xm_C * 2
+             CASE ( 'ETH'  );  chem_emis_att%xm(ispec) = xm_H * 4 + xm_C * 2
+             CASE ( 'TOL'  );  chem_emis_att%xm(ispec) = xm_H * 8 + xm_C * 7
+             CASE ( 'XYL'  );  chem_emis_att%xm(ispec) = xm_H * 10 + xm_C * 8
+             CASE ( 'ISOP' );  chem_emis_att%xm(ispec) = xm_H * 8 + xm_C * 5
+             CASE ( 'RCHO' );  chem_emis_att%xm(ispec) = xm_H * 2 + xm_C + xm_O
+             CASE ( 'RH'   );  chem_emis_att%xm(ispec) = xm_H * 6 + xm_C * 2
              CASE DEFAULT
-                chem_emis_att%xm(ispec) = 1.0_wp
+                WRITE (message_string, * ) 'molar mass for "',                                     &
+                                           TRIM( spc_names(match_spec_model(ispec) ) ),            &
+                                           '" has not been specified, &50 g/mol used instead'
+                CALL message( 'chem_emissions_init', 'CHM0051', 0, 1, 0, 6, 0 )
+                chem_emis_att%xm(ispec) = 0.05_wp
           END SELECT
        ENDDO
 
@@ -1875,15 +1894,15 @@ SUBROUTINE chem_emissions_match( emt_att,len_index )
     DO  k = 1, n_matched_vars
 
        DO  m = 1, surf_def%ns
-          IF ( surf_def%upward(m) )  surf_def%cssws(k,m) = cssws_def(k,m)
+          IF ( surf_def%upward(m) )  surf_def%cssws((match_spec_model(k)),m) = cssws_def(k,m)
        ENDDO
 
        DO  m = 1, surf_lsm%ns
-          IF ( surf_lsm%upward(m) )  surf_lsm%cssws(k,m) = cssws_lsm(k,m)
+          IF ( surf_lsm%upward(m) )  surf_lsm%cssws((match_spec_model(k)),m) = cssws_lsm(k,m)
        ENDDO
 
        DO  m = 1, surf_usm%ns
-          IF ( surf_usm%upward(m) )  surf_usm%cssws(k,m) = cssws_usm(k,m)
+          IF ( surf_usm%upward(m) )  surf_usm%cssws((match_spec_model(k)),m) = cssws_usm(k,m)
        ENDDO
 
     ENDDO
@@ -1947,8 +1966,11 @@ SUBROUTINE chem_emissions_match( emt_att,len_index )
 
        ALLOCATE( chem_emis_att%xm(n_matched_vars) )
 
+!
+!--    Set mole masses for possible compounds.
+!--    TODO: The list of below compounds may need to be extended depending on the chemical mechanism.
+!--         Best solution would be to include setting of mole masses into kpp4palm.
        DO  ispec = 1, n_matched_vars
-          chem_emis_att%xm(ispec) = 1.0_wp
           SELECT CASE ( TRIM( spc_names(match_spec_model(ispec)) ) )
              CASE ( 'SO2'  );  chem_emis_att%xm(ispec) = xm_S + xm_O * 2
              CASE ( 'SO4'  );  chem_emis_att%xm(ispec) = xm_S + xm_O * 4
@@ -1959,6 +1981,23 @@ SUBROUTINE chem_emissions_match( emt_att,len_index )
              CASE ( 'CO2'  );  chem_emis_att%xm(ispec) = xm_C + xm_O * 2
              CASE ( 'CH4'  );  chem_emis_att%xm(ispec) = xm_C + xm_H * 4
              CASE ( 'HNO3' );  chem_emis_att%xm(ispec) = xm_H + xm_N + xm_O*3
+             CASE ( 'HCHO' );  chem_emis_att%xm(ispec) = xm_H * 2 + xm_C + xm_O
+             CASE ( 'HONO' );  chem_emis_att%xm(ispec) = xm_H * 2 + xm_N + xm_O
+             CASE ( 'ALD2' );  chem_emis_att%xm(ispec) = xm_H * 3 + xm_C * 2 + xm_O
+             CASE ( 'PAR'  );  chem_emis_att%xm(ispec) = xm_H * 3 + xm_C
+             CASE ( 'OLE'  );  chem_emis_att%xm(ispec) = xm_H * 3 + xm_C * 2
+             CASE ( 'ETH'  );  chem_emis_att%xm(ispec) = xm_H * 4 + xm_C * 2
+             CASE ( 'TOL'  );  chem_emis_att%xm(ispec) = xm_H * 8 + xm_C * 7
+             CASE ( 'XYL'  );  chem_emis_att%xm(ispec) = xm_H * 10 + xm_C * 8
+             CASE ( 'ISOP' );  chem_emis_att%xm(ispec) = xm_H * 8 + xm_C * 5
+             CASE ( 'RCHO' );  chem_emis_att%xm(ispec) = xm_H * 2 + xm_C + xm_O
+             CASE ( 'RH'   );  chem_emis_att%xm(ispec) = xm_H * 6 + xm_C * 2
+             CASE DEFAULT
+                WRITE (message_string, * ) 'molar mass for "',                                     &
+                                           TRIM( spc_names(match_spec_model(ispec) ) ),            &
+                                           '" has not been specified, &50 g/mol used instead'
+                CALL message( 'chem_emissions_init_species', 'CHM0051', 0, 1, 0, 6, 0 )
+                chem_emis_att%xm(ispec) = 0.05_wp
           END SELECT
        ENDDO
 
@@ -2075,13 +2114,14 @@ SUBROUTINE chem_emissions_match( emt_att,len_index )
 
     REAL(wp) ::  flux_conv_factor   !< conversion factor
 
+
     IF  ( debug_output )  CALL debug_message( 'chem_emissions_header_init_lod2', 'start' )
 
-    DO k = 1, n_matched_vars
+    DO  k = 1, n_matched_vars
 
-       this_species_name = spc_names(k)  !< species already matched
+       this_species_name = spc_names(match_spec_model(k))
 
-       DO m = 1, nsurfs
+       DO  m = 1, nsurfs
 
           j = surf_j(m)   ! get surface coordinates
           i = surf_i(m)

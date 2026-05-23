@@ -146,4 +146,4 @@ wave_breaking:
     long: |
       [wave_breaking](#ocean_parameters--wave_breaking) = *.T.* switches on turbulence generation by wave breaking at the ocean surface. This way, random perturbations are added to the horizontal velocity components at the top model layer (at grid index k = nzt). The parameterization is realized as described in Noh et al. (2004), JPO.
 
-      **WARNING: The implemented parameterization is designed for a vertical grid spacing of dz = 1.25 m and time steps of about 4 s. It will probably fail for other setups.**
+      **WARNING: The implemented parameterization is designed for a vertical grid spacing of dz = 1.25 m and time steps of about 4 s. It will fail for setups which violate these requirements!**

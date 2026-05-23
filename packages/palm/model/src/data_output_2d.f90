@@ -82,10 +82,14 @@
                ntdim_2d_xy,                                                                        &
                ntdim_2d_xz,                                                                        &
                ntdim_2d_yz,                                                                        &
-               psolver,                                                                            &
                output_fill_value,                                                                  &
                section,                                                                            &
                time_since_reference_point
+
+#if defined( _OPENACC )
+    USE control_parameters,                                                                        &
+        ONLY:  enable_openacc
+#endif
 
     USE cpulog,                                                                                    &
         ONLY:  cpu_log,                                                                            &
@@ -100,8 +104,7 @@
                dy
 
     USE indices,                                                                                   &
-        ONLY:  nbgp,                                                                               &
-               nx,                                                                                 &
+        ONLY:  nx,                                                                                 &
                nxl,                                                                                &
                nxlg,                                                                               &
                nxr,                                                                                &
@@ -139,6 +142,11 @@
                nc_stat,                                                                            &
                netcdf_data_format,                                                                 &
                netcdf_handle_error
+
+#if defined( _OPENACC )
+    USE openacc,                                                                                   &
+        ONLY:  acc_is_present
+#endif
 
     USE particle_attributes,                                                                       &
         ONLY:  grid_particles,                                                                     &
@@ -217,6 +225,16 @@
 
 
     IF ( debug_output_timestep )  CALL debug_message( 'data_output_2d', 'start' )
+
+!
+!-- Routine does not work in GPU mode if data are collected on PE0.
+#if defined( _OPENACC )
+    IF ( .NOT. data_output_2d_on_each_pe )  THEN
+       message_string = 'GPU mode does not allow data_output_2d_on_each_pe = .FALSE.'
+       CALL message( 'data_output_2d', 'PAC0368', 1, 2, 0, 6, 0 )
+    ENDIF
+#endif
+
 !
 !-- Immediate return, if no output is requested (no respective sections found in parameter
 !-- data_output)
@@ -245,7 +263,6 @@
              ENDDO
              ns = ns - 1
              ALLOCATE( local_2d_sections(nxl:nxr,nys:nyn,1:ns) )
-             local_2d_sections = 0.0_wp
           ENDIF
 
 !
@@ -275,7 +292,6 @@
              ns = ns - 1
              ALLOCATE( local_2d_sections(nxl:nxr,1:ns,nzb:nzt+1) )
              ALLOCATE( local_2d_sections_l(nxl:nxr,1:ns,nzb:nzt+1) )
-             local_2d_sections = 0.0_wp; local_2d_sections_l = 0.0_wp
           ENDIF
 
 !
@@ -306,7 +322,6 @@
              ns = ns - 1
              ALLOCATE( local_2d_sections(1:ns,nys:nyn,nzb:nzt+1) )
              ALLOCATE( local_2d_sections_l(1:ns,nys:nyn,nzb:nzt+1) )
-             local_2d_sections = 0.0_wp; local_2d_sections_l = 0.0_wp
           ENDIF
 
 !
@@ -365,7 +380,21 @@
 !
 !-- Allocate a temporary array for resorting (kji -> ijk).
     ALLOCATE( local_pf(nxl:nxr,nys:nyn,nzb:nzt+1) )
+    !$ACC DATA CREATE( local_pf, local_2d, local_2d_sections, local_2d_sections_l, total_2d ) &
+    !$ACC IF(enable_openacc)
 
+!
+!-- Initialize local temporary arrays.
+    IF ( netcdf_data_format > 4 )  THEN
+       !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+       local_2d_sections = 0.0_wp
+       !$ACC END KERNELS
+       IF ( mode /= 'xy' )  THEN
+          !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+          local_2d_sections_l = 0.0_wp
+          !$ACC END KERNELS
+       ENDIF
+    ENDIF
 !
 !-- Loop of all variables to be written.
 !-- Output dimensions chosen
@@ -384,7 +413,11 @@
           nzt_do = nzt+1
 !
 !--       Before each output, set array local_pf to fill value.
-          IF ( .NOT. data_output_raw )  local_pf = output_fill_value
+          IF ( .NOT. data_output_raw )  THEN
+             !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+             local_pf = output_fill_value
+             !$ACC END KERNELS
+          ENDIF
 !
 !--       Set masking flag for topography for not resorted arrays
           flag_nr = 0
@@ -393,6 +426,7 @@
 !--       Store the array chosen on the temporary array.
           resorted = .FALSE.
           SELECT CASE ( TRIM( do2d(av,ivar) ) )
+
              CASE ( 'e_xy', 'e_xz', 'e_yz' )
                 IF ( av == 0 )  THEN
                    to_be_resorted => e
@@ -402,18 +436,6 @@
                       e_av = 0.0_wp
                    ENDIF
                    to_be_resorted => e_av
-                ENDIF
-                IF ( mode == 'xy' )  level_z = zu
-
-             CASE ( 'thetal_xy', 'thetal_xz', 'thetal_yz' )
-                IF ( av == 0 )  THEN
-                   to_be_resorted => pt
-                ELSE
-                   IF ( .NOT. ALLOCATED( lpt_av ) )  THEN
-                      ALLOCATE( lpt_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-                      lpt_av = 0.0_wp
-                   ENDIF
-                   to_be_resorted => lpt_av
                 ENDIF
                 IF ( mode == 'xy' )  level_z = zu
 
@@ -513,14 +535,13 @@
 
              CASE ( 'p_xy', 'p_xz', 'p_yz' )
                 IF ( av == 0 )  THEN
-                   IF ( psolver /= 'sor' )  CALL exchange_horiz( p, nbgp )
                    to_be_resorted => p
                 ELSE
                    IF ( .NOT. ALLOCATED( p_av ) )  THEN
                       ALLOCATE( p_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       p_av = 0.0_wp
+                      !$ACC ENTER DATA COPYIN(p_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
                    ENDIF
-                   IF ( psolver /= 'sor' )  CALL exchange_horiz( p_av, nbgp )
                    to_be_resorted => p_av
                 ENDIF
                 IF ( mode == 'xy' )  level_z = zu
@@ -529,7 +550,6 @@
                 IF ( av == 0 )  THEN
                    IF ( time_since_reference_point >= particle_advection_start )  THEN
                       tend = prt_count
-!                      CALL exchange_horiz( tend, nbgp )
                    ELSE
                       tend = 0.0_wp
                    ENDIF
@@ -546,7 +566,6 @@
                       ALLOCATE( pc_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       pc_av = 0.0_wp
                    ENDIF
-!                   CALL exchange_horiz( pc_av, nbgp )
                    to_be_resorted => pc_av
                 ENDIF
 
@@ -578,7 +597,6 @@
                             ENDDO
                          ENDDO
                       ENDDO
-!                      CALL exchange_horiz( tend, nbgp )
                    ELSE
                       tend = 0.0_wp
                    ENDIF
@@ -595,7 +613,6 @@
                       ALLOCATE( pr_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       pr_av = 0.0_wp
                    ENDIF
-!                   CALL exchange_horiz( pr_av, nbgp )
                    to_be_resorted => pr_av
                 ENDIF
 
@@ -763,7 +780,6 @@
                             ENDDO
                          ENDDO
                       ENDDO
-!                      CALL exchange_horiz( tend, nbgp )
                    ELSE
                       tend = 0.0_wp
                    ENDIF
@@ -780,7 +796,6 @@
                       ALLOCATE( ql_vp_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       ql_vp_av = 0.0_wp
                    ENDIF
-!                   CALL exchange_horiz( ql_vp_av, nbgp )
                    to_be_resorted => ql_vp_av
                 ENDIF
                 IF ( mode == 'xy' )  level_z = zu
@@ -1037,8 +1052,8 @@
                    IF ( .NOT. bulk_cloud_model )  THEN
                       to_be_resorted => pt
                    ELSE
-                   DO  i = nxl, nxr
-                      DO  j = nys, nyn
+                      DO  i = nxl, nxr
+                         DO  j = nys, nyn
                             DO  k = nzb, nzt+1
                                local_pf(i,j,k) = pt(k,j,i) + lv_d_cp * d_exner(k) * ql(k,j,i)
                             ENDDO
@@ -1050,8 +1065,21 @@
                    IF ( .NOT. ALLOCATED( pt_av ) ) THEN
                       ALLOCATE( pt_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       pt_av = 0.0_wp
+                      !$ACC ENTER DATA COPYIN(pt_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
                    ENDIF
                    to_be_resorted => pt_av
+                ENDIF
+                IF ( mode == 'xy' )  level_z = zu
+
+             CASE ( 'thetal_xy', 'thetal_xz', 'thetal_yz' )
+                IF ( av == 0 )  THEN
+                   to_be_resorted => pt
+                ELSE
+                   IF ( .NOT. ALLOCATED( lpt_av ) )  THEN
+                      ALLOCATE( lpt_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
+                      lpt_av = 0.0_wp
+                   ENDIF
+                   to_be_resorted => lpt_av
                 ENDIF
                 IF ( mode == 'xy' )  level_z = zu
 
@@ -1131,6 +1159,8 @@
                    IF ( .NOT. interpolate_to_grid_center )  THEN
                       to_be_resorted => u
                    ELSE
+                      !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                       DO  i = nxl, nxr
                          DO  j = nys, nyn
                             DO  k = nzb, nzt
@@ -1144,6 +1174,7 @@
                    IF ( .NOT. ALLOCATED( u_av ) )  THEN
                       ALLOCATE( u_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       u_av = 0.0_wp
+                      !$ACC ENTER DATA COPYIN(u_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
                    ENDIF
                    to_be_resorted => u_av
                 ENDIF
@@ -1196,6 +1227,8 @@
                    IF ( .NOT. interpolate_to_grid_center )  THEN
                       to_be_resorted => v
                    ELSE
+                      !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                       DO  i = nxl, nxr
                          DO  j = nys, nyn
                             DO  k = nzb, nzt
@@ -1209,6 +1242,7 @@
                    IF ( .NOT. ALLOCATED( v_av ) )  THEN
                       ALLOCATE( v_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       v_av = 0.0_wp
+                      !$ACC ENTER DATA COPYIN(v_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
                    ENDIF
                    to_be_resorted => v_av
                 ENDIF
@@ -1238,6 +1272,8 @@
                    IF ( .NOT. interpolate_to_grid_center )  THEN
                       to_be_resorted => w
                    ELSE
+                      !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j, k) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                       DO  i = nxl, nxr
                          DO  j = nys, nyn
 !
@@ -1254,6 +1290,7 @@
                    IF ( .NOT. ALLOCATED( w_av ) )  THEN
                       ALLOCATE( w_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                       w_av = 0.0_wp
+                      !$ACC ENTER DATA COPYIN(w_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
                    ENDIF
                    to_be_resorted => w_av
                 ENDIF
@@ -1390,6 +1427,17 @@
 !
 !--       Resort the array to be output, if not done above.
           IF ( .NOT. resorted )  THEN
+
+#if defined( _OPENACC )
+!
+!--          Security check for arrays from modules that are still not ported.
+             IF ( enable_openacc  .AND.  .NOT. acc_is_present( to_be_resorted ) )  THEN
+                message_string = 'output array ' // TRIM( do2d(av,ivar) ) // ' not on device'
+                CALL message( 'data_output_2d', 'PAC0367', 1, 2, 0, 6, 0 )
+             ENDIF
+#endif
+             !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+             !$ACC DEFAULT(PRESENT) IF(enable_openacc)
              DO  i = nxl, nxr
                 DO  j = nys, nyn
                    DO  k = nzb_do, nzt_do
@@ -1397,14 +1445,16 @@
                    ENDDO
                 ENDDO
              ENDDO
-          ENDIF
 
+          ENDIF
 !
 !--       Set fill values at topography/building grid points, but not for debugging to be able to
 !--       check if data has been written to (wrong) locations within the topography.
 !--       Output of (terrain following) surface data (where switch two_d = .T.) must not be masked
 !--       with fill values.
           IF ( .NOT. data_output_raw  .AND.  .NOT. two_d )  THEN
+             !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+             !$ACC DEFAULT(PRESENT) IF(enable_openacc)
              DO  i = nxl, nxr
                 DO  j = nys, nyn
                    DO  k = nzb_do, nzt_do
@@ -1464,23 +1514,32 @@
 !--                If required, carry out averaging along z
                    IF ( section(is,s_ind) == -1  .AND.  .NOT. two_d )  THEN
 
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d = 0.0_wp
+                      !$ACC END KERNELS
 !
-!--                   Carry out the averaging (all data are on the PE)
-                      DO  k = nzb_do, nzt_do
+!--                   Carry out the averaging (all data are on the PE). k=0 may contain FillValues.
+                      !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+                      DO  k = 1, nzt_do
                          DO  j = nys, nyn
                             DO  i = nxl, nxr
+                               !$ACC ATOMIC UPDATE
                                local_2d(i,j) = local_2d(i,j) + local_pf(i,j,k)
                             ENDDO
                          ENDDO
                       ENDDO
 
-                      local_2d = local_2d / ( nzt_do - nzb_do + 1.0_wp)
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+                      local_2d = local_2d / REAL( nzt_do, KIND = wp )
+                      !$ACC END KERNELS
 
                    ELSE
 !
 !--                   Just store the respective section on the local array
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d = local_pf(:,:,layer_xy)
+                      !$ACC END KERNELS
 
                    ENDIF
 
@@ -1498,6 +1557,8 @@
 !
 !--                   For parallel output, all cross sections are first stored here on a local array
 !--                   and will be written to the output file afterwards to increase the performance.
+                      !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                       DO  i = nxl, nxr
                          DO  j = nys, nyn
                             local_2d_sections(i,j,iis) = local_2d(i,j)
@@ -1514,6 +1575,7 @@
                             WRITE ( 21 )  time_since_reference_point, do2d_xy_time_count(av), av
                          ENDIF
 #endif
+                         !$ACC UPDATE HOST( local_2d ) IF(enable_openacc)
                          DO  i = 0, io_blocks-1
                             IF ( i == io_group )  THEN
                                WRITE ( 21 )  nxl, nxr, nys, nyn, nys, nyn
@@ -1595,6 +1657,7 @@
 #if defined( __netcdf )
 !
 !--                This is the non-parallel branch.
+                   !$ACC UPDATE HOST( local_2d ) IF(enable_openacc)
                    IF ( two_d ) THEN
                       nc_stat = NF90_PUT_VAR( id_set_xy(av),                                       &
                                               id_var_do2d(av,ivar),                                &
@@ -1650,13 +1713,20 @@
                    IF ( section(is,s_ind) == -1 )  THEN
 
                       ALLOCATE( local_2d_l(nxl:nxr,nzb_do:nzt_do) )
+                      !$ACC DATA CREATE( local_2d_l ) IF(enable_openacc)
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+                      local_2d   = 0.0_wp
                       local_2d_l = 0.0_wp
+                      !$ACC END KERNELS
                       ngp = ( nxr-nxl + 1 ) * ( nzt_do-nzb_do + 1 )
 !
 !--                   First local averaging on the PE
+                      !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                       DO  k = nzb_do, nzt_do
                          DO  j = nys, nyn
                             DO  i = nxl, nxr
+                               !$ACC ATOMIC UPDATE
                                local_2d_l(i,k) = local_2d_l(i,k) + local_pf(i,j,k)
                             ENDDO
                          ENDDO
@@ -1665,21 +1735,31 @@
 !
 !--                   Now do the averaging over all PEs along y
                       IF ( collective_wait )  CALL MPI_BARRIER( comm2d, ierr )
+                      !$ACC HOST_DATA USE_DEVICE( local_2d, local_2d_l )  IF(enable_openacc)
                       CALL MPI_ALLREDUCE( local_2d_l(nxl,nzb_do), local_2d(nxl,nzb_do), ngp,       &
                                           MPI_REAL, MPI_SUM, comm1dy, ierr )
+                      !$ACC END HOST_DATA
 #else
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d = local_2d_l
+                      !$ACC END KERNELS
 #endif
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d = local_2d / ( ny + 1.0_wp )
+                      !$ACC END KERNELS
 
                       DEALLOCATE( local_2d_l )
+                      !$ACC END DATA
 
                    ELSE
 !
 !--                   Just store the respective section on the local array (but only if it is
 !--                   available on this PE!)
                       IF ( section(is,s_ind) >= nys  .AND.  section(is,s_ind) <= nyn )  THEN
-                         local_2d = local_pf(:,section(is,s_ind),nzb_do:nzt_do)
+                         j = section(is,s_ind)
+                         !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+                         local_2d = local_pf(:,j,nzb_do:nzt_do)
+                         !$ACC END KERNELS
                       ENDIF
 
                    ENDIF
@@ -1698,6 +1778,8 @@
 !--                      For parallel output, all cross sections are first stored here on a local
 !--                      array and will be written to the output file afterwards to increase the
 !--                      performance.
+                         !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, k) &
+                         !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                          DO  i = nxl, nxr
                             DO  k = nzb_do, nzt_do
                                local_2d_sections_l(i,is,k) = local_2d(i,k)
@@ -1717,6 +1799,7 @@
                             WRITE ( 22 )  time_since_reference_point, do2d_xz_time_count(av), av
                          ENDIF
 #endif
+                         !$ACC UPDATE HOST( local_2d ) IF(enable_openacc)
                          DO  i = 0, io_blocks-1
                             IF ( i == io_group )  THEN
                                IF ( ( section(is,s_ind) >= nys .AND. section(is,s_ind) <= nyn )    &
@@ -1811,6 +1894,7 @@
 #if defined( __netcdf )
 !
 !--                This is the non-parallel branch.
+                   !$ACC UPDATE HOST( local_2d ) IF(enable_openacc)
                    nc_stat = NF90_PUT_VAR( id_set_xz(av),                                          &
                                            id_var_do2d(av,ivar),                                   &
                                            local_2d(nxl:nxr,nzb_do:nzt_do),                        &
@@ -1849,13 +1933,19 @@
                    IF ( section(is,s_ind) == -1 )  THEN
 
                       ALLOCATE( local_2d_l(nys:nyn,nzb_do:nzt_do) )
+                      !$ACC DATA CREATE( local_2d_l ) IF(enable_openacc)
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d_l = 0.0_wp
+                      !$ACC END KERNELS
                       ngp = ( nyn-nys+1 ) * ( nzt_do-nzb_do+1 )
 !
 !--                   First local averaging on the PE
+                      !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                      !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                       DO  k = nzb_do, nzt_do
                          DO  j = nys, nyn
                             DO  i = nxl, nxr
+                               !$ACC ATOMIC UPDATE
                                local_2d_l(j,k) = local_2d_l(j,k) + local_pf(i,j,k)
                             ENDDO
                          ENDDO
@@ -1864,21 +1954,31 @@
 !
 !--                   Now do the averaging over all PEs along x
                       IF ( collective_wait )  CALL MPI_BARRIER( comm2d, ierr )
+                      !$ACC HOST_DATA USE_DEVICE( local_2d, local_2d_l )  IF(enable_openacc)
                       CALL MPI_ALLREDUCE( local_2d_l(nys,nzb_do), local_2d(nys,nzb_do), ngp,       &
                                           MPI_REAL, MPI_SUM, comm1dx, ierr )
+                      !$ACC END HOST_DATA
 #else
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d = local_2d_l
+                      !$ACC END KERNELS
 #endif
+                      !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                       local_2d = local_2d / ( nx + 1.0_wp )
+                      !$ACC END KERNELS
 
                       DEALLOCATE( local_2d_l )
+                      !$ACC END DATA
 
                    ELSE
 !
 !--                   Just store the respective section on the local array (but only if it is
 !--                   available on this PE!)
                       IF ( section(is,s_ind) >= nxl  .AND.  section(is,s_ind) <= nxr )  THEN
-                         local_2d = local_pf(section(is,s_ind),:,nzb_do:nzt_do)
+                         i = section(is,s_ind)
+                         !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+                         local_2d = local_pf(i,:,nzb_do:nzt_do)
+                         !$ACC END KERNELS
                       ENDIF
 
                    ENDIF
@@ -1897,6 +1997,8 @@
 !--                      For parallel output, all cross sections are first stored here on a local
 !--                      array and will be written to the output file afterwards to increase the
 !--                      performance.
+                         !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(j, k) &
+                         !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                          DO  j = nys, nyn
                             DO  k = nzb_do, nzt_do
                                local_2d_sections_l(is,j,k) = local_2d(j,k)
@@ -1916,6 +2018,7 @@
                             WRITE ( 23 )  time_since_reference_point, do2d_yz_time_count(av), av
                          ENDIF
 #endif
+                         !$ACC UPDATE HOST( local_2d ) IF(enable_openacc)
                          DO  i = 0, io_blocks-1
                             IF ( i == io_group )  THEN
                                IF ( ( section(is,s_ind) >= nxl .AND. section(is,s_ind) <= nxr )    &
@@ -2010,6 +2113,7 @@
 #if defined( __netcdf )
 !
 !--                This is the non-parallel branch.
+                   !$ACC UPDATE HOST( local_2d ) IF(enable_openacc)
                    nc_stat = NF90_PUT_VAR( id_set_yz(av),                                          &
                                            id_var_do2d(av,ivar),                                   &
                                            local_2d(nys:nyn,nzb_do:nzt_do),                        &
@@ -2042,9 +2146,10 @@
                          nis = ns
                       ENDIF
 
+                      !$ACC UPDATE HOST( local_2d_sections ) IF(enable_openacc)
                       nc_stat = NF90_PUT_VAR( id_set_xy(av),                                       &
                                               id_var_do2d(av,ivar),                                &
-                                              local_2d_sections(nxl:nxr, nys:nyn,1:nis),           &
+                                              local_2d_sections(nxl:nxr,nys:nyn,1:nis),            &
                                               start = (/ nxl+1, nys+1, 1,                          &
                                                          do2d_xy_time_count(av) /),                &
                                               count = (/ nxr-nxl+1, nyn-nys+1, nis, 1 /) )
@@ -2068,16 +2173,22 @@
 !--                      Distribute data over all PEs along y
                          ngp = ( nxr-nxl+1 ) * ( nzt_do-nzb_do+1 ) * ns
                          IF ( collective_wait )  CALL MPI_BARRIER( comm2d, ierr )
+                         !$ACC HOST_DATA USE_DEVICE( local_2d_sections, local_2d_sections_l )      &
+                         !$ACC IF(enable_openacc)
                          CALL MPI_ALLREDUCE( local_2d_sections_l(nxl,1,nzb_do),                    &
                                              local_2d_sections(nxl,1,nzb_do),                      &
                                              ngp, MPI_REAL, MPI_SUM, comm1dy, ierr )
+                         !$ACC END HOST_DATA
 #else
+                         !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                          local_2d_sections = local_2d_sections_l
+                         !$ACC END KERNELS
 #endif
                       ENDIF
 !
 !--                   Only the first core along y does the output, the others call NF90_PUT_VAR
 !--                   with zero count. The ELSE branch is required to prevent a lock.
+                      !$ACC UPDATE HOST( local_2d_sections ) IF(enable_openacc)
                       IF ( myidy == 0 )  THEN
                          nc_stat = NF90_PUT_VAR( id_set_xz(av),                                    &
                                                  id_var_do2d(av,ivar),                             &
@@ -2111,16 +2222,22 @@
 !--                      Distribute data over all PEs along x
                          ngp = ( nyn-nys+1 ) * ( nzt-nzb + 2 ) * ns
                          IF ( collective_wait ) CALL MPI_BARRIER( comm2d, ierr )
+                         !$ACC HOST_DATA USE_DEVICE( local_2d_sections, local_2d_sections_l )      &
+                         !$ACC IF(enable_openacc)
                          CALL MPI_ALLREDUCE( local_2d_sections_l(1,nys,nzb_do),                    &
                                              local_2d_sections(1,nys,nzb_do),                      &
                                              ngp, MPI_REAL, MPI_SUM, comm1dx, ierr )
+                         !$ACC END HOST_DATA
 #else
+                         !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
                          local_2d_sections = local_2d_sections_l
+                         !$ACC END KERNELS
 #endif
                       ENDIF
 !
 !--                   Only the first core along x does the output, the others call NF90_PUT_VAR
 !--                   with zero count. The ELSE branch is required to prevent a lock.
+                      !$ACC UPDATE HOST( local_2d_sections ) IF(enable_openacc)
                       IF ( myidx == 0 )  THEN
                          nc_stat = NF90_PUT_VAR( id_set_yz(av),                                    &
                                                  id_var_do2d(av,ivar),                             &
@@ -2156,16 +2273,18 @@
 
 !
 !-- Deallocate temporary arrays.
+    DEALLOCATE( local_pf, local_2d )
     IF ( ALLOCATED( level_z ) )  DEALLOCATE( level_z )
     IF ( netcdf_data_format > 4 )  THEN
-       DEALLOCATE( local_pf, local_2d, local_2d_sections )
-       IF( mode == 'xz'  .OR.  mode == 'yz' )  DEALLOCATE( local_2d_sections_l )
+       DEALLOCATE( local_2d_sections )
+       IF ( mode == 'xz'  .OR.  mode == 'yz' )  DEALLOCATE( local_2d_sections_l )
     ENDIF
 #if defined( __parallel )
     IF ( .NOT. data_output_2d_on_each_pe  .AND.  myid == 0 )  THEN
        DEALLOCATE( total_2d )
     ENDIF
 #endif
+    !$ACC END DATA
 
 !
 !-- Close plot output file.

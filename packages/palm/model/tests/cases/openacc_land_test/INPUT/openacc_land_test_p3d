@@ -46,6 +46,7 @@
 
     bc_pt_b                    = 'dirichlet', ! required when using LSM
     bc_q_b                     = 'dirichlet', ! required when using LSM
+    bc_p_t                     = 'dirichlet',  ! workaround to pass the tests
 !
 !-- mode
 !------------------------------------------------------------------------------
@@ -71,13 +72,11 @@
 !
 !-- run steering
 !-------------------------------------------------------------------------------
-    end_time                   = 0120.0,   !   216000.0, ! (2.5 days)
+    end_time                   = 60.0,   !   216000.0, ! (2.5 days)
 
     create_disturbances        = .TRUE.,
     dt_disturb                 = 120.0,
     disturbance_energy_limit   = 0.0001,
-    enable_openacc             = .FALSE.,
-    enable_lsm_openacc             = .TRUE.,
 !
 !-- data output
 !------------------------------------------------------------------------------

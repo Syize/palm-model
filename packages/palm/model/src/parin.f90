@@ -85,6 +85,16 @@
                nesting_coupling_time
 #endif
 
+    USE poismg_mod,                                                                                &
+        ONLY:  cycle_mg,                                                                           &
+               max_mg_grid_levels,                                                                 &
+               mg_cycles,                                                                          &
+               mg_switch_to_pe0_level,                                                             &
+               ngsrb,                                                                              &
+               ngsrb_initial,                                                                      &
+               ngsrb_initial_timesteps,                                                            &
+               residual_limit
+
     USE profil_parameter,                                                                          &
         ONLY:  cross_profiles,                                                                     &
                profile_columns,                                                                    &
@@ -220,6 +230,7 @@
                                           loop_optimization,                                       &
                                           lsf_exception,                                           &
                                           masking_method,                                          &
+                                          max_mg_grid_levels,                                      &
                                           mg_cycles,                                               &
                                           mg_switch_to_pe0_level,                                  &
                                           mixing_length_1d,                                        &
@@ -228,6 +239,8 @@
                                           netcdf_precision,                                        &
                                           neutral,                                                 &
                                           ngsrb,                                                   &
+                                          ngsrb_initial,                                           &
+                                          ngsrb_initial_timesteps,                                 &
                                           nsor,                                                    &
                                           nsor_ini,                                                &
                                           nudging,                                                 &
@@ -366,8 +379,6 @@
                                    dt_restart,                                                     &
                                    dt_run_control,                                                 &
                                    dt_run_control_spinup,                                          &
-                                   enable_lsm_openacc,                                             &
-                                   enable_multigrid_openacc,                                       &
                                    enable_openacc,                                                 &
                                    end_time,                                                       &
                                    force_print_header,                                             &

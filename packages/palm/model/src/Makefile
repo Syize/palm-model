@@ -185,6 +185,7 @@ SOURCES = \
 	timestep_scheme_steering.f90 \
 	time_to_string.f90 \
 	topography_mod.f90 \
+	traffic_mod.f90 \
 	transpose_mod.f90 \
 	tridia_solver_mod.f90 \
 	turbulence_closure_mod.f90 \
@@ -538,7 +539,8 @@ data_output_mask.o: \
 	mod_particle_attributes.o \
 	modules.o \
 	netcdf_interface_mod.o \
-	salsa_mod.o
+	salsa_mod.o \
+	traffic_mod.o
 data_output_module.o: \
 	data_output_binary_module.o \
 	data_output_netcdf4_module.o \
@@ -751,6 +753,7 @@ header.o: \
 	plant_canopy_model_mod.o \
 	pmc_handle_communicator_mod.o \
 	pmc_interface_mod.o \
+	poismg_mod.o \
 	subsidence_mod.o \
 	surface_mod.o
 indoor_model_mod.o: \
@@ -909,13 +912,14 @@ module_interface.o: \
 	netcdf_interface_mod.o \
 	ocean_mod.o \
 	plant_canopy_model_mod.o \
-	poismg_noopt_mod.o \
+	poismg_mod.o \
 	radiation_model_mod.o \
 	salsa_mod.o \
 	slurb_mod.o \
 	spectra_mod.o \
 	surface_data_handling.o \
 	synthetic_turbulence_generator_mod.o \
+	traffic_mod.o \
 	turbulence_closure_mod.o \
 	turbulent_inflow_mod.o \
 	urban_surface_mod.o \
@@ -976,6 +980,7 @@ netcdf_interface_mod.o: \
 	salsa_mod.o \
 	slurb_mod.o \
 	spectra_mod.o \
+	traffic_mod.o \
 	turbulence_closure_mod.o \
 	urban_surface_mod.o \
 	user_module.o \
@@ -1028,6 +1033,7 @@ parin.o: \
 	netcdf_interface_mod.o \
 	pmc_handle_communicator_mod.o \
 	pmc_interface_mod.o \
+	poismg_mod.o \
 	progress_bar_mod.o \
 	read_restart_data_mod.o \
 	surface_data_output_mod.o \
@@ -1111,7 +1117,8 @@ poismg_noopt_mod.o: \
 	cpulog_mod.o \
 	exchange_horiz_mod.o \
 	mod_kinds.o \
-	modules.o
+	modules.o \
+	poismg_mod.o
 posix_interface_mod.o: \
 	mod_kinds.o
 pres.o: \
@@ -1203,6 +1210,7 @@ read_restart_data_mod.o: \
 	netcdf_interface_mod.o \
 	palm_date_time_mod.o \
 	pmc_interface_mod.o \
+	poismg_mod.o \
 	radiation_model_mod.o \
 	random_function_mod.o\
 	random_generator_parallel_mod.o \
@@ -1223,7 +1231,8 @@ restart_data_mpi_io_mod.o: \
 run_control.o: \
 	cpulog_mod.o \
 	mod_kinds.o \
-	modules.o
+	modules.o \
+	poismg_mod.o
 salsa_mod.o: \
 	modules.o \
 	mod_kinds.o \
@@ -1421,6 +1430,12 @@ topography_mod.o: \
 	netcdf_data_input_mod.o \
 	pmc_handle_communicator_mod.o \
 	pmc_interface_mod.o
+traffic_mod.o: \
+	basic_constants_and_equations_mod.o \
+	chem_emis_vsrc_mod.o \
+	mod_kinds.o \
+	netcdf_data_input_mod.o \
+	palm_date_time_mod.o
 transpose_mod.o: \
 	cpulog_mod.o \
 	mod_kinds.o \
@@ -1588,6 +1603,7 @@ write_restart_data_mod.o: \
 	netcdf_interface_mod.o \
 	palm_date_time_mod.o \
 	pmc_interface_mod.o \
+	poismg_mod.o \
 	radiation_model_mod.o \
 	random_function_mod.o \
 	random_generator_parallel_mod.o \
@@ -1598,11 +1614,11 @@ write_restart_data_mod.o: \
 	user_module.o \
 	virtual_measurement_mod.o
 
-$(OBJS1): combine_plot_fields.f90
+$(OBJS1): mod_kinds.o combine_plot_fields.f90
 	$(F90_SER) $(F90FLAGS) $(COPT) -c combine_plot_fields.f90
 
 $(PROG1): $(OBJS1)
-	$(F90_SER) -o $(PROG1) $(OBJS1) $(LDFLAGS)
+	$(F90_SER) -o $(PROG1) $(OBJS1) mod_kinds.o $(LDFLAGS)
 
 .PHONY : clean
 clean:

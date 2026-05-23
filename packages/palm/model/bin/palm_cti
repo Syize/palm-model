@@ -834,9 +834,9 @@ class PALMCycle:
             h = dict()
             h['Content-Type'] = 'application/json'
             h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-            h['Authorization'] = f'basic cGFsbV9jdGlfdjI1LjA0OlBBUWVQRzRLSFE4NkV3ZHpGMWxB'
+            h['Authorization'] = f'basic cGFsbV9jdGlfdjI1LjEwLXJjLjE6TkMwOVdUWlJJUmtzSWxOWFluUmxHQkFtWlYwPQ=='
             q = '''query palm_cti($current: String!) { check_version(input: {current: $current}) { show message } }'''
-            v = {'current': 'v25.04'}
+            v = {'current': 'v25.10-rc.1'}
             c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
             c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
             r = c.getresponse()

@@ -60,9 +60,7 @@
 
     USE grid_variables,                                                                            &
         ONLY:  dx,                                                                                 &
-               dy,                                                                                 &
-               ddx2_mg,                                                                            &
-               ddy2_mg
+               dy
 
     USE indices
 
@@ -165,19 +163,17 @@
 
     IMPLICIT NONE
 
-    LOGICAL      ::  var_available        !< flag to indicate whether a variable is present in the static input file
+    LOGICAL      ::  var_available  !< flag to indicate whether a variable is present in the static input file
 
-    INTEGER(iwp) ::  i                    !< grid index in x direction
-    INTEGER(iwp) ::  ind_array(1)         !< dummy used to determine start index for external pressure forcing
-    INTEGER(iwp) ::  j                    !< grid index in y direction
-    INTEGER(iwp) ::  k                    !< grid index in z direction
-    INTEGER(iwp) ::  l                    !< running index over multigrid levels
-    INTEGER(iwp) ::  nz_s_shift           !< topography-top index on scalar-grid, used to vertically shift initial profiles
-    INTEGER(iwp) ::  nz_u_shift           !< topography-top index on u-grid, used to vertically shift initial profiles
-    INTEGER(iwp) ::  nz_v_shift           !< topography-top index on v-grid, used to vertically shift initial profiles
-    INTEGER(iwp) ::  nz_w_shift           !< topography-top index on w-grid, used to vertically shift initial profiles
-    INTEGER(iwp) ::  nzt_l                !< index of top PE boundary for multigrid level
-    INTEGER(iwp) ::  sr                   !< index of statistic region
+    INTEGER(iwp) ::  i             !< grid index in x direction
+    INTEGER(iwp) ::  ind_array(1)  !< dummy used to determine start index for external pressure forcing
+    INTEGER(iwp) ::  j             !< grid index in y direction
+    INTEGER(iwp) ::  k             !< grid index in z direction
+    INTEGER(iwp) ::  nz_s_shift    !< topography-top index on scalar-grid, used to vertically shift initial profiles
+    INTEGER(iwp) ::  nz_u_shift    !< topography-top index on u-grid, used to vertically shift initial profiles
+    INTEGER(iwp) ::  nz_v_shift    !< topography-top index on v-grid, used to vertically shift initial profiles
+    INTEGER(iwp) ::  nz_w_shift    !< topography-top index on w-grid, used to vertically shift initial profiles
+    INTEGER(iwp) ::  sr            !< index of statistic region
 
     INTEGER(iwp), DIMENSION(:), ALLOCATABLE   ::  ngp_2dh_l  !< toal number of horizontal grid points in statistical region on
                                                              !< subdomain
@@ -186,9 +182,6 @@
                                                                      !< subdomain
     INTEGER(iwp), DIMENSION(:,:), ALLOCATABLE ::  ngp_2dh_s_inner_l  !< number of horizontal non-topography grid points on
                                                                      !< subdomain
-
-    REAL(wp) ::  dx_l !< grid spacing along x on different multigrid level
-    REAL(wp) ::  dy_l !< grid spacing along y on different multigrid level
 
     REAL(wp), DIMENSION(:), ALLOCATABLE ::  init_l                       !< dummy array used for averaging 3D data to obtain
                                                                          !< inital profiles
@@ -202,6 +195,7 @@
 
     TYPE(real_1d_3d) ::  tmp_1d !< temporary variable to input additional data from static/dynamic file
     TYPE(real_2d)    ::  tmp_2d !< temporary variable to input additional surface-data from static file
+
 
     CALL location_message( 'model initialization', 'start' )
 !
@@ -404,67 +398,6 @@
 
     ENDDO
 
-!
-!-- In case of multigrid method, compute grid lengths and grid factors for the grid levels with
-!-- respective density on each grid.
-    IF ( psolver(1:9) == 'multigrid' )  THEN
-
-       ALLOCATE( ddx2_mg(maximum_grid_level) )
-       ALLOCATE( ddy2_mg(maximum_grid_level) )
-       ALLOCATE( dzu_mg(nzb+1:nzt+1,maximum_grid_level) )
-       ALLOCATE( dzw_mg(nzb+1:nzt+1,maximum_grid_level) )
-       ALLOCATE( f1_mg(nzb+1:nzt,maximum_grid_level) )
-       ALLOCATE( f2_mg(nzb+1:nzt,maximum_grid_level) )
-       ALLOCATE( f3_mg(nzb+1:nzt,maximum_grid_level) )
-       ALLOCATE( rho_air_mg(nzb:nzt+1,maximum_grid_level) )
-       ALLOCATE( rho_air_zw_mg(nzb:nzt+1,maximum_grid_level) )
-
-       dzu_mg(:,maximum_grid_level) = dzu
-       rho_air_mg(:,maximum_grid_level) = rho_air
-!
-!--    Next line to ensure an equally spaced grid.
-       dzu_mg(1,maximum_grid_level) = dzu(2)
-       rho_air_mg(nzb,maximum_grid_level) = rho_air(nzb) + (rho_air(nzb) - rho_air(nzb+1))
-
-       dzw_mg(:,maximum_grid_level) = dzw
-       rho_air_zw_mg(:,maximum_grid_level) = rho_air_zw
-       nzt_l = nzt
-       DO  l = maximum_grid_level-1, 1, -1
-           dzu_mg(nzb+1,l) = 2.0_wp * dzu_mg(nzb+1,l+1)
-           dzw_mg(nzb+1,l) = 2.0_wp * dzw_mg(nzb+1,l+1)
-           rho_air_mg(nzb,l)    = rho_air_mg(nzb,l+1)    + ( rho_air_mg(nzb,l+1)    -              &
-                                                             rho_air_mg(nzb+1,l+1)    )
-           rho_air_zw_mg(nzb,l) = rho_air_zw_mg(nzb,l+1) + ( rho_air_zw_mg(nzb,l+1) -              &
-                                                             rho_air_zw_mg(nzb+1,l+1) )
-           rho_air_mg(nzb+1,l)    = rho_air_mg(nzb+1,l+1)
-           rho_air_zw_mg(nzb+1,l) = rho_air_zw_mg(nzb+1,l+1)
-           nzt_l = nzt_l / 2
-           DO  k = 2, nzt_l+1
-              dzu_mg(k,l) = dzu_mg(2*k-2,l+1) + dzu_mg(2*k-1,l+1)
-              dzw_mg(k,l) = dzw_mg(2*k-2,l+1) + dzw_mg(2*k-1,l+1)
-              rho_air_mg(k,l)    = rho_air_mg(2*k-1,l+1)
-              rho_air_zw_mg(k,l) = rho_air_zw_mg(2*k-1,l+1)
-           ENDDO
-       ENDDO
-
-       nzt_l = nzt
-       dx_l  = dx
-       dy_l  = dy
-       DO  l = maximum_grid_level, 1, -1
-          ddx2_mg(l) = 1.0_wp / dx_l**2
-          ddy2_mg(l) = 1.0_wp / dy_l**2
-          DO  k = nzb+1, nzt_l
-             f2_mg(k,l) = rho_air_zw_mg(k,l) / ( dzu_mg(k+1,l) * dzw_mg(k,l) )
-             f3_mg(k,l) = rho_air_zw_mg(k-1,l) / ( dzu_mg(k,l)   * dzw_mg(k,l) )
-             f1_mg(k,l) = 2.0_wp * ( ddx2_mg(l) + ddy2_mg(l) )                                     &
-                          * rho_air_mg(k,l) + f2_mg(k,l) + f3_mg(k,l)
-          ENDDO
-          nzt_l = nzt_l / 2
-          dx_l  = dx_l * 2.0_wp
-          dy_l  = dy_l * 2.0_wp
-       ENDDO
-
-    ENDIF
 
 !
 !-- 1D-array for large scale subsidence velocity
@@ -509,7 +442,6 @@
 !
 !-- Allocate arrays for other modules
     CALL module_interface_init_arrays
-
 
 !
 !-- Allocate arrays containing the RK coefficient for calculation of perturbation pressure and
@@ -905,7 +837,7 @@
           IF ( .NOT. humidity )  THEN
              ref_state(:) = pt_init(:)
           ELSE
-             ref_state(:) = vpt(:,nys,nxl)
+             ref_state(:) = pt_init(:) * ( 1.0_wp + 0.61_wp * q_init(:) )
           ENDIF
        ENDIF
 
@@ -1533,44 +1465,51 @@
     CALL init_advec
 
 !
-!-- Impose random perturbation on the horizontal velocity field and then
-!-- remove the divergences from the velocity field at the initial stage
-    IF ( create_disturbances  .AND.  disturbance_energy_limit /= 0.0_wp  .AND.                     &
-         TRIM( initializing_actions ) /= 'read_restart_data'  .AND.                                &
+!-- Remove the divergences from the velocity field at the initial stage. This is required after
+!-- random perturbations have been added, or if topography/buildings are used.
+    IF ( TRIM( initializing_actions ) /= 'read_restart_data'  .AND.                                &
          .NOT. cyclic_fill_initialization )                                                        &
     THEN
+       IF ( ( create_disturbances  .AND.  disturbance_energy_limit /= 0.0_wp )                     &
+            .OR.  topography /= 'flat' )                                                           &
+       THEN
 
-       IF ( debug_output )  THEN
-          CALL debug_message( 'creating disturbances + applying pressure solver', 'start' )
-       ENDIF
+          IF ( debug_output )  THEN
+             CALL debug_message( 'creating disturbances + applying pressure solver', 'start' )
+          ENDIF
 !
-!--    Needed for both disturb_field and pres
+!--       Needed for both disturb_field and pres
 !$ACC DATA &
 !$ACC CREATE(tend(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(u(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(v(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
-
-       CALL disturb_field( 'u', tend, u )
-       CALL disturb_field( 'v', tend, v )
+!
+!--       Impose random perturbation on the horizontal velocity field.
+          IF ( ( create_disturbances  .AND.  disturbance_energy_limit /= 0.0_wp ) )  THEN
+             CALL disturb_field( 'u', tend, u )
+             CALL disturb_field( 'v', tend, v )
+          ENDIF
 
 !$ACC DATA &
-!$ACC CREATE(d(nzb+1:nzt,nys:nyn,nxl:nxr)) &
+!$ACC COPY(p_loc(nzb:nzt+1,nys-1:nyn+1,nxl-1:nxr+1)) &
 !$ACC COPY(w(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
 !$ACC COPY(p(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) &
-!$ACC COPYIN(rho_air(nzb:nzt+1), rho_air_zw(nzb:nzt+1)) &
+!$ACC COPYIN(rho_air(nzb:nzt+1), drho_air(nzb:nzt+1), rho_air_zw(nzb:nzt+1)) &
 !$ACC COPYIN(ddzu(1:nzt+1), ddzw(1:nzt+1)) &
 !$ACC COPYIN(ngp_2dh_wgrid(nzb+1:nzt)) &
 !$ACC COPYIN(topo_flags(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
 
-       n_sor = nsor_ini
-       CALL pres
-       n_sor = nsor
+          n_sor = nsor_ini
+          CALL pres
+          n_sor = nsor
 
 !$ACC END DATA
 !$ACC END DATA
 
-       IF ( debug_output )  THEN
-          CALL debug_message( 'creating disturbances + applying pressure solver', 'end' )
+          IF ( debug_output )  THEN
+             CALL debug_message( 'creating disturbances + applying pressure solver', 'end' )
+          ENDIF
+
        ENDIF
 
     ENDIF
@@ -1677,25 +1616,29 @@
     IF ( rayleigh_damping_factor /= 0.0_wp )  THEN
 
        IF (  .NOT.  ocean_mode )  THEN
-          DO  k = nzb+1, nzt
-             IF ( zu(k) >= rayleigh_damping_height )  THEN
-                rdf(k) = rayleigh_damping_factor *                                                 &
-                         ( SIN( pi * 0.5_wp * ( zu(k) - rayleigh_damping_height )                  &
-                                / ( zu(nzt) - rayleigh_damping_height ) )                          &
-                         )**2
-             ENDIF
-          ENDDO
+          IF ( rayleigh_damping_height < zu(nzt) )  THEN
+             DO  k = nzb+1, nzt
+                IF ( zu(k) >= rayleigh_damping_height )  THEN
+                   rdf(k) = rayleigh_damping_factor *                                              &
+                            ( SIN( pi * 0.5_wp * ( zu(k) - rayleigh_damping_height )               &
+                                   / ( zu(nzt) - rayleigh_damping_height ) )                       &
+                            )**2
+                ENDIF
+             ENDDO
+          ENDIF
        ELSE
 !
 !--       In ocean mode, rayleigh damping is applied in the lower part of the model domain
-          DO  k = nzt, nzb+1, -1
-             IF ( zu(k) <= rayleigh_damping_height )  THEN
-                rdf(k) = rayleigh_damping_factor *                                                 &
-                         ( SIN( pi * 0.5_wp * ( rayleigh_damping_height - zu(k) )                  &
-                                / ( rayleigh_damping_height - zu(nzb+1) ) )                        &
-                         )**2
-             ENDIF
-          ENDDO
+          IF ( rayleigh_damping_height > zu(nzb+1) )  THEN
+             DO  k = nzt, nzb+1, -1
+                IF ( zu(k) <= rayleigh_damping_height )  THEN
+                   rdf(k) = rayleigh_damping_factor *                                              &
+                            ( SIN( pi * 0.5_wp * ( rayleigh_damping_height - zu(k) )               &
+                                   / ( rayleigh_damping_height - zu(nzb+1) ) )                     &
+                            )**2
+                ENDIF
+             ENDDO
+          ENDIF
        ENDIF
 
     ENDIF

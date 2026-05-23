@@ -30,7 +30,8 @@
 
 #if defined( __netcdf )
     USE arrays_3d,                                                                                 &
-        ONLY:  d_exner,                                                                            &
+        ONLY:  diss,                                                                               &
+               d_exner,                                                                            &
                e,                                                                                  &
                p,                                                                                  &
                pt,                                                                                 &
@@ -48,7 +49,8 @@
                w
 
     USE averaging,                                                                                 &
-        ONLY:  e_av,                                                                               &
+        ONLY:  diss_av,                                                                            &
+               e_av,                                                                               &
                lpt_av,                                                                             &
                p_av,                                                                               &
                pc_av,                                                                              &
@@ -96,7 +98,8 @@
                nz_do3d,                                                                            &
                output_fill_value,                                                                  &
                salsa,                                                                              &
-               time_since_reference_point
+               time_since_reference_point,                                                         &
+               traffic
 
 #if defined( __parallel )
     USE control_parameters,                                                                        &
@@ -152,6 +155,9 @@
 
     USE salsa_mod,                                                                                 &
         ONLY:  salsa_data_output_mask
+
+    USE traffic_mod,                                                                               &
+        ONLY:  trm_data_output_mask
 
 
     IMPLICIT NONE
@@ -259,6 +265,13 @@
 !--    Store the variable chosen.
        resorted = .FALSE.
        SELECT CASE ( TRIM( domask(mid,av,ivar) ) )
+
+          CASE ( 'diss' )
+             IF ( av == 0 )  THEN
+                to_be_resorted => diss
+             ELSE
+                to_be_resorted => diss_av
+             ENDIF
 
           CASE ( 'e' )
              IF ( av == 0 )  THEN
@@ -889,6 +902,11 @@
 !--          SALSA quantities.
              IF ( .NOT. found  .AND.  salsa )  THEN
                 CALL salsa_data_output_mask( av, domask(mid,av,ivar), found, local_pf, mid )
+             ENDIF
+!
+!--          Traffic quantities.
+             IF ( .NOT. found  .AND.  traffic )  THEN
+                CALL trm_data_output_mask( av, domask(mid,av,ivar), found, local_pf, mid )
              ENDIF
 !
 !--          User defined quantities.

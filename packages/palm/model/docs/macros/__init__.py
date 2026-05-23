@@ -293,7 +293,7 @@ def validate_yaml_field_shape(
     violation_counter = 0
     if 'shape' in content_dict:
         if isinstance(content_dict['shape'], str):
-            if not bool(re.match('^\(\[*(?:[a-z_][a-z0-9_]*|\d+)\]*(?:,\[*(?:[a-z_][a-z0-9_]*|\d+)\]*)*\)$', content_dict['shape'])):
+            if not bool(re.fullmatch(r'\(\[*(?:[a-z_][a-z0-9_]*|\d+)\]*(?:,\[*(?:[a-z_][a-z0-9_]*|\d+)\]*)*\)', content_dict['shape'])):
                 print_yaml_field_error_to_terminal(
                     database_path=database_path,
                     field_identifier=field_identifier,
@@ -304,9 +304,9 @@ def validate_yaml_field_shape(
             else:
                 shape_list = []
                 for n, v in enumerate(content_dict['shape'][1:-1].split(',')):
-                    if bool(re.match('^\[*[a-z_][a-z0-9_]*\]*$', v)):
+                    if bool(re.fullmatch(r'\[*[a-z_][a-z0-9_]*\]*', v)):
                         shape_list.append(v)
-                    elif bool(re.match('^\d+$', v)):
+                    elif bool(re.fullmatch(r'\d+', v)):
                         shape_list.append(int(v))
                     else:
                         print_yaml_field_error_to_terminal(
@@ -542,7 +542,7 @@ def validate_yaml_namelist_database(data_path, content_dict):
                     'The mandatory field "type" must have a value of type "str"',
                 )
                 valid = False
-            if not bool(re.match('^C(?:\*\d+)?$|^I$|^L$|^R$|^D$', parameter_dict['type'])):
+            if not bool(re.fullmatch(r'C(?:\*\d+)?$|^I$|^L$|^R$|^D', parameter_dict['type'])):
                 print_yaml_parameter_error_to_terminal(
                     data_path,
                     parameter,
@@ -568,7 +568,7 @@ def validate_yaml_namelist_database(data_path, content_dict):
                 )
                 valid = False
             else:
-                if not bool(re.match('^\((\d+,)*(\d+)\)$', parameter_dict['shape'])):
+                if not bool(re.fullmatch(r'\((\d+,)*(\d+)\)', parameter_dict['shape'])):
                     print_yaml_parameter_error_to_terminal(
                         data_path,
                         parameter,
@@ -1755,9 +1755,9 @@ def render_output_quantities_to_markdown_as_table(content_dict, show_remarks=Tru
     output_str = format_str_head.format('Name { .oq-name }', 'SI-Unit { .oq-unit }', 'Description { .oq-description }')
     output_str += format_str_head.format('-', '-', '-')
     for output_quantity, output_quantity_dict in content_dict.items():
-        output_quantity_excaped = output_quantity.replace('>', '\>').replace('_', '\_').replace('*', '\*')
-        description_excaped = output_quantity_dict['description'].replace('>', '\>').replace('_', '\_').replace('*', '\*')
-        remarks_excaped = output_quantity_dict['remarks'].replace('>', '\>').replace('_', '\_').replace('*', '\*')
+        output_quantity_excaped = output_quantity.replace('>', r'\>').replace('_', r'\_').replace('*', r'\*')
+        description_excaped = output_quantity_dict['description'].replace('>', r'\>').replace('_', r'\_').replace('*', r'\*')
+        remarks_excaped = output_quantity_dict['remarks'].replace('>', r'\>').replace('_', r'\_').replace('*', r'\*')
         output_str += format_str_body.format(
             '{}'.format(output_quantity_excaped),
             output_quantity_dict['si-unit'],

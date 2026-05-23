@@ -149,3 +149,45 @@
     WRITE ( 20 )  array
 
  END SUBROUTINE data_log_2d_int
+
+
+ !--------------------------------------------------------------------------------------------------!
+! Description:
+! ------------
+!> Complete logging of data for 1d arrays
+!--------------------------------------------------------------------------------------------------!
+ SUBROUTINE data_log_1d( array, i1, i2 )
+
+    USE control_parameters,                                                                        &
+        ONLY:  log_message,                                                                        &
+               simulated_time
+
+    USE kinds
+
+    USE pegrid
+
+    IMPLICIT NONE
+
+    INTEGER(iwp) ::  i1  !<
+    INTEGER(iwp) ::  i2  !<
+
+    REAL(wp), DIMENSION(i1:i2) ::  array  !<
+
+
+!
+!-- Open the file for data logging
+    CALL check_open( 20 )
+
+!
+!-- Write the message string
+    WRITE ( 20 )  log_message
+
+!
+!-- Write the simulated time and the array indices
+    WRITE ( 20 )  simulated_time, i1, i2
+
+!
+!-- Write the array
+    WRITE ( 20 )  array
+
+ END SUBROUTINE data_log_1d

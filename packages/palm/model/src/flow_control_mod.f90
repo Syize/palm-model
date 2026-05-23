@@ -95,8 +95,8 @@
 
     REAL(wp) ::  hom_u_interp = 0.0_wp      !< horizontal mean of u interpolated to target height
     REAL(wp) ::  hom_v_interp = 0.0_wp      !< horizontal mean of v interpolated to target height
-    REAL(wp) ::  kp = 0.0_wp                !< proportional gain factor
-    REAL(wp) ::  ki = 0.0_wp                !< integral gain factor
+    REAL(wp) ::  kp = 10.0_wp               !< proportional gain factor
+    REAL(wp) ::  ki = 20.0_wp               !< integral gain factor
     REAL(wp) ::  ki_f = 0.0_wp              !< integral gain factor multiplied by Coriolis parameter
     REAL(wp) ::  target_height = 0.0_wp     !< height at which target_u and target_v shall be reached
     REAL(wp) ::  target_u = 0.0_wp          !< target wind speed in x-direction
@@ -314,10 +314,10 @@
 1   FORMAT (//' Flow control settings:'/' ------------'/)
 2   FORMAT ('    Geostrophic wind controller is activated')
 3   FORMAT ('    target_height = ', F10.2)
-4   FORMAT ('    target_u = ', F10.2)
-5   FORMAT ('    target_v = ', F10.2)
-6   FORMAT ('    kp = ', F10.2)
-7   FORMAT ('    ki = ', F10.2)
+4   FORMAT ('    target_u      = ', F10.2)
+5   FORMAT ('    target_v      = ', F10.2)
+6   FORMAT ('    kp            = ', F10.2)
+7   FORMAT ('    ki            = ', F10.2)
 
  END SUBROUTINE fct_header
 

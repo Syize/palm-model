@@ -781,13 +781,17 @@ void fortran_file::write_file (ofstream & out) {
          global_substitute(lo_line,"(out)","(OUT)");
          global_substitute(lo_line,"(inout)","(INOUT)");
          global_substitute(lo_line,"\t","      ");
+         global_substitute(lo_line,"1.0d-10","1.0e-10_dp");
+         global_substitute(lo_line,"_dp","_wp");
+         global_substitute(lo_line,"(dp)","(wp)");
+         global_substitute(lo_line,"kind=dp","kind=wp");
 
          // Skalar Version
-         global_substitute(lo_line,"  REAL(kind=dp):: var(nvar)","! REAL(kind=dp):: var(nvar)  var is now POINTER");
-         global_substitute(lo_line,"REAL(kind=dp):: c(nspec)","REAL(kind=dp), TARGET    :: c(nspec)");
+         global_substitute(lo_line,"  REAL(kind=wp):: var(nvar)","! REAL(kind=wp):: var(nvar)  var is now POINTER");
+         global_substitute(lo_line,"REAL(kind=wp):: c(nspec)","REAL(kind=wp), TARGET    :: c(nspec)");
          // Vektor Version
-         global_substitute(lo_line,"  REAL(kind=dp):: var (vl_dim, nvar)","! REAL(kind=dp):: var (vl_dim, nvar)  var is now POINTER");
-         global_substitute(lo_line,"REAL(kind=dp):: c (vl_dim, nspec)","REAL(kind=dp), TARGET    :: c (vl_dim, nspec)");
+         global_substitute(lo_line,"  REAL(kind=wp):: var (vl_dim, nvar)","! REAL(kind=wp):: var (vl_dim, nvar)  var is now POINTER");
+         global_substitute(lo_line,"REAL(kind=wp):: c (vl_dim, nspec)","REAL(kind=wp), TARGET    :: c (vl_dim, nspec)");
 
 //       cout << "HIER1 " << lo_line <<endl;
        }

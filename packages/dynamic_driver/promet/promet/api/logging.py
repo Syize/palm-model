@@ -98,7 +98,7 @@ def print_error(s, *args, **kwargs):
 
 def check_version():
     query = '''query promet($current: String!) { check_version(input: {current: $current}) { show message } }'''
-    variables = {'current': 'v25.04'}
+    variables = {'current': 'v25.10-rc.1'}
     data = request_data(
         query=query,
         variables=variables,
@@ -250,7 +250,7 @@ def request_data(query, variables):
         h = dict()
         h['Content-Type'] = 'application/json'
         h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-        h['Authorization'] = f'basic cHJvbWV0X3YyNS4wNDpGZ1VJQ3k0V096d0JUMk55YlE9PQ=='
+        h['Authorization'] = f'basic cHJvbWV0X3YyNS4xMC1yYy4xOkpVUWVWU0FrTERkTGRocElTWDlFRDBOQg=='
         c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=2)
         c.request('POST', '/v1', body=json.dumps({'query': query, 'variables': variables}), headers=h)
         r = c.getresponse()

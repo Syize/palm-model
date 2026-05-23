@@ -50,8 +50,16 @@
 
     USE control_parameters,                                                                        &
         ONLY:  air_chemistry,                                                                      &
+               bc_dirichlet_l,                                                                     &
+               bc_dirichlet_n,                                                                     &
+               bc_dirichlet_r,                                                                     &
+               bc_dirichlet_s,                                                                     &
                bc_lr_cyc,                                                                          &
                bc_ns_cyc,                                                                          &
+               bc_radiation_l,                                                                     &
+               bc_radiation_n,                                                                     &
+               bc_radiation_r,                                                                     &
+               bc_radiation_s,                                                                     &
                coupling_char,                                                                      &
                cut_cell_topography,                                                                &
                dz,                                                                                 &
@@ -75,8 +83,7 @@
     USE exchange_horiz_mod,                                                                        &
         ONLY:  exchange_horiz,                                                                     &
                exchange_horiz_2d,                                                                  &
-               exchange_horiz_2d_byte,                                                             &
-               exchange_horiz_2d_int
+               exchange_horiz_2d_byte
 
     USE, INTRINSIC ::  IEEE_ARITHMETIC
 
@@ -2340,6 +2347,12 @@
           CALL overwrite_fill_values( u(nzb+1:nzt,nys:nyn,nxlu:nxr), nxlu, nxr, nys, nyn, nzb+1,   &
                                       nzt, init_3d%fill_u, 0.0_wp )
 !
+!--       Set lateral boundary.
+          IF ( bc_dirichlet_l  .OR.  bc_radiation_l )  u(:,:,nxlu-1) = u(:,:,nxlu)
+          IF ( bc_dirichlet_r  .OR.  bc_radiation_r )  u(:,:,nxr+1)  = u(:,:,nxr)
+          IF ( bc_dirichlet_s  .OR.  bc_radiation_s )  u(:,nys-1,:)  = u(:,nys,:)
+          IF ( bc_dirichlet_n  .OR.  bc_radiation_n )  u(:,nyn+1,:)  = u(:,nyn,:)
+!
 !--       Set bottom and top-boundary.
           u(nzb,:,:)   = u(nzb+1,:,:)
           u(nzt+1,:,:) = u(nzt,:,:)
@@ -2383,6 +2396,11 @@
           CALL overwrite_fill_values( v(nzb+1:nzt,nysv:nyn,nxl:nxr), nxl, nxr, nysv, nyn, nzb+1,   &
                                       nzt, init_3d%fill_v, 0.0_wp )
 !
+!--       Set lateral boundary.
+          IF ( bc_dirichlet_l  .OR.  bc_radiation_l )  v(:,:,nxl-1)  = v(:,:,nxl)
+          IF ( bc_dirichlet_r  .OR.  bc_radiation_r )  v(:,:,nxr+1)  = v(:,:,nxr)
+          IF ( bc_dirichlet_s  .OR.  bc_radiation_s )  v(:,nysv-1,:) = v(:,nysv,:)
+          IF ( bc_dirichlet_n  .OR.  bc_radiation_n )  v(:,nyn+1,:)  = v(:,nyn,:)
 !
 !--       Set bottom and top-boundary.
           v(nzb,:,:)   = v(nzb+1,:,:)
@@ -2422,6 +2440,12 @@
           CALL overwrite_fill_values( w(nzb+1:nzt,nys:nyn,nxl:nxr), nxl, nxr, nys, nyn, nzb+1,     &
                                       nzt, init_3d%fill_w, 0.0_wp )
 !
+!--       Set lateral boundary.
+          IF ( bc_dirichlet_l  .OR.  bc_radiation_l )  w(:,:,nxl-1) = w(:,:,nxl)
+          IF ( bc_dirichlet_r  .OR.  bc_radiation_r )  w(:,:,nxr+1) = w(:,:,nxr)
+          IF ( bc_dirichlet_s  .OR.  bc_radiation_s )  w(:,nys-1,:) = w(:,nys,:)
+          IF ( bc_dirichlet_n  .OR.  bc_radiation_n )  w(:,nyn+1,:) = w(:,nyn,:)
+!
 !--       Set bottom and top-boundary.
           w(nzb,:,:)   = 0.0_wp
           w(nzt,:,:)   = w(nzt-1,:,:)
@@ -2459,6 +2483,12 @@
 !--          Overwrite all fill values that are found with meaningful data.
              CALL overwrite_fill_values( pt(nzb+1:nzt,nys:nyn,nxl:nxr), nxl, nxr, nys, nyn, nzb+1, &
                                          nzt, init_3d%fill_pt, pt_surface )
+!
+!--          Set lateral boundary.
+             IF ( bc_dirichlet_l  .OR.  bc_radiation_l )  pt(:,:,nxl-1) = pt(:,:,nxl)
+             IF ( bc_dirichlet_r  .OR.  bc_radiation_r )  pt(:,:,nxr+1) = pt(:,:,nxr)
+             IF ( bc_dirichlet_s  .OR.  bc_radiation_s )  pt(:,nys-1,:) = pt(:,nys,:)
+             IF ( bc_dirichlet_n  .OR.  bc_radiation_n )  pt(:,nyn+1,:) = pt(:,nyn,:)
 !
 !--          Set bottom and top-boundary
              pt(nzb,:,:)   = pt(nzb+1,:,:)
@@ -2498,6 +2528,12 @@
 !--          Overwrite all fill values that are found with meaningful data.
              CALL overwrite_fill_values( q(nzb+1:nzt,nys:nyn,nxl:nxr), nxl, nxr, nys, nyn, nzb+1,  &
                                          nzt, init_3d%fill_q, q_surface )
+!
+!--          Set lateral boundary.
+             IF ( bc_dirichlet_l  .OR.  bc_radiation_l )  q(:,:,nxl-1) = q(:,:,nxl)
+             IF ( bc_dirichlet_r  .OR.  bc_radiation_r )  q(:,:,nxr+1) = q(:,:,nxr)
+             IF ( bc_dirichlet_s  .OR.  bc_radiation_s )  q(:,nys-1,:) = q(:,nys,:)
+             IF ( bc_dirichlet_n  .OR.  bc_radiation_n )  q(:,nyn+1,:) = q(:,nyn,:)
 !
 !--          Set bottom and top-boundary
              q(nzb,:,:)   = q(nzb+1,:,:)
@@ -2621,7 +2657,7 @@
        ENDIF
     ENDIF
 !
-!-- Set ghost boundaries, because they are not included in the driver file.
+!-- Set ghost boundaries.
     CALL exchange_horiz( u, nbgp )
     CALL exchange_horiz( v, nbgp )
     CALL exchange_horiz( w, nbgp )

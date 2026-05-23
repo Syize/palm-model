@@ -58,7 +58,7 @@ domain_layouts:
 
       `nest_shift_z` describes the vertical shift (in meters) of a child with respect to the root domain. `nest_shift_z = 0.0` means that the bottom boundary of the child matches the bottom boundary of the root domain. The root domain always requires to set `nest_shift_z = 0.0`. In ocean mode, `nest_shift_z /= 0.0` is not allowed, and the top boundary of the child always matches the top boundary of the root model (the atmosphere/ocean surface). The bottom coordinate of a child (as given by `nest_shift_z`) must match a vertical grid level of the root domain. If e.g. the vertical grid spacing of the root domain is [dz](#initialization_parameters--dz) = *20.0*, only values of *20.0*, *40.0*, *60.0*, etc. are allowed for `nest_shift_z`.
 
-      A nested domain must be completely embedded within its parent domain and there must be a clearance between the lateral nest boundaries and its parent boundaries. This clearance must be at least four parent-grid cells if using the Wicker-Skamarock advection scheme and at least two parent-grid cells if using the Piaseck-Williams advection scheme. Possible parallel nests, and the associated ghost-cell layers, are not allowed to overlap.
+      A nested domain must be completely embedded within its parent domain and there must be a clearance between the lateral nest boundaries and its parent boundaries. This clearance must be at least four parent-grid cells if using the Wicker-Skamarock advection scheme and at least two parent-grid cells if using the Piaseck-Williams advection scheme. In case of [nesting_mode](#nesting_parameters--nesting_mode) = *'two-way'*, possible parallel nests, and the associated ghost-cell layers, are not allowed to overlap. In contrast, an overlap of parallel nests is allowed if [nesting_mode](#nesting_parameters--nesting_mode) = *'one-way'*.
 
       Up to 64 domains can be used.
 
@@ -96,10 +96,10 @@ init_child_id:
     short: id of the child to be activated and initialized in this restart run
     long: |
       In order to save computational resources, childs can be activated in restart runs for the first time. This requires to add the respective child in the [domain_layouts](#nesting_parameters--domain_layouts) of the root domain's restart namelist file (the one with suffix `_p3dr`), or to add [domain_layouts](#nesting_parameters--domain_layouts) in that file for the first time, if it is the first child to be added. Only one child can be added per restart run. Regardless if it is the first child, or an additional one to be added, the id of the child to be added must be set via [init_child_id](#nesting_parameters--init_child_id), and its value must match the value of the child given in the last line of [domain_layouts](#nesting_parameters--domain_layouts).
-      
+
       **Attention:** <br>
       Parameter [init_child_id](#nesting_parameters--init_child_id) must be removed from the root domain's restart namelist file, before another restart run will be manually started (or immediately after the restart run has been submitted, and further restarts are done automatically). Instead of removing the parameter, it can be incremented by one, if an additional child shall be added in the next restart run.
-      
+
       **Note:** <br>
       Output times defined by runtime parameters [dt_dopr](#runtime_parameters--dt_dopr), [dt_do3d](#runtime_parameters--dt_do3d), etc. may not be exactly synchronized between the newly activated child and the remaining models. For that reason, output to be done at the end of a run may be missing for this child. It will appear at the beginning of the next restart. If no further restart is planned, increase the value of [end_time](#runtime_parameters--end_time) by a small amount to guarantee that the last output is done by the child, too. Another way to synchronize the output times is to set (e.g.) [skip_time_data_output](#runtime_parameters--skip_time_data_output) for all models (root as well as childs) to a simulated time where all childs have already been switched on.
 
@@ -205,7 +205,7 @@ synchronize_timestep:
     long: |
       If [synchronize_timestep](#nesting_parameters--synchronize_timestep) = *.T.*, the time-integration for each model is done using the smallest required time step among all models (usually the innermost child domain). Furthermore, data exchange between model domains is realized each Runge-Kutta substep.
       In order to relax this restriction, [synchronize_timestep](#nesting_parameters--synchronize_timestep) = *.F.* can be set. This allows models with larger time steps to use them, i.e. no time step synchronization between parent and child domains is performed. The model with the largest time step (usually the outermost parent domain) then determines the time of the next data exchange between parent and child domains. This case, all models run on their own time step, until the coupling timestep has been reached. Time steps may be slightly adjusted in order to allow that all models exactly reach the same time for the data exchange. No data exchange for Runge-Kutta substeps is carried out.
-      
+
       Note, [synchronize_timestep](#nesting_parameters--synchronize_timestep) = *.T.* is only allowed in conjunction with [nesting_mode](#nesting_parameters--nesting_mode) = *'one-way'* and [particle_coupling](#nesting_parameters--particle_coupling) = *.F.*.
 
       **Attention:** <br>

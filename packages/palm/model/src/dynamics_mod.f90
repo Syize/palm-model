@@ -83,7 +83,6 @@
                constant_diffusion,                                                                 &
                cyclic_fill_initialization,                                                         &
                dt_3d,                                                                              &
-               enable_lsm_openacc,                                                                 &
                enable_openacc,                                                                     &
                homogenize_surface_temperature,                                                     &
                humidity,                                                                           &
@@ -1133,11 +1132,8 @@
 !--    Dirichlet
        IF ( ibc_pt_b == 0 )  THEN
           !$OMP PARALLEL DO PRIVATE( i, j, k )
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(bc_hv, bc_hv%ns, bc_hv%i, bc_hv%j, bc_hv%k) &
-          !$ACC COPY(bc_hv%ioff, bc_hv%joff, bc_hv%koff) &
-          !$ACC COPY(pt_p, pt) &
-          !$ACC PRIVATE( i, j, k ) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP PRIVATE(i, j, k) &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  m = 1, bc_hv%ns
              i = bc_hv%i(m) + bc_hv%ioff(m)
              j = bc_hv%j(m) + bc_hv%joff(m)
@@ -1163,7 +1159,7 @@
        ELSEIF ( ibc_pt_b == 1 )  THEN
           !$OMP PARALLEL DO PRIVATE( i, j, k )
           !$ACC PARALLEL LOOP PRIVATE(i, j, k) &
-          !$ACC PRESENT(bc_hv, pt_p) DEFAULT(NONE) IF(enable_openacc)
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  m = 1, bc_hv%ns
              i = bc_hv%i(m)
              j = bc_hv%j(m)
@@ -1185,7 +1181,7 @@
        ELSEIF ( ibc_pt_t == 1 )  THEN
            pt_p(nzt+1,:,:) = pt_p(nzt,:,:)
        ELSEIF ( ibc_pt_t == 2 )  THEN
-           !$ACC KERNELS PRESENT(pt_p, dzu) DEFAULT(NONE) IF(enable_openacc)
+           !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
            pt_p(nzt+1,:,:) = pt_p(nzt,:,:) + bc_pt_t_val * dzu(nzt+1)
            !$ACC END KERNELS
        ENDIF
@@ -1200,11 +1196,8 @@
        IF ( ibc_q_b == 0 ) THEN
 
           !$OMP PARALLEL DO PRIVATE( i, j, k )
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(bc_hv, bc_hv%ns, bc_hv%i, bc_hv%j, bc_hv%k) &
-          !$ACC COPY(bc_hv%ioff, bc_hv%joff, bc_hv%koff) &
-          !$ACC COPY(q_p, q) &
-          !$ACC PRIVATE( i, j, k ) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(PRESENT) &
+          !$ACC PRIVATE( i, j, k ) IF(enable_openacc)
           DO  m = 1, bc_hv%ns
              i = bc_hv%i(m)
              j = bc_hv%j(m)
@@ -1217,9 +1210,8 @@
        ELSE
 
           !$OMP PARALLEL DO PRIVATE( i, j, k )
-          !$ACC PARALLEL LOOP SEQ PRESENT(q_p) &
-          !$ACC PRESENT(bc_hv, bc_hv%ns, bc_hv%i, bc_hv%ioff, bc_hv%j, bc_hv%joff, bc_hv%k, bc_hv%koff) &
-          !$ACC DEFAULT(NONE) IF(enable_openacc)
+          !$ACC PARALLEL LOOP SEQ &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  m = 1, bc_hv%ns
              i = bc_hv%i(m)
              j = bc_hv%j(m)
@@ -1234,8 +1226,7 @@
           q_p(nzt+1,:,:) = q(nzt+1,:,:)
        ELSEIF ( ibc_q_t == 1 ) THEN
           !$ACC KERNELS &
-          !$ACC PRESENT(dzu, q_p) &
-          !$ACC DEFAULT(NONE) IF(enable_openacc)
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           q_p(nzt+1,:,:) = q_p(nzt,:,:) + bc_q_t_val * dzu(nzt+1)
           !$ACC END KERNELS
        ENDIF
@@ -1280,14 +1271,22 @@
 
     ENDIF
 !
-!-- In case of inflow or nest boundary at the south boundary the boundary for v is at nys and in
-!-- case of inflow or nest boundary at the left boundary the boundary for u is at nxl. Since in
-!-- prognostic_equations (cache optimized version) these levels are handled as a prognostic level,
-!-- boundary values have to be restored here.
-    IF ( bc_dirichlet_s )  THEN
-       v_p(:,nys,:) = v_p(:,nys-1,:)
-    ELSEIF ( bc_dirichlet_l ) THEN
-       u_p(:,:,nxl) = u_p(:,:,nxl-1)
+!-- In case of inflow from the south the actual boundary for v is at nys, while in case of
+!-- inflow from the left the actual boundary for u is at nxl. To guarantee that these levels
+!-- maintain their boundary values throughout the simulation, boundary values at nys and nxl
+!-- are restored. This must not be done in case of the mesoscale nesting or in case of the
+!-- grid nesting as the values at nys-1 and nxl-1 are not set, repsectively.
+!--
+!-- @todo - it need to be check if this is still required in idealized setups with inflow from
+!--         left or from south. Actually, the boundaries at nys and nxl are not modified neither
+!--         in prognostic_equations nor in pres, where a Neumann boundary condition applies at all
+!--         non-cyclic boundaries.
+    IF ( .NOT. nesting_offline  .AND.  .NOT. child_domain )  THEN
+       IF ( bc_dirichlet_s )  THEN
+          v_p(:,nys,:) = v_p(:,nys-1,:)
+       ELSEIF ( bc_dirichlet_l ) THEN
+          u_p(:,:,nxl) = u_p(:,:,nxl-1)
+       ENDIF
     ENDIF
 
 !

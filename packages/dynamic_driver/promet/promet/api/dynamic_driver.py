@@ -1124,7 +1124,7 @@ class DynamicDriver:
                     nc_xu = ncfile.variables['time']
                 nc_xu[:] = numpy.array([t['start_time_delta'] for n, t in time_slots.items()])
                 nc_xu.long_name = 'time'
-                nc_xu.units = "m"
+                nc_xu.units = "s"
 
     def create_variable(
             self,

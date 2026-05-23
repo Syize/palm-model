@@ -63,6 +63,103 @@ global_attributes:
 #-------------------------------------------------------------------------------
 dimensions:
 
+  building_general_par:
+    mandatory: false
+    size:
+      value: 2
+    description:
+      short: Number of general building parameters.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_general_pars](#static--variable--building_general_pars).
+
+        | Index  | Description                                    | Unit |
+        | ------ | ---------------------------------------------- | ---- |
+        | 0      | ground-floor level height                      | m    |
+        | 1      | green type of roof (1 intensive, 2 extensive)  |      |
+
+  building_indoor_par:
+    mandatory: false
+    size:
+      value: 19
+    description:
+      short: Number of indoor building parameters.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_indoor_pars](#static--variable--building_indoor_pars). For a further description of parameters please also see [Pfafferott et al. (2021)](https://doi.org/10.5194/gmd-14-3511-2021).
+
+        | Index  | Description                                                                            | Unit          |
+        | ------ | -------------------------------------------------------------------------------------- | ------------- |
+        | 0      | indoor target summer temperature                                                       | K             |
+        | 1      | indoor target winter temperature                                                       | K             |
+        | 2      | shading factor                                                                         |               |
+        | 3      | g-value windows                                                                        |               |
+        | 4      | u-value windows                                                                        | W m^-2^ K^-1^ |
+        | 5      | basic airflow without occupancy of the room for - summer 0.5_wp, winter 0.5            | h^-1^         |
+        | 6      | additional airflow dependent on occupancy of the room for - summer 1.5_wp, winter 0.0  | h^-1^         |
+        | 7      | heat recovery efficiency                                                               |               |
+        | 8      | weighting factor to link facade surface area with indoor wall surface area             |               |
+        | 9      | weighting factor to link facade surface area with indoor heat storage capacity         | J m^-2^ K^-1^ |
+        | 10     | ratio internal surface/floor area                                                      |               |
+        | 11     | maximum heating capacity                                                               | W             |
+        | 12     | maximum cooling capacity                                                               | W             |
+        | 13     | additional internal heat gains during occupancy of the room                            | W m^-2^       |
+        | 14     | basic internal heat gains without occupancy of the room                                | W m^-2^       |
+        | 15     | storey height                                                                          | m             |
+        | 16     | ceiling construction height                                                            | m             |
+        | 17     | anthropogenic waste-heat coeefficent from heating (0 for district heating, >0 for boilers, <0 for heat pumps) |               |
+        | 18     | anthropogenic waste-heat coefficient from cooling (>0 if cooling system installed)     |               |
+
+  building_surface_layer:
+    mandatory: false
+    size:
+      value: 4
+    description:
+      short: Number of wall layers in the building-surface model (see [urban_surface_parameters](../../../Namelists/#urban-surface-parameters)).
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity) and [building_thickness](#static--variable--building_thickness).
+
+        | Index  | Description                   |
+        | ------ | ----------------------------- |
+        | 0      | first (outermost) wall layer  |
+        | 1      | second wall layer             |
+        | 2      | third wall layer              |
+        | 3      | fourth wall layer             |
+
+  building_surface_level:
+    mandatory: false
+    size:
+      value: 3
+    description:
+      short: Number of different considered building levels.
+      long: |
+        Respective indices are related to specific surfaces as indicated in the list below. Used by variable [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh) and [building_transmissivity](#static--variable--building_transmissivity).
+
+        | Index  | Description                                  |
+        | ------ | -------------------------------------------- |
+        | 0      | vertical surface - ground-floor level        |
+        | 1      | vertical surface - above ground-floor level  |
+        | 2      | roof                                         |
+
+  building_surface_type:
+    mandatory: false
+    size:
+      value: 9
+    description:
+      short: Number of different surface types that can be adressed.
+      long: |
+        Respective indices are related to quantities as indicated in the list below. Used by variable [building_albedo_type](#static--variable--building_albedo_type), [building_emissivity](#static--variable--building_emissivity), [building_fraction](#static--variable--building_fraction), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), [building_thickness](#static--variable--building_thickness), and [building_transmissivity](#static--variable--building_transmissivity).
+
+        | Index  | Description                                |
+        | ------ | ------------------------------------------ |
+        | 0      | wall surface - ground-floor level          |
+        | 1      | wall surface - above ground-floor level    |
+        | 2      | wall surface - roof                        |
+        | 3      | window surface - ground-floor level        |
+        | 4      | window surface - above ground-floor level  |
+        | 5      | window surface - roof                      |
+        | 6      | green surface - ground-floor level         |
+        | 7      | green surface - above ground-floor level   |
+        | 8      | green surface - roof                       |
+
   cct_dim_vertex_coords:
     mandatory: false
     size:
@@ -136,82 +233,6 @@ dimensions:
         | 5     | for buildings only: direct/diffuse longwave albedo of window fraction   |
         | 6     | for buildings only: direct/diffuse shortwave albedo of window fraction  |
 
-  nbuilding_general:
-    mandatory: false
-    size:
-      value: 2
-    description:
-      short: Number of general building parameters.
-      long: |
-        Respective indices are related to quantities as indicated in the list below. Used by variable [building_general](#static--variable--building_general).
-
-        | Index  | Description                                    | Unit |
-        | ------ | ---------------------------------------------- | ---- |
-        | 0      | ground-floor level height                      | m    |
-        | 1      | green type of roof (1 intensive, 2 extensive)  |      |
-
-  nbuilding_indoor:
-    mandatory: false
-    size:
-      value: 19
-    description:
-      short: Number of indoor building parameters.
-      long: |
-        Respective indices are related to quantities as indicated in the list below. Used by variable [building_indoor](#static--variable--building_indoor). For a further description of parameters please also see [Pfafferott et al. (2021)](https://doi.org/10.5194/gmd-14-3511-2021).
-
-        | Index  | Description                                                                            | Unit          |
-        | ------ | -------------------------------------------------------------------------------------- | ------------- |
-        | 0      | indoor target summer temperature                                                       | K             |
-        | 1      | indoor target winter temperature                                                       | K             |
-        | 2      | shading factor                                                                         |               |
-        | 3      | g-value windows                                                                        |               |
-        | 4      | u-value windows                                                                        | W m^-2^ K^-1^ |
-        | 5      | basic airflow without occupancy of the room for - summer 0.5_wp, winter 0.5            | h^-1^         |
-        | 6      | additional airflow dependent on occupancy of the room for - summer 1.5_wp, winter 0.0  | h^-1^         |
-        | 7      | heat recovery efficiency                                                               |               |
-        | 8      | weighting factor to link facade surface area with indoor wall surface area             |               |
-        | 9      | weighting factor to link facade surface area with indoor heat storage capacity         | J m^-2^ K^-1^ |
-        | 10     | ratio internal surface/floor area                                                      |               |
-        | 11     | maximum heating capacity                                                               | W             |
-        | 12     | maximum cooling capacity                                                               | W             |
-        | 13     | additional internal heat gains during occupancy of the room                            | W m^-2^       |
-        | 14     | basic internal heat gains without occupancy of the room                                | W m^-2^       |
-        | 15     | storey height                                                                          | m             |
-        | 16     | ceiling construction height                                                            | m             |
-        | 17     | anthropogenic waste-heat coeefficent from heating (0 for district heating, >0 for boilers, <0 for heat pumps) |               |
-        | 18     | anthropogenic waste-heat coefficient from cooling (>0 if cooling system installed)     |               |
-
-  nbuilding_surface_layer:
-    mandatory: false
-    size:
-      value: 4
-    description:
-      short: Number of wall layers in the building-surface model (see [urban_surface_parameters](../../../Namelists/#urban-surface-parameters)).
-      long: |
-        Respective indices are related to quantities as indicated in the list below. Used by variable [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity) and [building_thickness](#static--variable--building_thickness).
-
-        | Index  | Description                   |
-        | ------ | ----------------------------- |
-        | 0      | first (outermost) wall layer  |
-        | 1      | second wall layer             |
-        | 2      | third wall layer              |
-        | 3      | fourth wall layer             |
-
-  nbuilding_surface_level:
-    mandatory: false
-    size:
-      value: 3
-    description:
-      short: Number of different considered building levels.
-      long: |
-        Respective indices are related to specific surfaces as indicated in the list below. Used by variable [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh) and [building_transmissivity](#static--variable--building_transmissivity).
-
-        | Index  | Description                                  |
-        | ------ | -------------------------------------------- |
-        | 0      | vertical surface - ground-floor level        |
-        | 1      | vertical surface - above ground-floor level  |
-        | 2      | roof                                         |
-
   nbuilding_surface_pars:
     mandatory: false
     size:
@@ -242,27 +263,6 @@ dimensions:
         | 16    | transmissivity of window fraction                     |               |
         | 17    | roughness length for momentum                         | m             |
         | 18    | roughness length for heat and moisture                | m             |
-
-  nbuilding_surface_type:
-    mandatory: false
-    size:
-      value: 9
-    description:
-      short: Number of different surface types that can be adressed.
-      long: |
-        Respective indices are related to quantities as indicated in the list below. Used by variable [building_albedo_type](#static--variable--building_albedo_type), [building_emissivity](#static--variable--building_emissivity), [building_fraction](#static--variable--building_fraction), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), [building_thickness](#static--variable--building_thickness), and [building_transmissivity](#static--variable--building_transmissivity).
-
-        | Index  | Description                                |
-        | ------ | ------------------------------------------ |
-        | 0      | wall surface - ground-floor level          |
-        | 1      | wall surface - above ground-floor level    |
-        | 2      | wall surface - roof                        |
-        | 3      | window surface - ground-floor level        |
-        | 4      | window surface - above ground-floor level  |
-        | 5      | window surface - roof                      |
-        | 6      | green surface - ground-floor level         |
-        | 7      | green surface - above ground-floor level   |
-        | 8      | green surface - roof                       |
 
   npavement_pars:
     mandatory: false
@@ -564,7 +564,7 @@ variables:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_type,y,x)
+    shape: (building_surface_type,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -573,13 +573,13 @@ variables:
     description:
       short: x-y specific setting of building albedo type.
       long: |
-        Values are set for all building walls located at this x-y location. See table of [nbuilding_surface_type](#static--dimension--nbuilding_surface_type) for allowed values. The prescribed values are then used to set specific values of broadband, long- and shortwave albedo according to the values described under [albedo_type](#static--variable--albedo_type). Setting of [building_albedo_type](#static--variable--building_albedo_type) overwrites values given by [albedo_type](#static--variable--albedo_type) at building surfaces. Note, even though [building_albedo_type](#static--variable--building_albedo_type) is of type NC_FLOAT, only multiple integer values can be assigned. Setting specific paramters in [building_albedo_type](#static--variable--building_albedo_type) overwrites settings defined by [building_type](#static--variable--building_type).
+        Values are set for all building walls located at this x-y location. See table of [building_surface_type](#static--dimension--building_surface_type) for allowed values. The prescribed values are then used to set specific values of broadband, long- and shortwave albedo according to the values described under [albedo_type](#static--variable--albedo_type). Setting of [building_albedo_type](#static--variable--building_albedo_type) overwrites values given by [albedo_type](#static--variable--albedo_type) at building surfaces. Note, even though [building_albedo_type](#static--variable--building_albedo_type) is of type NC_FLOAT, only multiple integer values can be assigned. Setting specific paramters in [building_albedo_type](#static--variable--building_albedo_type) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_emissivity:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_type,y,x)
+    shape: (building_surface_type,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -588,13 +588,13 @@ variables:
     description:
       short: x-y specific setting of building emissivity.
       long: |
-         See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). Setting specific paramters in [building_emissivity](#static--variable--building_emissivity) overwrites settings defined by [building_type](#static--variable--building_type).
+         See table for [building_surface_type](#static--dimension--building_surface_type). Setting specific paramters in [building_emissivity](#static--variable--building_emissivity) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_fraction:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_type,y,x)
+    shape: (building_surface_type,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -603,13 +603,13 @@ variables:
     description:
       short: x-y specific setting of building fractions.
       long: |
-        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the fraction is set, that this surface type has with respect to the total building surface at this point. Values are set for all building surfaces located at this x-y location. See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). Setting specific parameters in [building_fraction](#static--variable--building_fraction) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the fraction is set, that this surface type has with respect to the total building surface at this point. Values are set for all building surfaces located at this x-y location. See table for [building_surface_type](#static--dimension--building_surface_type). Setting specific parameters in [building_fraction](#static--variable--building_fraction) overwrites settings defined by [building_type](#static--variable--building_type).
 
-  building_general:
+  building_general_pars:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_general,y,x)
+    shape: (building_general_par,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -618,13 +618,13 @@ variables:
     description:
       short: x-y specific setting of general building parameters.
       long: |
-        First dimension is used to specify the specific general building parameter to be set. Values are set for all building surfaces located at this x-y location. See table for [nbuilding_general](#static--dimension--nbuilding_general). Setting specific paramters in [building_general](#static--variable--building_general) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the specific general building parameter to be set. Values are set for all building surfaces located at this x-y location. See table for [building_general_par](#static--dimension--building_general_par). Setting specific paramters in [building_general_pars](#static--variable--building_general_pars) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_heat_capacity:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_type,nbuilding_surface_layer,y,x)
+    shape: (building_surface_type,building_surface_layer,y,x)
     si-unit: J m^-3^ K^-1^
     attributes:
       _FillValue:
@@ -634,13 +634,13 @@ variables:
     description:
       short: x-y specific setting of heat capacity of building surfaces.
       long: |
-        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the heat capacity is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). The second dimension is used to specify the respective wall layer (see table for [nbuilding_surface_layer](#static--dimension--nbuilding_surface_layer)). Setting specific paramters in [building_heat_capacity](#static--variable--building_heat_capacity) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the heat capacity is set. Values are set for all building walls located at this x-y location. See table for [building_surface_type](#static--dimension--building_surface_type). The second dimension is used to specify the respective wall layer (see table for [building_surface_layer](#static--dimension--building_surface_layer)). Setting specific paramters in [building_heat_capacity](#static--variable--building_heat_capacity) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_heat_conductivity:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_type,nbuilding_surface_layer,y,x)
+    shape: (building_surface_type,building_surface_layer,y,x)
     si-unit: W m^-1^ K^-1^
     attributes:
       _FillValue:
@@ -650,7 +650,7 @@ variables:
     description:
       short: x-y specific setting of thermal conductivity of building surfaces.
       long: |
-        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the thermal conductivity is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_type](#static--variable--nbuilding_surface_type). The second dimension is used to specify the respective wall layer (see table for [nbuilding_surface_layer](#static--dimension--nbuilding_surface_layer)). Setting specific paramters in [building_heat_conductivity](#static--variable--building_heat_conductivity) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the thermal conductivity is set. Values are set for all building walls located at this x-y location. See table for [building_surface_type](#static--variable--building_surface_type). The second dimension is used to specify the respective wall layer (see table for [building_surface_layer](#static--dimension--building_surface_layer)). Setting specific paramters in [building_heat_conductivity](#static--variable--building_heat_conductivity) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_id:
     modules: ['PAC', 'IDM']
@@ -667,11 +667,11 @@ variables:
       long: |
         Used to identify single building envelopes which are composed of a number of grid volumes, and which is used for correct mapping of buildings on top of the underlying terrain, as well as for the [indoor model](../../../Namelists/#indoor-parameters). All grid volumes with the same ID are considered to belong to the same building. Note, [building_id](#static--variable--building_id) must not contain any `_FillValue` at grid points where buildings are defined via [buildings_2d](#static--variable--buildings_2d) or [buildings_3d](#static--variable--buildings_3d). There is no range or limitation for the ID numbers, except that each building must have a unique number which needs to fit into the range of a 32-bit integer variable (i.e. -2147483647 to +2147483647).
 
-  building_indoor:
+  building_indoor_pars:
     modules: ['IDM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_indoor,y,x)
+    shape: (building_indoor_par,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -680,13 +680,13 @@ variables:
     description:
       short: x-y specific setting of building indoor parameters.
       long: |
-        First dimension is used to specify respective building indoor parameters for which values are set. Values are set for all building volumes located at this x-y location. See table for [nbuilding_indoor](#static--dimension--nbuilding_indoor). Setting specific paramters in [building_indoor](#static--variable--building_indoor) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify respective building indoor parameters for which values are set. Values are set for all building volumes located at this x-y location. See table for [building_indoor_par](#static--dimension--building_indoor_par). Setting specific paramters in [building_indoor_pars](#static--variable--building_indoor_pars) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_lai:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_level,y,x)
+    shape: (building_surface_level,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -695,13 +695,13 @@ variables:
     description:
       short: x-y specific setting of leaf-area index at green fraction of building surfaces.
       long: |
-        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the leaf area index of the green fraction is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_lai](#static--variable--building_lai) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the leaf area index of the green fraction is set. Values are set for all building walls located at this x-y location. See table for [building_surface_level](#static--dimension--building_surface_level). Setting specific paramters in [building_lai](#static--variable--building_lai) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_roughness_length:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_level,y,x)
+    shape: (building_surface_level,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -710,13 +710,13 @@ variables:
     description:
       short: x-y specific setting of roughness length for momentum at building surfaces.
       long: |
-        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the roughness length for momentum is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_roughness_length](#static--variable--building_roughness_length) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the roughness length for momentum is set. Values are set for all building walls located at this x-y location. See table for [building_surface_level](#static--dimension--building_surface_level). Setting specific paramters in [building_roughness_length](#static--variable--building_roughness_length) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_roughness_length_qh:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_level,y,x)
+    shape: (building_surface_level,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -725,7 +725,7 @@ variables:
     description:
       short: x-y specific setting of roughness length for heat and moisture at building surfaces.
       long: |
-        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the roughness length for heat and moisture is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_roughness_length_qh](#static--variable--building_roughness_length_qh) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the roughness length for heat and moisture is set. Values are set for all building walls located at this x-y location. See table for [building_surface_level](#static--dimension--building_surface_level). Setting specific paramters in [building_roughness_length_qh](#static--variable--building_roughness_length_qh) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_surface_pars:
     modules: ['USM']
@@ -742,13 +742,13 @@ variables:
       long: |
         The variable is used to assign building parameters for individual surfaces at a number of locations (points) `ns` (second dimension). The location and orientation of these surfaces need to be specified by [xs](#static--variable--xs), [ys](#static--variable--ys), and [zs](#static--variable--zs), as well as [azimuth](#static--variable--azimuth) and [zenith](#static--variable--zenith). The first dimension is used to specify the specific building surface parameter to be set. See table for [nbuilding_surface_pars](#static--dimension--nbuilding_surface_pars).
 
-        Building parameters given by other input variables, i.e. [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh), [building_transmissivity](#static--variable--building_transmissivity), [building_indoor](#static--variable--building_indoor), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), or [building_fraction](#static--variable--building_fraction), will be overwritten by [building_surface_pars](#static--variable--building_surface_pars).
+        Building parameters given by other input variables, i.e. [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh), [building_transmissivity](#static--variable--building_transmissivity), [building_indoor_pars](#static--variable--building_indoor_pars), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), or [building_fraction](#static--variable--building_fraction), will be overwritten by [building_surface_pars](#static--variable--building_surface_pars).
 
   building_thickness:
     modules: ['USM', 'IDM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_type,nbuilding_surface_layer,y,x)
+    shape: (building_surface_type,building_surface_layer,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -757,13 +757,13 @@ variables:
     description:
       short: x-y specific setting of building wall-layer thicknesses.
       long: |
-        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the thickness of the layer is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_type](#static--dimension--nbuilding_surface_type). The second dimension is used to specify the respective wall layer (see table for [nbuilding_surface_layer](#static--dimension--nbuilding_surface_layer)). Setting specific paramters in [building_thickness](#static--variable--building_thickness) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different surface type (`wall`, `green`, `window`, at ground floor level, above ground floor level, and at the roof) for which the thickness of the layer is set. Values are set for all building walls located at this x-y location. See table for [building_surface_type](#static--dimension--building_surface_type). The second dimension is used to specify the respective wall layer (see table for [building_surface_layer](#static--dimension--building_surface_layer)). Setting specific paramters in [building_thickness](#static--variable--building_thickness) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_transmissivity:
     modules: ['USM']
     mandatory: false
     type: NC_FLOAT
-    shape: (nbuilding_surface_level,y,x)
+    shape: (building_surface_level,y,x)
     attributes:
       _FillValue:
         mandatory: true
@@ -772,7 +772,7 @@ variables:
     description:
       short: x-y specific setting of transmissivity of windows at building surfaces.
       long: |
-        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the transmissivity of the window fraction is set. Values are set for all building walls located at this x-y location. See table for [nbuilding_surface_level](#static--dimension--nbuilding_surface_level). Setting specific paramters in [building_transmissivity](#static--variable--building_transmissivity) overwrites settings defined by [building_type](#static--variable--building_type).
+        First dimension is used to specify the different building surfaces (at ground floor level, above ground floor level, and at the roof) for which the transmissivity of the window fraction is set. Values are set for all building walls located at this x-y location. See table for [building_surface_level](#static--dimension--building_surface_level). Setting specific paramters in [building_transmissivity](#static--variable--building_transmissivity) overwrites settings defined by [building_type](#static--variable--building_type).
 
   building_type:
     modules: ['USM', 'IDM']
@@ -787,7 +787,7 @@ variables:
     description:
       short: Building type used to select bulk parameters.
       long: |
-         The `building_type` is used to define buildings by year of construction and bulding use, as specified via namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type). The different `building_types` are linked to predefined bulk parameters for the fractions and physical properties of the building envelope, the individual components, and the exchange processes with the indoor environment. The `building_type` is required if the [urban surface model](../../../Namelists/#urban-surface-parameters) or the [indoor model](../../../Namelists/#indoor-parameters) are applied. Note, `building_type` must not contain any `_FillValue` at grid points where a building is defined via [buildings_2d](#static--variable--buildings_2d) or [buildings_3d](#static--variable--buildings_3d). Setting of `building_type` = 0 in the static file is not allowed. To further specify building parameters and overwrite the `building_type` bulk paramaters, set the respective [building_albedo_type](#static--variable--building_albedo_type), [building_emissivity](#static--variable--building_emissivity), [building_fraction](#static--variable--building_fraction), [building_general](#static--variable--building_general), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), [building_indoor](#static--variable--building_indoor), [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh), [building_thickness](#static--variable--building_thickness), and [building_transmissivity](#static--variable--building_transmissivity). The previous parameter lists will replace the soon to be deprecated [building_pars](#static--variable--building_pars) (link unavailable!), which are currently active.
+         The `building_type` is used to define buildings by year of construction and bulding use, as specified via namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type). The different `building_types` are linked to predefined bulk parameters for the fractions and physical properties of the building envelope, the individual components, and the exchange processes with the indoor environment. The `building_type` is required if the [urban surface model](../../../Namelists/#urban-surface-parameters) or the [indoor model](../../../Namelists/#indoor-parameters) are applied. Note, `building_type` must not contain any `_FillValue` at grid points where a building is defined via [buildings_2d](#static--variable--buildings_2d) or [buildings_3d](#static--variable--buildings_3d). Setting of `building_type` = 0 in the static file is not allowed. To further specify building parameters and overwrite the `building_type` bulk paramaters, set the respective [building_albedo_type](#static--variable--building_albedo_type), [building_emissivity](#static--variable--building_emissivity), [building_fraction](#static--variable--building_fraction), [building_general_pars](#static--variable--building_general_pars), [building_heat_capacity](#static--variable--building_heat_capacity), [building_heat_conductivity](#static--variable--building_heat_conductivity), [building_indoor_pars](#static--variable--building_indoor_pars), [building_lai](#static--variable--building_lai), [building_roughness_length](#static--variable--building_roughness_length), [building_roughness_length_qh](#static--variable--building_roughness_length_qh), [building_thickness](#static--variable--building_thickness), and [building_transmissivity](#static--variable--building_transmissivity). The previous parameter lists will replace the soon to be deprecated [building_pars](#static--variable--building_pars) (link unavailable!), which are currently active.
     allowed_values:
       - depends_on: 'namelist parameter [building_type](../../../Namelists/#urban_surface_parameters--building_type)'
         description: see [building_type](../../../Namelists/#urban_surface_parameters--building_type)

@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Module to handle the palm_csd configuration.
 
@@ -25,13 +25,14 @@ default values are read from a csv file.
 import csv
 import logging
 import os
-from enum import Enum, IntEnum
-from importlib.resources import open_text
+from enum import Enum
+from importlib.resources import files
 
 # remove Dict here and replace by dict below once Python >=3.9 could be used
 from pathlib import Path
-from typing import ClassVar, Dict, List, Optional, Type, Union, cast
+from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Type, TypeVar, Union, cast
 
+import geopandas as gpd
 import rasterio.warp as riowp
 from pydantic import (
     AfterValidator,
@@ -39,6 +40,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    StringConstraints,
     ValidationError,
     ValidationInfo,
     field_validator,
@@ -48,6 +50,17 @@ from pydantic.types import PathType
 from typing_extensions import Annotated, TypedDict
 
 from palm_csd import StatusLogger
+from palm_csd.constants import (
+    INPUT_DATA_EXPANDED,
+    NBUILDING_SURFACE_LAYER,
+    IndexBuildingGeneralPars,
+    IndexBuildingIndoorPars,
+    IndexBuildingSurfaceLevel,
+    IndexBuildingSurfaceType,
+    IndexPavementType,
+    IndexWaterType,
+    InputDataVector,
+)
 from palm_csd.tools import DefaultMinMax
 
 # module logger, StatusLogger already set in __init__.py so cast only for type checking
@@ -63,8 +76,8 @@ def _populate_defaults() -> Dict[str, DefaultMinMax]:
         Dictionary with the variable names as keys and the DefaultMinMax objects as values.
     """
     defaults = {}
-    # Read csv from palm_csd.data. Use files instead of open_text for Python >=3.9.
-    with open_text("palm_csd.data", "value_defaults.csv") as default_min_max_csv:
+    # Read csv from palm_csd.data.
+    with files("palm_csd.data").joinpath("value_defaults.csv").open() as default_min_max_csv:
         reader = csv.DictReader(default_min_max_csv)
         for row in reader:
             # Process each row. Each row is a dict of strings.
@@ -80,15 +93,11 @@ def _populate_defaults() -> Dict[str, DefaultMinMax]:
     return defaults
 
 
-defaults = _populate_defaults()
+value_defaults = _populate_defaults()
 """Default, minimum and maximum value for the variables in the keys."""
 # TODO: implement some kind of unpacking for defaults, current issues:
 # - mypy does not like it and does not recognize the default value
 # - harder to differentiate between no default and None default
-
-# number of wall layers fixed in PALM
-NBUILDING_SURFACE_LAYER = 4
-"""Number of layers in building surfaces."""
 
 
 class CSDConfigElement(BaseModel):
@@ -172,9 +181,19 @@ class CSDConfigAttributes(CSDConfigElement):
     source: Optional[str] = None
     """List of data sources used to generate the driver."""
     palm_version: Optional[float] = None
-    """PALM version."""
+    """REMOVED: PALM version."""
     origin_time: Optional[str] = None
     """Reference point in time."""
+
+    @field_validator("palm_version")
+    @classmethod
+    def _message_removed_palm_version(
+        cls, value: Optional[float], info: ValidationInfo
+    ) -> Optional[float]:
+        return _validate_removed_conf(
+            value,
+            info,
+        )
 
 
 def _default_not_none(name: str) -> float:
@@ -189,7 +208,7 @@ def _default_not_none(name: str) -> float:
     Returns:
         The default value of the variable name.
     """
-    value = defaults[name].default
+    value = value_defaults[name].default
     if value is None:
         raise ValueError(f"Default value of {name} must not be None")
     return value
@@ -316,7 +335,7 @@ class CSDConfigSettings(CSDConfigElement):
     _type = "settings"
 
     bridge_width: Optional[float] = None
-    """DEPRECATED and not working: Depth of the bridge."""
+    """REMOVED: Depth of the bridge."""
     ignore_input_georeferencing: bool = False
     """Ignore input file's georeferencing."""
 
@@ -334,53 +353,64 @@ class CSDConfigSettings(CSDConfigElement):
     ] = _upscaling_method_default
     """Resampling method for upscaling."""
 
-    # default value should not be None, check with _default_not_none
-    lai_roof_extensive: float = Field(
-        default=_default_not_none("lai_roof_extensive"),
-        ge=defaults["lai_roof_extensive"].minimum,
-        le=defaults["lai_roof_extensive"].maximum,
+    height_high_vegetation_lower_threshold: float = Field(
+        default=_default_not_none("height_high_vegetation_lower_threshold"),
+        ge=value_defaults["height_high_vegetation_lower_threshold"].minimum,
+        le=value_defaults["height_high_vegetation_lower_threshold"].maximum,
     )
-    """LAI of extensive roof greening."""
+    """Lower threshold for high vegetation height."""
 
-    lai_roof_intensive: float = Field(
-        default=_default_not_none("lai_roof_intensive"),
-        ge=defaults["lai_roof_intensive"].minimum,
-        le=defaults["lai_roof_intensive"].maximum,
+    height_rel_resolved_vegetation_lower_threshold: float = Field(
+        default=_default_not_none("height_rel_resolved_vegetation_lower_threshold"),
+        ge=value_defaults["height_rel_resolved_vegetation_lower_threshold"].minimum,
+        le=value_defaults["height_rel_resolved_vegetation_lower_threshold"].maximum,
     )
-    """LAI of intensive roof greening."""
+    """Minimum vegetation height for resolved vegetation relative to dz."""
+
+    lai_roof_extensive: Optional[float] = None
+    """REMOVED: LAI of extensive roof greening."""
+
+    lai_roof_intensive: Optional[float] = None
+    """REMOVED: LAI of intensive roof greening."""
 
     lai_tree_lower_threshold: float = Field(
         default=_default_not_none("lai_tree_lower_threshold"),
-        ge=defaults["lai_tree_lower_threshold"].minimum,
-        le=defaults["lai_tree_lower_threshold"].maximum,
+        ge=value_defaults["lai_tree_lower_threshold"].minimum,
+        le=value_defaults["lai_tree_lower_threshold"].maximum,
     )
     """Lower threshold for tree LAI."""
 
-    lai_low_vegetation_default: float = Field(
-        default=_default_not_none("lai_low_vegetation_default"),
-        ge=defaults["lai_low_vegetation_default"].minimum,
-        le=defaults["lai_low_vegetation_default"].maximum,
+    lai_per_vegetation_height: float = Field(
+        default=_default_not_none("lai_per_vegetation_height"),
+        ge=value_defaults["lai_per_vegetation_height"].minimum,
+        le=value_defaults["lai_per_vegetation_height"].maximum,
+    )
+
+    lai_low_vegetation_default: Optional[float] = Field(
+        default=value_defaults["lai_low_vegetation_default"].default,
+        ge=value_defaults["lai_low_vegetation_default"].minimum,
+        le=value_defaults["lai_low_vegetation_default"].maximum,
     )
     """Default LAI for low vegetation."""
 
-    lai_high_vegetation_default: float = Field(
-        default=_default_not_none("lai_high_vegetation_default"),
-        ge=defaults["lai_high_vegetation_default"].minimum,
-        le=defaults["lai_high_vegetation_default"].maximum,
+    lai_high_vegetation_default: Optional[float] = Field(
+        default=value_defaults["lai_high_vegetation_default"].default,
+        ge=value_defaults["lai_high_vegetation_default"].minimum,
+        le=value_defaults["lai_high_vegetation_default"].maximum,
     )
     """Default LAI for high vegetation."""
 
     lad_alpha: float = Field(
         default=_default_not_none("lad_alpha"),
-        ge=defaults["lad_alpha"].minimum,
-        le=defaults["lad_alpha"].maximum,
+        ge=value_defaults["lad_alpha"].minimum,
+        le=value_defaults["lad_alpha"].maximum,
     )
     """alpha parameter for LAD profile of Markkanen et al. (2003)."""
 
     lad_beta: float = Field(
         default=_default_not_none("lad_beta"),
-        ge=defaults["lad_beta"].minimum,
-        le=defaults["lad_beta"].maximum,
+        ge=value_defaults["lad_beta"].minimum,
+        le=value_defaults["lad_beta"].maximum,
     )
     """beta parameter for LAD profile of Markkanen et al. (2003)."""
 
@@ -389,15 +419,15 @@ class CSDConfigSettings(CSDConfigElement):
 
     lad_z_max_rel: float = Field(
         default=_default_not_none("lad_z_max_rel"),
-        ge=defaults["lad_z_max_rel"].minimum,
-        le=defaults["lad_z_max_rel"].maximum,
+        ge=value_defaults["lad_z_max_rel"].minimum,
+        le=value_defaults["lad_z_max_rel"].maximum,
     )
     """Relative height of the maximum LAD for LAD profile of Lalic and Mihailovic (2004)."""
 
     patch_height_default: float = Field(
         default=_default_not_none("patch_height_default"),
-        ge=defaults["patch_height_default"].minimum,
-        le=defaults["patch_height_default"].maximum,
+        ge=value_defaults["patch_height_default"].minimum,
+        le=value_defaults["patch_height_default"].maximum,
     )
     """Default vegetation patch height."""
 
@@ -406,48 +436,76 @@ class CSDConfigSettings(CSDConfigElement):
 
     rotation_angle: float = Field(
         default=_default_not_none("rotation_angle"),
-        ge=defaults["rotation_angle"].minimum,
-        le=defaults["rotation_angle"].maximum,
+        ge=value_defaults["rotation_angle"].minimum,
+        le=value_defaults["rotation_angle"].maximum,
     )
     """Rotation angle of the domains."""
 
     season: str = "summer"
     """Season for LAD profile calculation."""
 
+    soil_type_default: int = Field(
+        default=int(_default_not_none("soil_type")),
+        ge=value_defaults["soil_type"].minimum,
+        le=value_defaults["soil_type"].maximum,
+    )
+    """Default soil type."""
+
+    use_lai_for_roofs: bool = True
+    """Use lai for vegetation on roofs."""
+
+    use_lai_for_trees: bool = True
+    """Use lai for trees."""
+
+    use_vegetation_height_for_trees: bool = True
+    """Use vegetation height for trees."""
+
     vegetation_type_below_trees: int = Field(
         default=int(_default_not_none("vegetation_type_below_trees")),
-        ge=defaults["vegetation_type_below_trees"].minimum,
-        le=defaults["vegetation_type_below_trees"].maximum,
+        ge=value_defaults["vegetation_type_below_trees"].minimum,
+        le=value_defaults["vegetation_type_below_trees"].maximum,
     )
     """Vegetation type below trees."""
 
     debug: Optional[Union[bool, List[str]]] = None
-    """DEPRECATED and not working: Debug switches."""
+    """REMOVED: Debug switches."""
 
     epsg: Optional[int] = None
     """EPSG code for georeferencing."""
 
     @field_validator("bridge_width")
     @classmethod
-    def _message_old_bridge_width(cls, value: Optional[float]) -> Optional[float]:
-        """Check if bridge_width is not None and raise a ValueError.
+    def _message_old_bridge_width(
+        cls, value: Optional[float], info: ValidationInfo
+    ) -> Optional[float]:
+        return _validate_removed_conf(
+            value, info, "It is now called bridge_depth and is set in the domain section."
+        )
 
-        bridge_width should not be used anymore. Check if is used and issue warning.
+    @field_validator("debug")
+    @classmethod
+    def _message_former_debug(
+        cls, value: Optional[Union[bool, List[str]]], info: ValidationInfo
+    ) -> Optional[Union[bool, List[str]]]:
+        return _validate_removed_conf(value, info, "Use command line switch -v/--verbose instead.")
 
-        Args:
-            value: Input bridge_width value.
+    @field_validator("lai_roof_extensive")
+    @classmethod
+    def _message_old_lai_roof_extensive(
+        cls, value: Optional[float], info: ValidationInfo
+    ) -> Optional[float]:
+        return _validate_removed_conf(
+            value, info, "Define LAI with building_lai for surface level roof instead."
+        )
 
-        Raises:
-            ValueError: bridge_width is not None.
-
-        Returns:
-            Input None value.
-        """
-        if value is not None:
-            raise ValueError(
-                "bridge_width is now called bridge_depth and is set in the domain section."
-            )
-        return value
+    @field_validator("lai_roof_intensive")
+    @classmethod
+    def _message_old_lai_roof_intensive(
+        cls, value: Optional[float], info: ValidationInfo
+    ) -> Optional[float]:
+        return _validate_removed_conf(
+            value, info, "Define LAI with building_lai for surface level roof instead."
+        )
 
     @field_validator("season")
     @classmethod
@@ -477,30 +535,6 @@ class CSDConfigSettings(CSDConfigElement):
         _check_string(value, ["Metal2003", "LM2004"])
         return value
 
-    @field_validator("debug")
-    @classmethod
-    def _message_former_debug(
-        cls, value: Optional[Union[bool, List[str]]]
-    ) -> Optional[Union[bool, List[str]]]:
-        """Check if debug is not None and raise a ValueError.
-
-        debug should not be used anymore. Check if is used and issue error.
-
-        Args:
-            value: Input debug value.
-
-        Raises:
-            ValueError: debug is not None.
-
-        Returns:
-            Input None value.
-        """
-        if value is not None:
-            raise ValueError(
-                "debug is not used anymore. Use command line switch -v/--verbose instead."
-            )
-        return value
-
 
 def _expand_user_path(path: Optional[Path]) -> Optional[Path]:
     """Expand user path.
@@ -516,7 +550,10 @@ def _expand_user_path(path: Optional[Path]) -> Optional[Path]:
     return path.expanduser() if path is not None else None
 
 
-def _prepend_path_to_file(file: Optional[str], info: ValidationInfo) -> Optional[str]:
+FileLike = TypeVar("FileLike", Path, str)
+
+
+def _prepend_path_to_file(file: Optional[FileLike], info: ValidationInfo) -> Optional[FileLike]:
     """Prepend path from ValidationInfo to file.
 
     The path value of info.data is prepended to the file if it exists.
@@ -532,7 +569,12 @@ def _prepend_path_to_file(file: Optional[str], info: ValidationInfo) -> Optional
         return None
     if "path" not in info.data:
         return file
-    return os.path.join(info.data["path"], file) if info.data["path"] else file
+    if isinstance(file, str):
+        return os.path.join(info.data["path"], file) if info.data["path"] else file
+    elif isinstance(file, Path):
+        return Path(info.data["path"]) / file if info.data["path"] else file
+    else:
+        raise ValueError(f"Unknown type {type(file)} for file.")
 
 
 # ~ expansion in path according to https://github.com/pydantic/pydantic/issues/7990
@@ -592,6 +634,10 @@ class CSDConfigOutput(CSDConfigElement):
         return path
 
 
+StrLowercaseStrip = Annotated[str, StringConstraints(to_lower=True, strip_whitespace=True)]
+IntStrLowercaseStrip = Union[int, StrLowercaseStrip]
+
+
 class CSDConfigInput(CSDConfigElement):
     """Class for input data configuration for the static driver.
 
@@ -602,90 +648,227 @@ class CSDConfigInput(CSDConfigElement):
     _type = "input"
     _unique = False
 
-    pixel_size: Optional[float] = Field(
-        ge=defaults["pixel_size"].minimum,
-        default=None,
-        le=defaults["pixel_size"].maximum,
-    )
-    """DEPRECATED: (Intendend) Pixel size of the input data."""
+    pixel_size: Optional[float] = None
+    """REMOVED: (Intendend) Pixel size of the input data."""
 
     path: Optional[DirPathExpanded] = None
     """Path for input files."""
 
+    files: Dict[str, List[FilePathPrependedExpanded]]
+
     file_buildings_2d: Optional[FilePathPrependedExpanded] = None
-    """Input file for building height."""
+    """REMOVED: Input file for building height."""
     file_bridges_2d: Optional[FilePathPrependedExpanded] = None
-    """Input file for bridge height."""
+    """REMOVED: Input file for bridge height."""
     file_building_id: Optional[FilePathPrependedExpanded] = None
-    """Input file for building ID."""
+    """REMOVED: Input file for building ID."""
     file_bridges_id: Optional[FilePathPrependedExpanded] = None
-    """Input file for bridge ID."""
+    """REMOVED: Input file for bridge ID."""
     file_building_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for building type."""
+    """REMOVED: Input file for building type."""
     file_vegetation_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for vegetation type."""
+    """REMOVED: Input file for vegetation type."""
     file_vegetation_height: Optional[FilePathPrependedExpanded] = None
-    """Input file for vegetation height."""
+    """REMOVED: Input file for vegetation height."""
     file_pavement_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for pavement type."""
+    """REMOVED: Input file for pavement type."""
     file_water_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for water type."""
+    """REMOVED: Input file for water type."""
     file_street_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for street type."""
+    """REMOVED: Input file for street type."""
     file_street_crossings: Optional[FilePathPrependedExpanded] = None
-    """Input file for street crossings."""
+    """REMOVED: Input file for street crossings."""
     file_vegetation_on_roofs: Optional[FilePathPrependedExpanded] = None
-    """Input file for vegetation on roofs."""
-    file_tree_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for tree type."""
+    """REMOVED: Input file for vegetation on roofs."""
     file_patch_height: Optional[FilePathPrependedExpanded] = None
-    """Input file for vegetation patch height."""
+    """REMOVED: Input file for vegetation patch height."""
     file_x_UTM: Optional[FilePathPrependedExpanded] = None
-    """Input file for x UTM coordinates."""
+    """REMOVED: Input file for x UTM coordinates."""
     file_y_UTM: Optional[FilePathPrependedExpanded] = None
-    """Input file for y UTM coordinates."""
+    """REMOVED: Input file for y UTM coordinates."""
     file_lat: Optional[FilePathPrependedExpanded] = None
-    """Input file for latitude coordinates."""
+    """REMOVED: Input file for latitude coordinates."""
     file_lon: Optional[FilePathPrependedExpanded] = None
-    """Input file for longitude coordinates."""
+    """REMOVED: Input file for longitude coordinates."""
     file_lai: Optional[FilePathPrependedExpanded] = None
-    """Input file for Leaf Area Index."""
+    """REMOVED: Input file for Leaf Area Index."""
     file_lcz: Optional[FilePathPrependedExpanded] = None
-    """Input file for Local Climate Zones."""
+    """REMOVED: Input file for Local Climate Zones."""
     file_patch_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for vegetation patch type."""
+    """REMOVED: Input file for vegetation patch type."""
     file_soil_type: Optional[FilePathPrependedExpanded] = None
-    """Input file for soil type."""
+    """REMOVED: Input file for soil type."""
     file_tree_crown_diameter: Optional[FilePathPrependedExpanded] = None
-    """Input file for tree crown diameter."""
-    file_tree_trunk_diameter: Optional[FilePathPrependedExpanded] = None
-    """Input file for tree trunk diameter."""
+    """REMOVED: Input file for tree crown diameter."""
     file_tree_height: Optional[FilePathPrependedExpanded] = None
-    """Input file for tree height."""
+    """REMOVED: Input file for tree height."""
+    file_tree_lai: Optional[FilePathPrependedExpanded] = None
+    """REMOVED: Input file for tree LAI."""
+    file_tree_shape: Optional[FilePathPrependedExpanded] = None
+    """REMOVED: Input file for tree shape."""
+    file_tree_trunk_diameter: Optional[FilePathPrependedExpanded] = None
+    """IREMOVED: nput file for tree trunk diameter."""
+    file_tree_type: Optional[FilePathPrependedExpanded] = None
+    """REMOVED: Input file for tree type."""
     file_water_temperature: Optional[FilePathPrependedExpanded] = None
-    """Input file for water temperature."""
+    """REMOVED: Input file for water temperature."""
     file_zt: Optional[FilePathPrependedExpanded] = None
-    """Input file for terrain height."""
+    """REMOVED: Input file for terrain height."""
+
+    columns: Dict[
+        StrLowercaseStrip, Union[StrLowercaseStrip, Dict[IntStrLowercaseStrip, StrLowercaseStrip]]
+    ] = {}
+    """Assignment of input column names to column types or subtypes."""
+
+    _used_file: Set[Path] = set()
+    """List of used input files."""
+
+    @field_validator("file_patch_height")
+    @classmethod
+    def _message_removed_file_patch_height(
+        cls, value: Optional[FilePathPrependedExpanded], info: ValidationInfo
+    ) -> Optional[FilePathPrependedExpanded]:
+        return _validate_removed_conf(
+            value,
+            info,
+            "Use vegetation_height in files to set (among other things) "
+            + "the vegetation patch height.",
+        )
+
+    @field_validator(
+        "file_bridges_2d",
+        "file_bridges_id",
+        "file_building_id",
+        "file_building_type",
+        "file_buildings_2d",
+        "file_lat",
+        "file_lai",
+        "file_lcz",
+        "file_lon",
+        "file_patch_type",
+        "file_pavement_type",
+        "file_soil_type",
+        "file_street_crossings",
+        "file_street_type",
+        "file_tree_crown_diameter",
+        "file_tree_height",
+        "file_tree_lai",
+        "file_tree_shape",
+        "file_tree_trunk_diameter",
+        "file_tree_type",
+        "file_vegetation_height",
+        "file_vegetation_on_roofs",
+        "file_vegetation_type",
+        "file_water_temperature",
+        "file_water_type",
+        "file_x_UTM",
+        "file_y_UTM",
+        "file_zt",
+    )
+    @classmethod
+    def _message_removed_separate_file_entries(
+        cls, value: Optional[FilePathPrependedExpanded], info: ValidationInfo
+    ) -> Optional[FilePathPrependedExpanded]:
+        return _validate_removed_conf(
+            value,
+            info,
+        )
 
     @field_validator("pixel_size")
     @classmethod
-    def _message_deprecated_pixel_size(cls, value: Optional[float]) -> Optional[float]:
-        """Check if pixel_size is not None and raise a warning.
+    def _message_removed_pixel_size(
+        cls, value: Optional[float], info: ValidationInfo
+    ) -> Optional[float]:
+        return _validate_removed_conf(
+            value, info, "Use input in each domain section to define its input section."
+        )
 
-        pixel_size should not be used anymore. Check if it is used and issue warning.
+    @field_validator("files", mode="before")
+    @classmethod
+    def _file_elements_to_list(cls, value: Any) -> Optional[Dict]:
+        """Wrap single value in a list if it is not already a list.
 
         Args:
-            value: Input pixel_size value.
+            value: Value to check.
 
         Returns:
-            Input pixel_size value.
+            Dictionary with list values if value is not None, otherwise None.
         """
-        if value is not None:
-            logger.warning(
-                "pixel_size in the input section is deprecated.\n"
-                + "Use input in each domain section to define its input section."
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError(f"Expected a dictionary for files, got {type(value)} instead.")
+        for key, val in value.items():
+            if not isinstance(val, list):
+                value[key] = [val]
+        return value
+
+    @field_validator("columns", mode="after")
+    @classmethod
+    def _columns_keys_valid(
+        cls,
+        value: Dict[
+            StrLowercaseStrip,
+            Union[StrLowercaseStrip, Dict[IntStrLowercaseStrip, StrLowercaseStrip]],
+        ],
+    ) -> Dict[
+        StrLowercaseStrip, Union[StrLowercaseStrip, Dict[IntStrLowercaseStrip, StrLowercaseStrip]]
+    ]:
+        valid_variables = set(INPUT_DATA_EXPANDED["name"]).union({col for col in InputDataVector})
+        invalid = []
+        for key in value.values():
+            if isinstance(key, str):
+                matches = {k for k in valid_variables if k.startswith(key)}
+                if len(matches) == 0:
+                    invalid.append(key)
+        if len(invalid) > 0:
+            raise ValueError(
+                f"Invalid input column{'s' if len(invalid) > 1 else ''} found: {invalid}"
             )
         return value
+
+    @field_validator("files", mode="after")
+    @classmethod
+    def _files_keys_valid(
+        cls, value: Dict[str, List[FilePathPrependedExpanded]]
+    ) -> Dict[str, List[FilePathPrependedExpanded]]:
+        valid_variables = set(INPUT_DATA_EXPANDED["name"]).union({col for col in InputDataVector})
+        invalid = []
+        for key in value.keys():
+            matches = {k for k in valid_variables if k.startswith(key)}
+            if len(matches) == 0:
+                invalid.append(key)
+        if len(invalid) > 0:
+            raise ValueError(
+                f"Invalid input file{'s' if len(invalid) > 1 else ''} found: {invalid}"
+            )
+        # Check if value lists have only one element for all entries except those in InputDataVector
+        for key, file_list in value.items():
+            if key not in {col.value for col in InputDataVector} and len(file_list) > 1:
+                raise ValueError(
+                    f"Input file '{key}' should be a single file, but got {len(file_list)} given."
+                )
+        return value
+
+    @model_validator(mode="after")
+    def _check_columns_exist(self) -> "CSDConfigInput":
+        """Check if all columns exists in vector data."""
+        if self.columns == {}:
+            return self
+        input_columns: Set[str] = set()
+        for input in InputDataVector:
+            if input.value in self.files:
+                for vinput in self.files[input]:
+                    gdf = gpd.read_file(vinput, rows=1)
+                    input_columns = input_columns.union({col.lower() for col in gdf.columns})
+
+        for column in self.columns.keys():
+            if column not in input_columns:
+                raise ValueError(
+                    f"Column '{column}' not found in input vector data. "
+                    + "Please check the input files and the columns configuration."
+                )
+        return self
 
     def any_netcdf(self) -> bool:
         """Check if any input file is a netCDF file.
@@ -693,10 +876,33 @@ class CSDConfigInput(CSDConfigElement):
         Returns:
             True if any input file is a netCDF file, False otherwise.
         """
-        return any(
-            file.suffix == ".nc"
-            for file in self.model_dump(exclude_none=True, exclude={"pixel_size", "path"}).values()
-        )
+        for paths in self.files.values():
+            for p in paths:
+                if p.suffix == ".nc":
+                    return True
+        return False
+
+    def add_used_file(self, file: Path) -> None:
+        """Add file to list of used files.
+
+        Args:
+            file: File to add.
+        """
+        self._used_file.add(file)
+
+    def unused_file(self) -> List[Tuple[str, Path]]:
+        """Return list of unread files.
+
+        Returns:
+            List of unread files.
+        """
+        unused_file_path = []
+        for file, paths in self.files.items():
+            for p in paths:
+                if p not in self._used_file:
+                    unused_file_path.append((file, p))
+
+        return unused_file_path
 
 
 FloatInt = Union[float, int]
@@ -808,7 +1014,7 @@ def _expand_parslike(
             raise ValueError(f"Unknown type {type(value)} for parslike value.")
 
         if isinstance(key, str):
-            keys_starting_with_key = [k for k in enum_key_strings if k.startswith(key.upper())]
+            keys_starting_with_key = [k for k in enum_key_strings if k.startswith(key)]
             if not keys_starting_with_key:
                 raise ValueError(f"Key {key} cannot be expanded to any key in {enum_key_strings}.")
             for k in keys_starting_with_key:
@@ -849,16 +1055,16 @@ def _validate_parslike(
         raise ValueError("Field name is None. Should not happen.")
 
     for key, value in input.items():
-        full_key = f"{info.field_name}_{enum(key).name.lower()}"
-        keys_starting_with_key = [k for k in defaults.keys() if full_key.startswith(k)]
+        full_key = f"{info.field_name}_{enum(key).name}"
+        keys_starting_with_key = [k for k in value_defaults.keys() if full_key.startswith(k)]
         if not keys_starting_with_key:
             raise ValueError(
-                f"Key {full_key} cannot be expanded to any key in {list(defaults.keys())}."
+                f"Key {full_key} cannot be expanded to any key in {list(value_defaults.keys())}."
             )
         if len(keys_starting_with_key) > 1:
             # take the longest match as a list
             keys_starting_with_key = sorted(keys_starting_with_key, key=len, reverse=True)[0:1]
-        default = defaults[keys_starting_with_key[0]]
+        default = value_defaults[keys_starting_with_key[0]]
         if isinstance(value, list):
             for v in value:
                 _check_within_range(v, default)
@@ -934,72 +1140,72 @@ class CSDConfigDomain(CSDConfigElement):
     """Name of the input section for the domain."""
 
     pixel_size: float = Field(
-        ge=defaults["pixel_size"].minimum,
-        le=defaults["pixel_size"].maximum,
+        ge=value_defaults["pixel_size"].minimum,
+        le=value_defaults["pixel_size"].maximum,
     )
     """Grid spacing in x and y direction."""
 
     nx: int = Field(
-        ge=defaults["nx"].minimum,
-        le=defaults["nx"].maximum,
+        ge=value_defaults["nx"].minimum,
+        le=value_defaults["nx"].maximum,
     )
     """Number of grid points -1 in x direction."""
 
     ny: int = Field(
-        ge=defaults["ny"].minimum,
-        le=defaults["ny"].maximum,
+        ge=value_defaults["ny"].minimum,
+        le=value_defaults["ny"].maximum,
     )
     """Number of grid points -1 in y direction."""
 
     dz: float = Field(
-        ge=defaults["dz"].minimum,
-        le=defaults["dz"].maximum,
+        ge=value_defaults["dz"].minimum,
+        le=value_defaults["dz"].maximum,
     )
     """Grid spacing in z direction."""
 
     input_lower_left_x: Optional[float] = Field(
-        default=defaults["input_lower_left_x"].default,
-        ge=defaults["input_lower_left_x"].minimum,
-        le=defaults["input_lower_left_x"].maximum,
+        default=value_defaults["input_lower_left_x"].default,
+        ge=value_defaults["input_lower_left_x"].minimum,
+        le=value_defaults["input_lower_left_x"].maximum,
     )
     """Distance (m) on x-axis between the lower-left domain corner and the lower-left input data
     corner."""
 
     input_lower_left_y: Optional[float] = Field(
-        default=defaults["input_lower_left_y"].default,
-        ge=defaults["input_lower_left_y"].minimum,
-        le=defaults["input_lower_left_y"].maximum,
+        default=value_defaults["input_lower_left_y"].default,
+        ge=value_defaults["input_lower_left_y"].minimum,
+        le=value_defaults["input_lower_left_y"].maximum,
     )
     """Distance (m) on y-axis between the lower-left domain corner and the lower-left input data
     corner."""
 
     lower_left_x: Optional[float] = Field(
-        default=defaults["lower_left_x"].default,
-        ge=defaults["lower_left_x"].minimum,
-        le=defaults["lower_left_x"].maximum,
+        default=value_defaults["lower_left_x"].default,
+        ge=value_defaults["lower_left_x"].minimum,
+        le=value_defaults["lower_left_x"].maximum,
     )
     """Distance (m) on x-axis between the lower-left corner of the nested domain and the lower-left
     corner of the root parent domain."""
 
     lower_left_y: Optional[float] = Field(
-        default=defaults["lower_left_y"].default,
-        ge=defaults["lower_left_y"].minimum,
-        le=defaults["lower_left_y"].maximum,
+        default=value_defaults["lower_left_y"].default,
+        ge=value_defaults["lower_left_y"].minimum,
+        le=value_defaults["lower_left_y"].maximum,
     )
     """Distance (m) on y-axis between the lower-left corner of the nested domain and the lower-left
     corner of the root parent domain."""
 
     origin_lon: Optional[float] = Field(
-        default=defaults["origin_lon"].default,
-        ge=defaults["origin_lon"].minimum,
-        le=defaults["origin_lon"].maximum,
+        default=value_defaults["origin_lon"].default,
+        ge=value_defaults["origin_lon"].minimum,
+        le=value_defaults["origin_lon"].maximum,
     )
     """Longitude of the left border of the lower-left grid point of the PALM domain in WGS84."""
 
     origin_lat: Optional[float] = Field(
-        default=defaults["origin_lat"].default,
-        ge=defaults["origin_lat"].minimum,
-        le=defaults["origin_lat"].maximum,
+        default=value_defaults["origin_lat"].default,
+        ge=value_defaults["origin_lat"].minimum,
+        le=value_defaults["origin_lat"].maximum,
     )
     """Latitude of the lower border of the lower-left grid point of the PALM domain in WGS84."""
 
@@ -1012,26 +1218,51 @@ class CSDConfigDomain(CSDConfigElement):
 
     bridge_depth: float = Field(
         default=_default_not_none("bridge_depth"),
-        ge=defaults["bridge_depth"].minimum,
-        le=defaults["bridge_depth"].maximum,
+        ge=value_defaults["bridge_depth"].minimum,
+        le=value_defaults["bridge_depth"].maximum,
     )
     """Structural depth of bridge pixels."""
 
-    buildings_3d: bool = False
-    """Use generate 3D buildings field."""
+    buildings_3d: Optional[bool] = None
+    """REMOVED: Use generate 3D buildings field."""
 
-    allow_high_vegetation: bool = False
-    """Allow high vegetation in vegetation_type."""
+    building_free_border_width: float = Field(
+        default=_default_not_none("building_free_border_width"),
+        ge=value_defaults["building_free_border_width"].minimum,
+        le=value_defaults["building_free_border_width"].maximum,
+    )
+    """Width of the border (in meters) around the domain that is free of buildings."""
+
+    building_free_border_pavement_type: int = Field(
+        default=int(_default_not_none("building_free_border_pavement_type")),
+        ge=value_defaults["building_free_border_pavement_type"].minimum,
+        le=value_defaults["building_free_border_pavement_type"].maximum,
+    )
+    """Substitute pavement type where buildings are removed."""
+
+    generate_buildings_3d: bool = False
+    """Generate 3D buildings field."""
+
+    allow_high_vegetation: Optional[bool] = None
+    """REMOVED: Allow high vegetation in vegetation_type."""
+    estimate_lai_from_vegetation_height: bool = True
+    """Calculate resolved LAI from vegetation height."""
+    generate_single_trees: bool = True
+    """Generate LAD and BAD fields of single trees."""
+    generate_vegetation_on_roofs: Optional[bool] = None
+    """REMOVED: Generate vegetation on roofs."""
     generate_vegetation_patches: bool = True
     """Generate vegetation patches."""
     overhanging_trees: bool = True
     """Allow overhanging trees."""
     remove_low_lai_tree: bool = False
     """Remove trees with low Lead Area Index."""
-    street_trees: bool = True
-    """Generate LAD and BAD fields of single trees."""
-    vegetation_on_roofs: bool = True
-    """Generate vegetation on roofs."""
+    replace_high_vegetation_types: bool = True
+    """Replace high vegetation in vegetation_type."""
+    street_trees: Optional[bool] = None
+    """REMOVED: Generate LAD and BAD fields of single trees."""
+    vegetation_on_roofs: Optional[bool] = None
+    """REMOVED: Generate vegetation on roofs."""
 
     interpolate_terrain: bool = False
     """Interpolate and blend terrain height between parent and child domains."""
@@ -1075,7 +1306,25 @@ class CSDConfigDomain(CSDConfigElement):
     water_temperature: Optional[DictWaterTypeFloat] = None
     """Water temperature for water types."""
     water_temperature_per_water_type: Optional[DictWaterTypeFloat] = None
-    """DEPRECATED and not working: Water temperature for water types."""
+    """REMOVED: Water temperature for water types."""
+
+    @field_validator("building_free_border_pavement_type", mode="before")
+    @classmethod
+    def _expand_building_free_border_pavement_type(cls, values: Any) -> Any:
+        if isinstance(values, str):
+            enum_key_strings = [element.name for element in IndexPavementType]
+            matching_keys = [k for k in enum_key_strings if k == values]
+            if not matching_keys:
+                raise ValueError(
+                    f"Value {values} cannot be expanded to any key in {enum_key_strings}."
+                )
+            if len(matching_keys) > 1:
+                raise ValueError(
+                    f"Value {values} is ambiguous and matches multiple keys in "
+                    + f"{enum_key_strings}."
+                )
+            return IndexPavementType[matching_keys[0]].value
+        return values
 
     @field_validator("z_uhl")
     @classmethod
@@ -1095,7 +1344,7 @@ class CSDConfigDomain(CSDConfigElement):
         if values[0] != 0.0:
             raise ValueError("z_uhl[0] must be 0.0")
         for i in range(1, len(values)):
-            _check_within_range(values[i], defaults["z_uhl"])
+            _check_within_range(values[i], value_defaults["z_uhl"])
             if (values[i] - values[i - 1]) <= 0.0:
                 raise ValueError(
                     f"z_uhl not monotonously increasing from {values[i - 1]} " + f"to {values[i]}."
@@ -1114,34 +1363,77 @@ class CSDConfigDomain(CSDConfigElement):
             Validated udir values.
         """
         for value in values:
-            _check_within_range(value, defaults["udir"])
+            _check_within_range(value, value_defaults["udir"])
         return values
+
+    @field_validator("allow_high_vegetation")
+    @classmethod
+    def _message_old_allow_high_vegetation(
+        cls, value: Optional[bool], info: ValidationInfo
+    ) -> Optional[bool]:
+        return _validate_removed_conf(
+            value,
+            info,
+            "It is replaced by replace_high_vegetation_types with in inverted meaning.",
+        )
+
+    @field_validator("generate_vegetation_on_roofs")
+    @classmethod
+    def _message_old_generate_vegetation_on_roofs(
+        cls, value: Optional[bool], info: ValidationInfo
+    ) -> Optional[bool]:
+        return _validate_removed_conf(
+            value,
+            info,
+            "Define building_fraction for surface type wall_roof, window_roof and green_roof, "
+            + "or building_lai for surface level roof instead.",
+        )
+
+    @field_validator("buildings_3d")
+    @classmethod
+    def _message_old_buildings_3d(
+        cls, value: Optional[bool], info: ValidationInfo
+    ) -> Optional[bool]:
+        return _validate_removed_conf(
+            value,
+            info,
+            "It is replaced by generate_buildings_3d.",
+        )
+
+    @field_validator("street_trees")
+    @classmethod
+    def _message_old_street_trees(
+        cls, value: Optional[bool], info: ValidationInfo
+    ) -> Optional[bool]:
+        return _validate_removed_conf(
+            value,
+            info,
+            "It is now called generate_single_trees.",
+        )
+
+    @field_validator("vegetation_on_roofs")
+    @classmethod
+    def _message_old_vegetation_on_roofs(
+        cls, value: Optional[bool], info: ValidationInfo
+    ) -> Optional[bool]:
+        return _validate_removed_conf(
+            value,
+            info,
+            "Define building_fraction for surface type wall_roof, window_roof and green_roof, "
+            + "or building_lai for surface level roof instead.",
+        )
 
     @field_validator("water_temperature_per_water_type")
     @classmethod
     def _message_old_water_temperature_per_water_type(
-        cls, values: Optional[Dict[int, float]]
+        cls, values: Optional[Dict[int, float]], info: ValidationInfo
     ) -> Optional[Dict[int, float]]:
-        """Check if water_temperature_per_water_type is not None and raise a ValueError.
-
-        water_temperature_per_water_type should not be used anymore. Check if is used and issue
-        error.
-
-        Args:
-            values: Input water_temperature_per_water_type value.
-
-        Raises:
-            ValueError: water_temperature_per_water_type is not None.
-
-        Returns:
-            Input None value.
-        """
-        if values is not None:
-            raise ValueError(
-                "water_temperature_per_water_type is now called water_temperature and \n"
-                + "supports named water types and single floats for all water types."
-            )
-        return values
+        return _validate_removed_conf(
+            values,
+            info,
+            "It is now called water_temperature and "
+            + "supports named water types and single floats for all water types.",
+        )
 
     @model_validator(mode="after")
     def _validate_interpolation_palm_z_axis(self: "CSDConfigDomain") -> "CSDConfigDomain":
@@ -1181,7 +1473,7 @@ class CSDConfigLCZ(CSDConfigElement):
     """Updated parameters of the Open midrise LCZ class."""
     open_lowrise: Optional[Dict[str, float]] = None
     """Updated parameters of the Open lowrise LCZ class."""
-    leightweight_lowrise: Optional[Dict[str, float]] = None
+    lightweight_lowrise: Optional[Dict[str, float]] = None
     """Updated parameters of the Lightweight lowrise LCZ class."""
     large_lowrise: Optional[Dict[str, float]] = None
     """Updated parameters of the Large lowrise LCZ class."""
@@ -1305,21 +1597,28 @@ class CSDConfig:
                             + "adjust the maximum in palm_csd/data/value_defaults.csv."
                         )
                     else:
+                        message = f"{error['loc'][0]}: " if error["loc"] else ""
                         if "ctx" in error:
-                            logger.critical(f"{error['loc'][0]}: {error['ctx']['error']}")
+                            logger.critical(f"{message}{error['ctx']['error']}")
                         else:
-                            logger.critical(f"{error['loc'][0]}: {error['msg']}")
+                            logger.critical(f"{message}{error['msg']}")
                 raise
 
         # if not LCZ section is given, use default values
         if CSDConfigLCZ.counter == 0:
             self.lcz = CSDConfigLCZ()
 
+        self._update_value_defaults()
+
+    def _update_value_defaults(self) -> None:
+        """Update value defaults with input settings."""
+        value_defaults["soil_type"].default = self.settings.soil_type_default
+
     def input_of_domain(self, domain_name: str) -> CSDConfigInput:
         """Find fitting input configuration for a domain.
 
-        The domain_name, the input option and the pixel size are used to identify the input. If
-        there is only one input section, this is used.
+        The domain_name and the input option are used to identify the input. If there is only one
+        input section, this is used.
 
         Args:
             domain_name: Domain name
@@ -1346,14 +1645,6 @@ class CSDConfig:
                     f"Input section {domain_config.input} of domain {domain_name} not found.",
                 )
 
-        # Check input's pixel_size against domain's pixel_size.
-        for input_config in self.input_dict.values():
-            if (
-                input_config.pixel_size is not None
-                and input_config.pixel_size == domain_config.pixel_size
-            ):
-                return input_config
-
         # If there is only one input section, use it.
         if len(self.input_dict) == 1:
             return list(self.input_dict.values())[0]
@@ -1361,7 +1652,7 @@ class CSDConfig:
         # If no fitting input section was found, raise an error.
         logger.critical_raise(
             f"For the domain {domain_name} with pixel_size {domain_config.pixel_size}, "
-            + "no fitting input configuration section with the same pixel_size was found.",
+            + "no fitting input configuration section was found.",
         )
 
     def input_of_parent_domain(self, domain_config: CSDConfigDomain) -> Optional[CSDConfigInput]:
@@ -1379,11 +1670,6 @@ class CSDConfig:
             return None
         return self.input_of_domain(domain_parent)
 
-    def update_defaults(self) -> None:
-        """Update the default values."""
-        if self.settings.patch_height_default is not None:
-            defaults["patch_height"].default = self.settings.patch_height_default
-
 
 def reset_all_config_counters() -> None:
     """Reset counters of all config classes."""
@@ -1393,6 +1679,57 @@ def reset_all_config_counters() -> None:
     CSDConfigLCZ._reset_counter()
     CSDConfigOutput._reset_counter()
     CSDConfigSettings._reset_counter()
+
+
+T = TypeVar("T")
+
+
+def _validate_removed_conf(
+    value: T, validation_info: ValidationInfo, user_info: Optional[str] = None
+) -> T:
+    """Validate that value is None.
+
+    Args:
+        value: Value to validate.
+        validation_info: ValidationInfo with attribute field_name.
+        user_info: Additional information for the user. Defaults to None.
+
+    Raises:
+        ValueError: value is not None.
+
+    Returns:
+        Input value.
+    """
+    if value is not None:
+        message = f"{validation_info.field_name} is not used anymore."
+        if user_info is not None:
+            message += "\n" + user_info
+        raise ValueError(message)
+    return value
+
+
+def _validate_deprecated_conf(
+    value: T, validation_info: ValidationInfo, user_info: Optional[str] = None
+) -> T:
+    """Issue warning that the configuration option is deprecated.
+
+    Args:
+        value: Value to validate.
+        validation_info: ValidationInfo with attribute field_name.
+        user_info: Additional information for the user. Defaults to None.
+
+    Raises:
+        ValueError: value is not None.
+
+    Returns:
+        Input value.
+    """
+    if value is not None:
+        message = f"{validation_info.field_name} is deprecated."
+        if user_info is not None:
+            message += "\n" + user_info
+        logger.warning(message)
+    return value
 
 
 def _check_string(value: str, valid: List[str]) -> None:
@@ -1427,196 +1764,3 @@ def _check_within_range(value: float, range: DefaultMinMax) -> None:
         raise ValueError(
             f"Value {value} is larger than maximum {range.maximum}. type=less_than_equal"
         )
-
-
-class IndexBuildingSurfaceLevel(IntEnum):
-    """Index for building surface levels."""
-
-    GFL = 0
-    """ground floor level"""
-    AGFL = 1
-    """above ground floor level"""
-    ROOF = 2
-    """roof"""
-
-
-class IndexBuildingGeneralPars(IntEnum):
-    """Index for building general parameters."""
-
-    HEIGHT_GFL = 0
-    """ground floor level height"""
-    GREEN_TYPE_ROOF = 1
-    """type of green roof"""
-
-
-class IndexBuildingSurfaceType(IntEnum):
-    """Index for building surface types."""
-
-    WALL_GFL = 0
-    """wall ground floor level"""
-    WALL_AGFL = 1
-    """wall above ground floor level"""
-    WALL_ROOF = 2
-    """wall roof"""
-    WINDOW_GFL = 3
-    """window ground floor level"""
-    WINDOW_AGFL = 4
-    """window above ground floor level"""
-    WINDOW_ROOF = 5
-    """window roof"""
-    GREEN_GFL = 6
-    """green on wall ground floor level"""
-    GREEN_AGFL = 7
-    """green on wall above ground floor level"""
-    GREEN_ROOF = 8
-    """green on roof ground floor level"""
-
-
-class IndexBuildingIndoorPars(IntEnum):
-    """Index for building indoor parameters."""
-
-    INDOOR_TEMPERATURE_SUMMER = 0
-    """indoor target summer temperature"""
-    INDOOR_TEMPERATURE_WINTER = 1
-    """indoor target winter temperature"""
-    SHADING_WINDOW = 2
-    """shading factor"""
-    G_WINDOW = 3
-    """g-value windows"""
-    U_WINDOW = 4
-    """u-value windows"""
-    AIRFLOW_UNOCCUPIED = 5
-    """basic airflow without occupancy of the room"""
-    AIRFLOW_OCCUPIED = 6
-    """additional airflow dependent on occupancy of the room"""
-    HEAT_RECOVERY_EFFICIENCY = 7
-    """heat recovery efficiency"""
-    EFFECTIVE_SURFACE = 8
-    """dynamic parameter specific effective surface"""
-    INNER_HEAT_STORAGE = 9
-    """dynamic parameter innner heat storage"""
-    RATIO_SURFACE_FLOOR = 10
-    """ratio internal surface/floor area"""
-    HEATING_CAPACITY_MAX = 11
-    """maximal heating capacity"""
-    COOLING_CAPACITY_MAX = 12
-    """maximal cooling capacity"""
-    HEAT_GAIN_HIGH = 13
-    """additional internal heat gains dependent on occupancy of the room"""
-    HEAT_GAIN_LOW = 14
-    """basic internal heat gains without occupancy of the room"""
-    HEIGHT_STOREY = 15
-    """storey height"""
-    HEIGHT_CEILING_CONSTRUCTION = 16
-    """ceiling construction height"""
-    HEATING_FACTOR = 17
-    """anthropogenic heat output factor for heating"""
-    COOLING_FACTOR = 18
-    """anthropogenic heat output factor for cooling"""
-
-
-class IndexVegetationType(IntEnum):
-    """Vegetation type index."""
-
-    USER_DEFINED = 0
-    """user defined"""
-    BARE_SOIL = 1
-    """bare soil"""
-    CROPS_MIXED_FARMING = 2
-    """crops, mixed farming"""
-    SHORT_GRASS = 3
-    """short grass"""
-    EVERGREEN_NEEDLELEAF_TREES = 4
-    """evergreen needleleaf trees"""
-    DECIDUOUS_NEEDLELEAF_TREES = 5
-    """deciduous needleleaf trees"""
-    EVERGREEN_BROADLEAF_TREES = 6
-    """evergreen broadleaf trees"""
-    DECIDUOUS_BROADLEAF_TREES = 7
-    """deciduous broadleaf trees"""
-    TALL_GRASS = 8
-    """tall grass"""
-    DESERT = 9
-    """desert"""
-    TUNDRA = 10
-    """tundra"""
-    IRRIGATED_CROPS = 11
-    """irrigated crops"""
-    SEMIDESERT = 12
-    """semidesert"""
-    ICE_CAPS_GLACIERS = 13
-    """ice caps and glaciers"""
-    BOGS_MARSHES = 14
-    """bogs and marshes"""
-    EVERGREEN_SHRUBS = 15
-    """evergreen shrubs"""
-    DECIDUOUS_SHRUBS = 16
-    """deciduous shrubs"""
-    MIXED_FOREST_WOODLAND = 17
-    """mixed forest/woodland"""
-    INTERRUPTED_FOREST = 18
-    """interrupted forest"""
-
-
-VT_HIGH_VEGETATION = [
-    IndexVegetationType.EVERGREEN_NEEDLELEAF_TREES,
-    IndexVegetationType.DECIDUOUS_NEEDLELEAF_TREES,
-    IndexVegetationType.EVERGREEN_BROADLEAF_TREES,
-    IndexVegetationType.DECIDUOUS_BROADLEAF_TREES,
-    IndexVegetationType.MIXED_FOREST_WOODLAND,
-    IndexVegetationType.INTERRUPTED_FOREST,
-]
-"""Vegetation_types that are considered high vegetation"""
-
-
-class IndexBuildingType(IntEnum):
-    """Index for building types."""
-
-    RESIDENTIAL_1950 = 1
-    """Residential, before 1950"""
-    RESIDENTIAL_1951_2000 = 2
-    """Residential, 1951 -- 2000"""
-    RESIDENTIAL_2001 = 3
-    """Residential, after 2001"""
-    OFFICE_1950 = 4
-    """Office, before 1950"""
-    OFFICE_1951_2000 = 5
-    """Office, 1951 -- 2000"""
-    OFFICE_2001 = 6
-    """Office, after 2001"""
-    BRIDGES = 7
-    """Bridges"""
-
-
-class IndexWaterPars(IntEnum):
-    """Index for water parameters."""
-
-    WATER_TEMPERATURE = 0
-    """water temperature"""
-    ROUGHNESS_LENGTH = 1
-    """roughness length for momentum"""
-    ROUGHNESS_LENGTH_QH = 2
-    """roughness length for heat"""
-    HEAT_CONDUCTIVITY_STABLE = 3
-    """heat conductivity between skin layer and water (stable conditions)"""
-    HEAT_CONDUCTIVITY_UNSTABLE = 4
-    """heat conductivity between skin layer and water (unstable conditions)"""
-    ALBEDO_TYPE = 5
-    """albedo type"""
-    EMISSIVITY = 6
-    """surface emissivity"""
-
-
-class IndexWaterType(IntEnum):
-    """Index for water types."""
-
-    LAKE = 1
-    """Lake"""
-    RIVER = 2
-    """River"""
-    OCEAN = 3
-    """Ocean"""
-    POND = 4
-    """Pond"""
-    FOUNTAIN = 5
-    """Fountain"""

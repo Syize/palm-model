@@ -1,39 +1,18 @@
 ---
 title: Overview
 ---
-# Nesting
+# Nesting Overview
 
 ---
 
 !!! warning
     This site is  Work in Progress.
 
-## First activation of nesting in a restart run
+PALM offers two different kinds of nesting.
 
-In order to save computational resources, childs can be activated after the root domain has advanced for a specific time interval.
+- [self-nesting](self_nesting.md)<br>
+  One or more instances of PALM (so called children or **childs**) with higher spatial resolution are nested inside the total domain (called the **root** domain). Recursive nesting (nests within nests) is allowed. A typical application for self-nesting is if high spatial resolution is only required at specific areas of interest, e.g. within the urban canopy layer or in the entrainment zone at the top of a mixed layer, and if computational resources do not allow to use that high resolution for the total tomain.<br><br>
+- [mesoscale nesting](mesoscale_nesting.md)<br>
+  Boundary layer processes contain a wide range of scales, ranging from the mesoscale, e.g. urban heat island, land-sea breeze, low-level jets, etc. down to the microscale, e.g. effects of single trees, building and roof shapes, local emissions, etc.. To consider both large model domains and a small grid size would often require huge computational resources. The idea of [mesoscale nesting](mesoscale_nesting.md) is to consider the effects of mesoscale processes in PALM via lateral (and top) boundary conditions provided by larger-scale models, and refine the grid within the domain of interest.
 
-First prepare the namelist files for root and child domains for an initial run as well as a restart run.
-
-Omit the [nesting_parameters](/Reference/LES_Model/Namelists/#nesting-parameters) namelist in the `_p3d` file of the root domain only, and choose [end_time](/Reference/LES_Model/Namelists/#runtime_parameters--end_time) as the time when the nesting shall be activated. The `_p3dr` file of the root domain must contain the [nesting_parameters](/Reference/LES_Model/Namelists/#nesting-parameters) namelist. Start the initial run via command 
-```bash
-palmrun .... -a "d3# restart"
-```
-Set [end_time](/Reference/LES_Model/Namelists/#runtime_parameters--end_time) in the `_p3dr` file of the root domain and the `_p3d` files of all childs to the desired value. Start a restart run via command
-```bash
-palmrun .... -a "d3r activate_nesting"
-```
-The run will take the `_p3dr` file of the root domain, but the `_p3d` files of all childs.
-
-Further restart runs may be carried out via command
-
-```bash
-palmrun .... -a "d3r"
-```
-
-Keep in mind to always use activation string `restart` to store restart data for the next restart run.
-
-
-
-## Notes, shortcommings and open issues
-
-1. So far, using a spin-up for child domains is not allowed (see [spinup_time](/Reference/LES_Model/Namelists/#initialization_parameters--spinup_time)).
+[Mesoscale nesting](mesoscale_nesting.md) and [self-nesting](self_nesting.md) can be used simultaneously. In a self-nesting setup, mesocale-nesting can be used for the root domain (but only for the root domain!).

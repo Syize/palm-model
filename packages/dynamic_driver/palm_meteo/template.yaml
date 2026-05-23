@@ -1,104 +1,208 @@
-# A template with all user-selectable configuration options. The options are
-# commented out and the the values are set to their defaults.
+# A template with all user-selectable configuration options. Most options are
+# commented out and the values shown are the defaults.
 
 ############################## GENERIC OPTIONS ##############################
 
 #case: #case name (required)
-#scenario: #optional scenario identification (multiple scenarios per case)
+# Optional scenario identification (for preparing multiple scenarios based on
+# the same case)
+#scenario:
 #dnum: 1 #1 for root domain, 2 for nested domain *_N02 etc.
 
-# Some paths may be relative as specified or absolute. They may contain
-# these references:
-# {case}: case name
-# {scenario}: scenario name (if provided) with leading dot
-# {domain}: domain number string: empty for dnum=1, '_N02' for dnum=2 etc.
-paths:                                               #RELATIVE TO:
-    #base: .                                         #------------
+# One or more tasks selected by the user will add required plugins and set
+# necessary options. Tasks typically select input meteo and/or chemistry data
+# sources.
+tasks:
+    - wrf         # WRF meteo inputs
+    #- wrf_rad    # WRF radiation inputs
+    #- icon       # ICON inputs
+    #- aladin     # Aladin inputs
+    #- aladin_rad # Aladin inputs
+    #- camx       # CAMx chemistry inputs
+    #- cams       # CAMS chemistry inputs
+    #- synthetic  # Profiles and other synthetic inputs
+    #- winddamp   # Postprocessor for wind damping near walls
 
-    #palm_input: '../JOBS/{case}{scenario}/INPUT'    #base
-    #dynamic_driver: '{case}_dynamic{domain}'        #palm_input
-    #static_driver: '{case}_static{domain}'          #palm_input
+# Replacement strings to be used in paths. They are valid Python expressions
+# and they may reference configuration values such as `dnum` or `scenario`.
+path_strings:
+    #case: 'case'
+    #scenario: 'f"_{scenario}" if scenario else ""'
+    #domain: 'f"_N{dnum:02d}" if dnum != 1 else ""'
 
-    #intermediate: '../JOBS/{case}{scenario}/METEO'  #base
-    #imported: 'import.nc'                           #intermediate
-    #hinterp: 'hinterp.nc'                           #intermediate
-    #vinterp: 'vinterp.nc'                           #intermediate
+# All paths are either absolute or relative to paths.base. They may contain
+# references to entries in path_strings
+paths:
+    #base: '../JOBS/{case}{scenario}'
 
-    #wrf_output: '../JOBS/{case}{scenario}/WRF'      #base
-    #wrf_file_mask: 'wrfout_*.e000'                  #wrf_output
-    #wrf_rad_file_mask: 'auxhist6_*'                 #wrf_output
+    palm_input:
+        #dynamic_driver: 'INPUT/{case}_dynamic{domain}'
+        #static_driver:  'INPUT/{case}_static{domain}'
 
-    #camx_output: '../JOBS/{case}{scenario}/CAMX'    #base
-    #camx_file_mask: 'CAMx.*.nc'                     #camx_output
+    intermediate:
+        #import_data: 'METEO/import{domain}.nc'
+        #hinterp:     'METEO/hinterp{domain}.nc'
+        #vinterp:     'METEO/vinterp{domain}.nc'
 
-    #icon_output: '../JOBS/{case}{scenario}/ICON'    #base
-    #icon_file_mask: 'i?ff[0-9]_*.nc*'               #icon_output
-    #icon_static_data: ~                             #icon_output
+    snapshot:
+        #setup_model:  'METEO/setup{domain}.pickle.zst'
+        #import_data:  'METEO/import{domain}.pickle.zst'
+        #hinterp:      'METEO/hinterp{domain}.pickle.zst'
+        #vinterp:      'METEO/vinterp{domain}.pickle.zst'
+
+    wrf:
+        #file_mask:      'WRF/wrfout_*.e000'
+        #rad_file_mask:  'WRF/auxhist6_*'
+
+    camx:
+        #file_mask:      'CAMX/CAMx.*.nc'
+
+    icon:
+        #file_mask:      'ICON/i?ff[0-9]_*.nc*'
+        #static_data:    ~
+
+    aladin:
+        #output:         'ALADIN/aladin_import.nc'
+        #grib_file_mask: 'ALADIN/ALADIN_GRIBS/**/*.grb'
+        #soil_depth:     'ALADIN/aladin_soil_depth.grb'
+
+    cams:
+        #file:           'CAMS'
 
 output:
     # Overwrite existing output files? Otherwise create a new file with
     # numerical suffix
     #overwrite: false
 
+    #geostrophic_wind: false #not available with all plugins
+
+    # LODs for output variables:
+    # LOD2 = 3D data (unchanged, default),
+    # LOD1 = vertical profile (via horizontal averaging).
+    lod:
+        #pt: 2
+        #qv: 2
+        #uvw: 2
+
+    #default_precision: 'f4'
+    #fill_value: -9999.0
+
     #check_mass_balance: false #re-verify final mass balance after balancing
+
+intermediate_files:
+    #after a successful stage, delete the intermediate file from the previous stage
+    delete_after_success: false
 
 domain:
     #dz: #default=dx
-    #nz: #required
+    nz: #required
     #dz_stretch_level: -1.0 #in metres
     #dz_stretch_factor: 1.0
     #dz_max: -1.0 #in metres
 
-    # minimal number of free surface canopy layers above top of terrain with
-    # building and plant canopy
+    # Check minimum number of free surface canopy layers above the top of
+    # terrain, buildings and plant canopy
     #nscl_free: 3
+
+    # Manual shift of terrain in metres. This should be equal to min(zt) of all
+    # domains. It is better to generate static drivers with such origin_z that
+    # min(zt) of all domains is 0.
+    #terrain_offset: 0    #default
+    #terrain_offset: auto #calculate from min(zt), only valid for single domain cases
+
+    # Ignore buildings in the static driver (for nscl_free and wind damping)
+    #ignore_buildings: false
 
 simulation:
     #origin_time: #default: read from static driver
     #timestep: 1 h
     #length: 1 d
 
-#radiation: #empty = off by default, switched on by tasks or manually
+    #timestep_rad: auto # default: detect from input files (if possible)
+    #timestep_rad: 10 m # explicit
+
+radiation:
+    #enabled: false #off by default, switched on by tasks or manually
+
+    #timestep: auto #default: detect from input files (if possible)
+    #timestep: 10 m #explicit
+
+    # Configure when using external radiation also for spinup (PALM default for
+    # spinup is clearsky).
+    #spinup_length: 0 h
 
 #chem_species: [] #empty list = disabled chemistry
 
-#verbosity: 1 #can be overwritten by command-line switches -v (=2) or -s (=0)
-
-# One or more tasks selected by the user will add required plugins and set
-# necessary options. Tasks typically select input meteo and/or chemistry data
-# sources.
-tasks:
-    #- wrf     # WRF meteo inputs
-    #- wrf_rad # WRF radiation inputs
-    #- icon2   # ICON inputs
-    #- aladin  # Aladin inputs
-    #- camx    # CAMx chemistry inputs
-    #- cams    # CAMS chemistry inputs
-
-# Default workflow. Currently no need to have separate workflows per task.
-# Advnanced users may skip some steps in special cases.
-#workflow:
-#    - check_config
-#    - setup
-#    - import
-#    - hinterp
-#    - vinterp
-#    - write
-
-######################### PLUGIN-SPECIFIC OPTIONS #########################
+hinterp:
+    #validate: false
+    #max_input_grid_error: 0.01
 
 vinterp:
     # Smoothing of PALM terrain for WRF vertical interpolation to avoid sharp
     # horizontal gradients. Sigma value in grid points.
     #terrain_smoothing: off
 
+    # Upper limit of vertical adaptation for terrain matching
+    # [metres above highest obstacles]
+    #transition_level: 300.0
+
+    # code used for the interpolation
+    #interpolator: prepared  #pure-Python interpolator with prepared weights (default)
+    #interpolator: metpy     #legacy interpolator from the MetPy library (slow)
+    #interpolator: fortran   #Fortran-based interpolator (fastest, must be compiled using f2py)
+
+    #wind_power_law: false #off by default
+    #wind_power_law: 0.147
+
+postproc:
+    #nox_post_sum: false
+
+compute:
+    #nthreads: 1 #number of parallel threads (currently in fortran vinterp)
+
+#verbosity: 1 #can be overwritten by command-line switches -v (=2) or -s (=0)
+#log_datetime: true #prepend each log message with date+time
+
+# Workflow: optionally select a subset of stages
+#workflow:
+#    - check_config
+#    - setup_model
+#    - import_data
+#    - hinterp
+#    - vinterp
+#    - write
+
+######################### PLUGIN-SPECIFIC OPTIONS #########################
+
 wrf:
-    # Method of stretching vertical levels before vertical interpolation in
-    # order to match the target (high-resolution) terrain, while limiting the
-    # propagation of surface features to higher levels. May be one of:
-    # universal:    A universal method where levels above transition_level are
-    #               kept unmodified while the levels below are stretched
-    #               gradually
+    # Compose continuous timeseries for the simululation using one or more
+    # forecast/assimilation cycles from the set of input files
+    assim_cycles:
+        # Interval between assimilation cycles to be used (a larger time
+        # interval can be specified in order to use every nth cycle).
+        #cycles_used: 3 h    # time interval
+        #cycles_used: single # use one specified cycle
+        #cycles_used: all    # default: use all files, assume they are continuous
+
+        # Datetime for the reference cycle from which the selected cycle
+        # intervals are counted, or the selected cycle if cycles_used=single.
+        # Default: 00:00 UTC from the first day of simulation.
+        #reference_cycle:
+
+        # Earliest horizon (time since cycle time) to be used in the
+        # simulation. If set to higher than 0, the 0th file of each cycle must
+        # still be available to load the level heights (HHL).
+        #earliest_horizon: 0 h
+
+    # Method of stretching or squeezing of the intermediate-height levels
+    # before vertical interpolation in order to match the target
+    # (high-resolution) terrain, while limiting the propagation of
+    # surface-reltaed effects to higher levels. (Do not confuse with PALM's
+    # vertically stretched grid as in dz_stretch_level and dz_stretch_factor.)
+    # May be one of:
+    # universal:    A universal method where levels above
+    #               vinterp:transition_level are kept unmodified while the
+    #               levels below are stretched/squeezed gradually.
     # hybrid:       Use the WRF hybrid vertical coordinate system from the
     #               WRFOUT input files to stretch the levels. WARNING: the WRF
     #               model must be configured to using hybrid levels, not sigma
@@ -107,13 +211,21 @@ wrf:
     #               files to stretch the levels. WARNING: the WRF model must be
     #               configured to using sigma levels, not hybrid leves, there
     #               is no check for this!
-    #vertical_stretching: universal
-    #transition_level: 2000.0 #m above origin_z
+    #vertical_adaptation: universal
 
-# The CAMx configuration uses Python formulae, so it is obviously vulnerable to
-# malicious configuration files. We assume that the users know what they are
-# doing and they do not run arbitrary code from the internet.
+    #radiation_smoothing_distance: 10000.0
+
+    rad_vars:
+        #sw_tot_h: SWDOWN #may be also SWDNB
+        #sw_dif_h: SWDDIF
+        #lw_tot_h: GLW #may be also LWDNB
+
 camx:
+    # True: model grid is Lambert Conformal Conic from the coupled WRF model.
+    # This uses bilinear inteprolation based on WRF-specific ellipsoid. False
+    # (default): use universal triangular interpolation.
+    #uses_wrf_lambert_grid: false
+
     # Python-code checks on input file variables and attributes. May also be
     # extended by individual output variables.
     #validations: []
@@ -127,118 +239,92 @@ camx:
     #preprocessors:
     #    PM25: 'PM25 = PSO4+PNO3+PNH4+POA+PEC+FPRM+SOA1+SOA2+SOA3+SOA4+SOPA+SOPB'
 
-    # Output variable definitions with units and Python formulae on loaded
-    # variables, which may optionally trigger specific preprocessors and/or
-    # validations.
-    #output_var_defs:
-    #    'NO': #NO without quotes means False in yaml!
-    #        formula: 'NO'
-    #        unit: 'ppm'
-    #        loaded_vars: ['NO']
-    #        validations:
-    #            - '_units.NO == "ppmv"'
-    #        preprocessors: []
-    #    NO2:
-    #        formula: 'NO2'
-    #        unit: 'ppm'
-    #        loaded_vars: [NO2]
-    #        validations:
-    #            - '_units.NO2 == "ppmv"'
-    #        preprocessors: []
-    #    NOX:
-    #        formula: 'NO+NO2'
-    #        unit: 'ppm'
-    #        loaded_vars: ['NO', NO2]
-    #        validations:
-    #            - '_units.NO == "ppmv"'
-    #            - '_units.NO2 == "ppmv"'
-    #        preprocessors: []
-    #    O3:
-    #        formula: 'O3'
-    #        unit: 'ppm'
-    #        loaded_vars: [O3]
-    #        validations:
-    #            - '_units.O3 == "ppmv"'
-    #        preprocessors: []
-    #    PM10:
-    #        formula: '(CPRM+PM25)*1e-9'
-    #        unit: 'kg/m3'
-    #        loaded_vars: [PSO4, PNO3, PNH4, POA, PEC, FPRM, SOA1, SOA2, SOA3,
-    #            SOA4, SOPA, SOPB, CPRM]
-    #        validations:
-    #            - '_units.PSO4 == "micrograms m-3"'
-    #            - '_units.PNO3 == "micrograms m-3"'
-    #            - '_units.PNH4 == "micrograms m-3"'
-    #            - '_units.POA == "micrograms m-3"'
-    #            - '_units.PEC == "micrograms m-3"'
-    #            - '_units.FPRM == "micrograms m-3"'
-    #            - '_units.SOA1 == "micrograms m-3"'
-    #            - '_units.SOA2 == "micrograms m-3"'
-    #            - '_units.SOA3 == "micrograms m-3"'
-    #            - '_units.SOA4 == "micrograms m-3"'
-    #            - '_units.SOPA == "micrograms m-3"'
-    #            - '_units.SOPB == "micrograms m-3"'
-    #            - '_units.CPRM == "micrograms m-3"'
-    #        preprocessors: [PM25]
-    #    PM25:
-    #        formula: 'PM25*1e-9'
-    #        unit: 'kg/m3'
-    #        loaded_vars: [PSO4, PNO3, PNH4, POA, PEC, FPRM, SOA1, SOA2, SOA3,
-    #            SOA4, SOPA, SOPB]
-    #        validations:
-    #            - '_units.PSO4 == "micrograms m-3"'
-    #            - '_units.PNO3 == "micrograms m-3"'
-    #            - '_units.PNH4 == "micrograms m-3"'
-    #            - '_units.POA == "micrograms m-3"'
-    #            - '_units.PEC == "micrograms m-3"'
-    #            - '_units.FPRM == "micrograms m-3"'
-    #            - '_units.SOA1 == "micrograms m-3"'
-    #            - '_units.SOA2 == "micrograms m-3"'
-    #            - '_units.SOA3 == "micrograms m-3"'
-    #            - '_units.SOA4 == "micrograms m-3"'
-    #            - '_units.SOPA == "micrograms m-3"'
-    #            - '_units.SOPB == "micrograms m-3"'
-    #        preprocessors: [PM25]
-
 synthetic:
-    #transition_level: 2000.0 #m above origin_z
+    #prof_vars:
+    #    u:
+    #        # The list of vertical profiles of the given quantity, either one
+    #        # profile for values constant in time or more as timesteps within
+    #        # timeseries
+    #        profiles: ~
 
-    prof_vars:
-        #u: {profiles: ~, heights: ~, timeseries: ~, times: ~}
-        #v: {profiles: ~, heights: ~, timeseries: ~, times: ~}
-        #w: {profiles: ~, heights: ~, timeseries: ~, times: ~}
-        #pt: {profiles: ~, heights: ~, timeseries: ~, times: ~}
-        #qv: {profiles: ~, heights: ~, timeseries: ~, times: ~}
-        #soil_t: {profiles: ~, heights: ~, timeseries: ~, times: ~}
-        #soil_m: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+    #        # List of heights of the vertical profile points (m above origin_z)
+    #        heights: ~
 
-    #p_surf: ~
-    #p_sl: 100000.
+    #        # If specified, allows arbitrary permutation or repetition of
+    #        # timesteps from "profiles" (using order numbers starting from 0).
+    #        # If unspecified, the profiles are taken sequentially, starting
+    #        # over from the first one if there is less of them than "times".
+    #        timeseries: ~
 
-icon2:
-    # List of assimilation cycles specified as timedeltas after midnight UTC
-    #input_assim_cycles: [0 h, 3 h, 6 h, 9 h, 12 h, 15 h, 18 h, 21 h]
+    #        # Time points for the timeseries. This may be omitted if there is
+    #        # exactly one profile (constant in time).
+    #        times: ~
 
-    # First and last forecast horizon taken from each cycle. Must match
-    # assimilation cycles in such a way that a full, continuous day is formed.
-    # For aggregated values, the last horizon is exactly 1 timestep further.
-    #input_fcst_horizon_range: [0 h, 2 h]
+    #    v: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+    #    w: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+    #    pt: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+    #    qv: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+    #    soil_t: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+    #    soil_m: {profiles: ~, heights: ~, timeseries: ~, times: ~}
 
-    #interpolation_buffer: 20.0 #km
-    #radiation_smoothing_distance: 30.0 #km
-
-    #transition_level: 2000.0 #m above origin_z
-
-    # Smoothing of PALM terrain for vertical interpolation to avoid sharp
-    # horizontal gradients. Sigma value in grid points.
-    #terrain_smoothing: off
+    #p_surf: ~ #pressure at origin_z (default: calculate from p_sl)
+    #p_sl: 100000. #sea level pressure for p_surf calculation
 
 aladin:
     #load_gribs: true
-    #vertical_stretching: universal
-    #transition_level: 2000.0 #m above origin_z
+    #vertical_adaptation: universal
 
     #radiation_smoothing_distance: 10000.0
 
     #soil_depth_default: 0.40
     #soil_avg_point: [ 14.418540, 50.073658 ]
+
+icon:
+    # Compose continuous timeseries for the simululation using one or more
+    # forecast/assimilation cycles from the set of input files
+    assim_cycles:
+        # Interval between assimilation cycles to be used (a larger time
+        # interval can be specified in order to use every nth cycle).
+        #cycles_used: 3 h    # default: time interval
+        #cycles_used: single # use one specified cycle
+
+        # Datetime for the reference cycle from which the selected cycle
+        # intervals are counted, or the selected cycle if cycles_used=single.
+        # Default: 00:00 UTC from the first day of simulation.
+        #reference_cycle:
+
+        # Earliest horizon (time since cycle time) to be used in the
+        # simulation. If set to higher than 0, the 0th file of each cycle must
+        # still be available to load the level heights (HHL).
+        #earliest_horizon: 0 h
+
+    # The disaggregated values (radiation) represent centres of intervals
+    # between timesteps, therefore to cover the full duration of the
+    # simulation, one more time interval before and after the simulation are
+    # required. Enable this to allow skipping them using extrapolation.
+    #allow_skip_first_disaggr: true
+    #allow_skip_last_disaggr: true
+
+    # Distance [km] for selecting nearby grid points usable for interpolation.
+    # Recommended value: original grid resolution × 3
+    #point_selection_buffer: 20.0
+
+    #radiation_smoothing_distance: 30.0 #km
+
+cams:
+
+winddamp:
+    # Distance in number of grid cells from the wall which have some wind
+    # damping. Cells further from the wall will have no damping.
+    #damping_dist: 2
+
+    # Distance in number of grid cells from the wall which are damped to zero.
+    # The next cells further from the wall have a damping factor which
+    # increases linearly to 1.
+    #num_zeroed: 1
+
+    # Method of staggering the damping factor for the U, V and W wind
+    # components by taking adjacent cells in the respective dimension.
+    #stagger_method: average #default
+    #stagger_method: minimum
+

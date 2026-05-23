@@ -110,6 +110,7 @@ class ICONInputData(PluginInputData):
         self.hsurf = hsurf
         self.depth_t_so = depth_t_so
         self.depth_w_so = depth_w_so
+        self.d_depth = (self.depth_t_so[1:] - self.depth_w_so) * 2.0
         self.zw_2d_te = extend_to_surface(
             cells_2d=self.zw_2d,
             surface_1d=self.hsurf,
@@ -351,7 +352,7 @@ class ICONInputData(PluginInputData):
                 )
             elif input_variable == 'W_SO':
                 netcdf_variable_name = self.get_netcdf_variable(input_variable, ncfile)
-                input_array = ncfile.variables[netcdf_variable_name][0, :, :] * 0.001
+                input_array = ncfile.variables[netcdf_variable_name][0, :, :] * 0.001 / self.d_depth[:, numpy.newaxis]  # Kg/m2 to m3/m3
                 input_array_flat = input_array.flatten(order='F')
                 crop_mask_flat = self.crop_mask_depth_w_so_2d_flat
                 timeframe = dict(

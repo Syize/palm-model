@@ -11,13 +11,13 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Run the LCZ test cases."""
 
-import os
-from typing import Generator, Tuple
+from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import pytest
@@ -28,24 +28,35 @@ from numpy import ma
 from palm_csd.create_driver import create_driver
 from palm_csd.geo_converter import GeoConverter
 from palm_csd.lcz import LCZTypes
-from tests.tools import modify_configuration, ncdf_equal
+from tests.tools import add_to_stem, modify_configuration, modify_configuration_output, ncdf_equal
 
-test_folder = "tests/98_lcz_application/"
-test_folder_ref = test_folder + "output/"
+test_folder = Path("tests/98_lcz_application/")
+test_folder_ref = test_folder / "output/"
 
 
-@pytest.fixture(scope="session")
-def create_input_data(worker_id) -> Generator[None, None, None]:
-    """Create LCZ and orography input data in geotiff format."""
+@pytest.fixture
+def configuration_dcep(request: pytest.FixtureRequest, tmp_path: Path) -> Tuple[Path, Path, Path]:
+    """Generate a configuration file with domain_root.dcep True or False."""
+    config_in = test_folder / "full_lcz.yml"
+    config_out = tmp_path / f"full_lcz_dcep_{request.param}.yml"
+    file_out = f"lcz_dcep_{request.param}"
+    file_ref = test_folder_ref / f"lcz_dcep_{request.param}"
+
+    to_set = [(["output", "file_out"], file_out)]
+    to_set.extend([(["domain", "dcep"], request.param)])
+    to_set.extend([(["input", "path"], str(tmp_path))])
+
+    modify_configuration(config_in, config_out, to_set=to_set)
+    modify_configuration_output(config_out, config_out, tmp_path)
+
+    # Create input data
     # LCZ values
     lcz_index: ma.MaskedArray = ma.MaskedArray(np.full((4, 10), 17, dtype=np.uint8))
     lcz_index[1:3, 1:9] = np.arange(1, 17, 1, dtype=np.uint8).reshape((2, 8))
     lcz_types = LCZTypes("summer", True)
     lcz_rgb = lcz_types.lcz_index_to_rgb(lcz_index)
 
-    # with pytest-xdist, every worker executes this fixture once
-    # so give each worker different output files
-    lcz_output = test_folder + f"{worker_id}_lcz.tif"
+    lcz_output = tmp_path / "lcz.tif"
     with rio.open(
         lcz_output,
         "w",
@@ -64,9 +75,7 @@ def create_input_data(worker_id) -> Generator[None, None, None]:
     for iy, ix in np.ndindex(zt.shape[1:]):
         zt[0, iy, ix] += iy * 0.5 + ix * 1.0
 
-    # with pytest-xdist, every worker executes this fixture once
-    # so give each worker different output files
-    zt_output = test_folder + f"{worker_id}_zt.tif"
+    zt_output = tmp_path / "zt.tif"
     with rio.open(
         zt_output,
         "w",
@@ -79,45 +88,21 @@ def create_input_data(worker_id) -> Generator[None, None, None]:
         transform=riotf.from_origin(12.99, 52.01, 0.0005, 0.0005),
     ) as output_file:
         output_file.write(zt)
-    yield
-    # delete generated files
-    os.remove(lcz_output)
-    os.remove(zt_output)
 
-
-@pytest.fixture
-def configuration_dcep(request, worker_id) -> Generator[Tuple[str, str, str], None, None]:
-    """Generate a configuration file with domain_root.dcep True or False."""
-    config_in = test_folder + "full_lcz.yml"
-    config_out = test_folder + f"full_lcz_dcep_{request.param}.yml"
-    file_out = f"lcz_dcep_{request.param}"
-    file_ref = test_folder_ref + f"lcz_dcep_{request.param}"
-
-    to_set = [(["output", "file_out"], file_out)]
-    to_set.extend([(["domain_root", "dcep"], request.param)])
-    to_set.extend([(["input_01", "file_zt"], f"{worker_id}_zt.tif")])
-    to_set.extend([(["input_01", "file_lcz"], f"{worker_id}_lcz.tif")])
-
-    modify_configuration(config_in, config_out, to_set=to_set)
-    yield config_out, test_folder + file_out, file_ref
-    os.remove(config_out)
+    return config_out, tmp_path / file_out, file_ref
 
 
 @pytest.mark.parametrize("configuration_dcep", [True, False], indirect=True)
-@pytest.mark.usefixtures("config_counters", "create_input_data")
-def test_lcz_run(configuration_dcep):
+@pytest.mark.usefixtures("config_counters")
+def test_lcz_run(configuration_dcep: Tuple[Path, Path, Path]):
     """Run the LCZ test case and compare with correct output."""
     create_driver(configuration_dcep[0], verbose={"gis": True})
 
-    output_root = configuration_dcep[1] + "_root"
-    output_root_ref = configuration_dcep[2] + "_root"
+    output_root = add_to_stem(configuration_dcep[1], "_root")
+    output_root_ref = add_to_stem(configuration_dcep[2], "_root")
 
     assert ncdf_equal(
         output_root_ref,
         output_root,
         metadata_significant_digits=10,
     ), "Root driver does not comply with reference"
-
-    os.remove(output_root)
-    os.remove(configuration_dcep[1] + "_lcz-reprojected_root.tif")
-    os.remove(configuration_dcep[1] + "_zt-reprojected_root.tif")

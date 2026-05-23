@@ -32,18 +32,20 @@
 #%project_account     <project-account>
 #%submit_command      /opt/moab/default/bin/msub -E
 #
-%c_compiler_name     @CMAKE_C_COMPILER@
-%compiler_name       @MPI_Fortran_COMPILER@
-%compiler_name_ser   @CMAKE_Fortran_COMPILER@
-%cpp_options         @PALM_CPP_OPTIONS_STR@
-%make_options        -j @PALM_CORES@
-%c_compiler_options  @PALM_C_COMPILER_OPTIONS@
-%compiler_options    @PALM_COMPILER_OPTIONS@
-%linker_options      @PALM_LINKER_OPTIONS@
-%execute_command     @PALM_EXECUTE_COMMAND@ ./palm
-#%memory              2300
-#%module_commands     module switch craype-ivybridge craype-haswell; module load fftw cray-hdf5-parallel cray-netcdf-hdf5parallel
-#%login_init_cmd      .execute_special_profile
+%c_compiler_name         @CMAKE_C_COMPILER@
+%compiler_name           @MPI_Fortran_COMPILER@
+%compiler_name_ser       @CMAKE_Fortran_COMPILER@
+%cpp_options             @PALM_CPP_OPTIONS_STR@
+%make_options            -j @PALM_CORES@
+%c_compiler_options      @PALM_C_COMPILER_OPTIONS@
+%compiler_options_rrtmg  @RRTMG_COMPILER_OPTIONS@
+%compiler_options        @PALM_COMPILER_OPTIONS@
+%linker_options_rrtmg    @RRTMG_LINKER_OPTIONS@
+%linker_options          @PALM_LINKER_OPTIONS@
+%execute_command         @PALM_EXECUTE_COMMAND@ ./palm
+#%memory                 2300
+#%module_commands         module switch craype-ivybridge craype-haswell; module load fftw cray-hdf5-parallel cray-netcdf-hdf5parallel
+#%login_init_cmd          .execute_special_profile
 #
 #-------------------------------------------------------------------------------
 # Directives to be used for batch jobs

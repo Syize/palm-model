@@ -21,11 +21,11 @@ allow_negative_scalar_values:
   category: General Settings
   type: L
   default:
-    value: .F.
+    value: .T.
   description:
     short: Parameter to steer the treatment of negative scalar values.
     long: |
-      Due to numerical dispersion errors caused by non-monotone discretization of the advection term, numerical oscillations occur near strong gradients. This sometimes results in negative values of the scalar. By default, scalars are constrained to positive values (>= 0), i.e., in case a negative value appears after time stepping, the scalar value at a respective grid point is reset to *0.1* times the scalar value before the timestep. However, this way, the total scalar amount is not conserved any more and my increase during the simulation. With [allow_negative_scalar_values](#initialization_parameters--allow_negative_scalar_values) = *.T.*, negative scalar values are accepted and the total amount of the scalar in a source/sink-free domain is conserved during the simulation.
+      Due to numerical dispersion errors caused by non-monotone discretization of the advection term, numerical oscillations occur near strong gradients. This sometimes results in negative values of the scalar. If requested, scalars are constrained to positive values (>= 0) by setting this parameter to *.F.*, i.e., in case a negative value appears after time stepping, the scalar value at a respective grid point is reset to *0.1* times the scalar value before the timestep. However, this way, the total scalar amount is not conserved any more and may increase during the simulation. With the default value [allow_negative_scalar_values](#initialization_parameters--allow_negative_scalar_values) = *.T.*, negative scalar values are accepted and the total amount of the scalar in a source/sink-free domain is conserved during the simulation.
 
       This option only becomes active for scalars that do not interact with the flow, i.e. for passive scalars (see [passive_scalar](#initialization_parameters--passive_scalar)), chemical species, and aerosols. Furthermore, also potential temperature, humidity, cloud-physical quantities, and the SGS-TKE are still constrained to positive values.
 
@@ -38,7 +38,7 @@ allow_roughness_limitation:
   description:
     short: Parameter to define if automatic limitation of roughness lenghts shall be applied.
     long: |
-      Application of Monin-Obukhov similarity requires the roughness length $z_0$ to be smaller than the surface layer height $z_{mo}$ (which is assumed as half the grid spacing in normal direction to the respective surface), because otherwise functions like $ln \frac{z_{mo}}{z_0}$ give wrong results. It is automatically checked if roughness lengths for momentum, temperature, and mositure are $\le 0.5 z_{mo}$ and the run is automatically aborted, if this condition is violated. Setting [allow_roughness_limitation](#initialization_parameters--allow_roughness_limitation) = *.T.* automatically limits the roughness lengths to $0.5 z_{mo}$ and continues the run.
+      Application of Monin-Obukhov similarity requires the roughness length $z_0$ to be smaller than the surface layer height $z_{mo}$ (which is assumed as half the grid spacing in normal direction to the respective surface), because otherwise functions like $ln \frac{z_{mo}}{z_0}$ give wrong results. It is automatically checked if roughness lengths for momentum, temperature, and moisture are $\le 0.5 z_{mo}$ and the run is automatically aborted, if this condition is violated. Setting [allow_roughness_limitation](#initialization_parameters--allow_roughness_limitation) = *.T.* automatically limits the roughness lengths to $0.5 z_{mo}$ and continues the run.
 
 
 alpha_surface:
@@ -168,17 +168,17 @@ bc_p_b:
   description:
     short: Bottom boundary condition of the perturbation pressure.
     long: |
-      Depending on the given value, the boundary condition is applied at the model domain bottom, i.e. at grid level `k=0`. Since vertical velocity is zero at the rigid lower boundary (`w(k=0) = 0.0`), the consistent Neumann condition [bc_p_b](#initialization_parameters--bc_p_b) = *'neumann'* (i.e. $\frac{\partial p}{\partial z} = 0$) should be used, which leaves the vertical component `w` unchanged at this level, when the pressure solver is applied. However, at elevated physical surfaces, i.e. terrain or buildings, no pressure boundary condition is applied at all. Simultaneous use of the Neumann boundary conditions both at the bottom and at the top boundary ([bc_p_t](#initialization_parameters--bc_p_t)) is allowed and recommended.
+      Depending on the given value, the boundary condition is applied at the model domain bottom, i.e. at grid level `k=0`. Since vertical velocity is zero at the rigid lower boundary (`w(k=0) = 0.0`), the consistent Neumann condition [bc_p_b](#initialization_parameters--bc_p_b) = *'neumann'* (i.e. $\frac{\partial p}{\partial z} = 0$) should be used, which leaves the vertical component `w` unchanged at this level, when the pressure solver is applied. At elevated physical surfaces, i.e. terrain or buildings, a Neumann boundary condition is implicitly used ([psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*), or no pressure boundary condition is applied at all ([psolver](#initialization_parameters--psolver) = *'poisfft'* or *'poisfft_sm'*). Simultaneous use of the Neumann boundary conditions both at the bottom and at the top boundary ([bc_p_t](#initialization_parameters--bc_p_t)) is allowed and recommended.
 
       **Note:**
-      In case of simultaneous use of Neumann boundary conditions both at the top and bottom, the the multigrid solver (see [psolver](#initialization_parameters--psolver) = *'multigrid'*) calculates the perturbation pressure except for a (non-determined) constant offset. The global average value of perturbation pressure remains arbitrary. The convergence rate of the multigrid solver is usually lower than for mixed Dirichlet/Neumann conditions. Proper adjustment of steering parameters for the multigrid method may help to improve the convergence. In case of output of pressure perturbation data, you may remove the global offset manually.
+      In case of simultaneous use of Neumann boundary conditions both at the top and bottom, the multigrid solvers (see [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*) calculate the perturbation pressure except for a (non-determined) constant offset. The global average value of perturbation pressure remains arbitrary. The convergence rate of the multigrid solver is usually lower than for mixed Dirichlet/Neumann conditions. Proper adjustment of steering parameters for the multigrid method may help to improve the convergence. In case of output of pressure perturbation data, you may remove the global offset manually.
   allowed_values:
     - value: dirichlet
       description: |
         A Dirichlet condition is applied with `p(k=0) = 0.0`.
     - value: neumann
       description: |
-        A zero-gradient Neumann is applied at the model bottom, i.e. `p(k=0) = p(k=1)`.
+        A zero-gradient Neumann is applied at the bottom boundary, i.e. `p(k=0) = p(k=1)`.
 
 
 bc_p_t:
@@ -192,9 +192,7 @@ bc_p_t:
     long: |
       Depending on the given value, the boundary condition is applied at the model domain top, i.e. at `k=nz+1`. For more information on pressure boundary conditions see [bc_p_b](#initialization_parameters--bc_p_b).
 
-      In case that the multigrid solver is used (see [psolver](#initialization_parameters--psolver)), the default value is set to *'dirichlet'*.
-
-      In case of nested runs, the default value of [bc_p_t](#initialization_parameters--bc_p_t) in the nest domains is not *'dirichlet'* but *'neumann'* instead, which will be set automatically. For the root domain of a nested run the default is 'dirichlet' as usual. For child domains see the note that is given for [bc_p_b](#initialization_parameters--bc_p_b).
+      In case of nested runs, [bc_p_t](#initialization_parameters--bc_p_t) = *'neumann'* is automatically set.
 
       **Attention:**
       The chosen value of [bc_p_t](#initialization_parameters--bc_p_t) heavily effects the mean vertical profile of the perturbation pressure.
@@ -204,7 +202,7 @@ bc_p_t:
         A Dirichlet condition is applied with `p(k=nz+1) = 0.0`.
     - value: neumann
       description: |
-        A zero-gradient Neumann is applied at the model top, i.e. `p(k=nz+1) = p(k=nz`).
+        A zero-gradient Neumann is applied at the top boundary, i.e. `p(k=nz+1) = p(k=nz`).
 
 bc_pt_b:
   category: Boundary Conditions
@@ -812,15 +810,15 @@ dt:
     long: |
       By default, the length of the time step is automatically determined after each time step based on stability criteria (e.g. Courant Friedrichs Levy (CFL) criterion, diffusion criterion, etc.). The respectiv value is then used for the next step. The actual value depends on these criteria and the parameter [cfl_factor](#initialization_parameters--cfl_factor), which in turn depends on [timestep_scheme](#initialization_parameters--timestep_scheme).
 
-      If [dt](#initialization_parameters--dt) is assigned a value, then the time step is fixed to this value throughout the whole run (whether it fulfills the time step criteria or not). However, changes are allowed for restart runs ([dt](#initialization_parameters--dt) can also be used as a runtime parameter).
+      If [dt](#initialization_parameters--dt) has been set, the time step is fixed to that value throughout the run (whether it fulfills the time step criteria or not). However, changes are allowed for restart runs. ([dt](#initialization_parameters--dt) can also be used as a runtime parameter).
 
       In case that the automatically calculated time step meets the condition: [dt](#initialization_parameters--dt) < 0.00001 * [dt_max](#runtime_parameters--dt_max),
-      the simulation will be aborted. Such situations usually arise in case of any numerical problem / instability which causes a non-realistic increase of the wind speed.
+      the simulation will be aborted. Such situations usually arise in case of any numerical problem / instability which causes a non-realistic increase of the velocity.
 
       For flat terrain and horizontally homogeneous setups with cyclic boundary conditions the automatically calculated time step may be enlarged by using a coordinate transformation (see [galilei_transformation](#initialization_parameters--galilei_transformation)), in order to save CPU time.
 
       **Warning:** <br>
-      The simulation will crash in case of a fixed [dt](#initialization_parameters--dt), if the given value violates the time step criteria at any time throughout the run. Even worse, the simulation may continue to run up to the end, producing `NaN` data, if you have not switched on the floating point error detection by setting a respective compiler option (e.g. `-fpe0` for the Intel compiler). You should first run the case without setting [dt](#initialization_parameters--dt), check the minimum time step througout the simulation, and then choose a [dt](#initialization_parameters--dt smaller than that minimum.
+      The simulation will crash in case of a fixed [dt](#initialization_parameters--dt), if the given value violates the time step criteria at any time throughout the run. Even worse, the simulation may continue to run up to the end, producing `NaN` data, if floating point error detection has not been activated (see [recommended compiler options](../../../Guide/LES_Model/Recommended_compiler_options)). First run the case without setting [dt](#initialization_parameters--dt), check the minimum time step throughout the simulation, and then choose a [dt](#initialization_parameters--dt) smaller than the determined minimum.
 
 
 dt_pr_1d:
@@ -1388,7 +1386,7 @@ loop_optimization:
   allowed_values:
     - value: 'cache'
       description: |
-         All prognostic equations are solved within one big loop over the two horizontal indices `i` and `j` for a good cache utilization. This setting is recommended for all Intel/AMD/ARM based processors.
+         All prognostic equations are solved within one big loop over the two horizontal indices `i` and `j` for a good cache utilization. This setting is recommended for all cache based processors (like e.g. Intel/AMD/ARM).
     - value: 'vector'
       description: |
         Single 3d-loops are used to calculate each tendency term of each prognostic equation. This allows for long vectors and is recommended for vector processors (e.g. NEC, but also for GPUs).
@@ -1410,23 +1408,29 @@ masking_method:
   category: Numerics
   type: L
   default:
-    value: .F.
+    value: .T.
   description:
-    short: Switch for topography pressure boundary conditions in case of [psolver](#initialization_parameters--psolver) = *'multigrid_noopt'*.
+    short: Switch for pressure boundary conditions at walls or boundaries in case of [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*.
     long: |
-      In case of topography, by default, the pressure solvers (see [psolver](#initialization_parameters--psolver)) are running 'through' the topography, which means that no pressure boundary conditions are considered at the respective topography/wall surfaces (topography is masked).
-
-      For [psolver](#initialization_parameters--psolver) = *'multigrid_noopt'* Neumann boundary conditions for perturbation pressure are used by default at all wall boundaries. In case of [masking_method](#initialization_parameters--masking_method) = *.T.*, this solver runs through the topography like it is done for all other pressure solvers that are available.
-
       **Note:** <br>
-      [masking_method](#initialization_parameters--masking_method) only has an effect if [psolver] (#initialization_parameters--psolver) = *'multigrid_noopt'*, otherwise masking is always used.
+      Setting of [masking_method](#initialization_parameters--masking_method) = *.T.* is only recommended in case that model results shall be compared with runs that used [psolver](#initialization_parameters--psolver) = *'poisfft'* or *'poisfft_sm'*, or to compare results with those from earlier PALM releases.
 
-      **Remarks:** <br>
-      In case of very complex topography, including narrow street canyons or complex shapes resolved by only a few grid points, the use of [psolver](#initialization_parameters--psolver) = *'multigrid_noopt'* in combination with [masking_method](#initialization_parameters--masking_method) = *.F.* can lead to a blow up of wind velocity.
-      A possible workaround to prevent such velocity blow-up is to preprocess the topography by filling holes and removing complex shapes on the small scale before running the LES. (This approach should have no significant effect on the flow field, as in LES the flow in such regions is poorly resolved and do not yield to reliable physical information.)
+      By default, the multigrid pressure solvers are using a Neumann boundary condition at any wall or non-cyclic boundary (except if bottom or/and top boundary conditions are explicitly set via parameters [bc_p_b](#initialization_parameters--bc_p_b) or/and [bc_p_t](#initialization_parameters--bc_p_t)). This way, obstacles or boundaries are well represented, and the velocity divergence at walls and boundaries (after the pressure correction step) is kept small. The multigrid solvers do not solve for pressure at grid points inside obstacles.
 
-      If topography is prescribed and [psolver](#initialization_parameters--psolver) = *'multigrid_noopt'*, the mean velocity-divergence reduction (see [RUN_CONTROL](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#RUN_CONTROL)) is smaller in case of [masking_method](#initialization_parameters--masking_method) = *.T.* compared to *.F.* (about one-order of magnitude). This smaller reduction can be attributed to wall-bounded grid points, where the divergence after pressure correction remains significantly larger in case of masking, while the divergence reduction for non-wall-bounded grid points is similar in both cases. However, validation tests revealed that this smaller divergence reduction has no significant effect on the resulting flow.
+      With [masking_method](#initialization_parameters--masking_method) = *.T.*, obstacles are not represented via boundary conditions but by setting ("masking") the velocity divergence to zero at grid points within obstacles. Here the pressure solution is provided for all grid points, i.e. the solvers are running 'through' the topography. This way, the velocity divergence at walls  (after the pressure correction step) is often reduced only marginally (compared to the predictor step), which may effect the quality of the advection schemes (they assume a velocity field free of divergence). The way of representing obstacles by masking the divergence at respective grid points is always used by the FFT-solver (see [psolver](#initialization_parameters--psolver) = *'poisfft'* or *'poisfft_sm'*).
 
+
+max_mg_grid_levels:
+  category: Numerics
+  type: I
+  default:
+    value: ~
+  description:
+    short: Maximum number of grid levels allowed for the multigrid Poisson solver.
+    long: |
+      This parameter can be used to restrict the number of grid levels to be used in the multigrid-solver (see [psolver](#initialization_parameters--psolver) = *'poismg'* or *'poismg_noopt'*). By default, the solver automatically calculates and sets the number of possible grid levels. The more levels used, the better the reduction of divergence on the largest spatial scales.
+      
+      There are special cases where the local reduction of divergence can be improved by using less grid levels than possible, because on coarser grid levels building / topography structures may disappear and this may increase the divergence of the velocity field in such areas (which in turn may e.g. effect the scalar conservation). In such cases, explicit setting of [max_mg_grid_levels](#initialization_parameters--max_mg_grid_levels) to a smaller value than automatically calculated may improve the velocity divergence and e.g. the scalar conservation. A test simulation may has to be carried out to determine the number of grid levels that is automatically calculated. [max_mg_grid_levels](#initialization_parameters--max_mg_grid_levels) must be smaller or equal than this value. Be aware, that reducing the number of possible grid levels will worsen the reduction of divergence on the largest spatial scales.
 
 mg_cycles:
   category: Numerics
@@ -1451,12 +1455,12 @@ mg_switch_to_pe0_level:
   description:
     short: Multigrid level at which data shall be gathered on PE0.
     long: |
-      In case of a parallel run and [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*, the value of this parameter defines on which multigrid level the data are gathered on PE0 in order to allow for a further coarsening of the grid. The finest grid defines the largest grid level. If [mg_switch_to_pe0_level](#initialization_parameters--mg_switch_to_pe0_level) = *0*, the gathering level is determined automatically and displayed in file [RUN_CONTROL](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#RUN_CONTROL). It is only possible to gather data from a level larger than the one determined automatically. A test run may be necessary to determine this level.
+      In case of a parallel run and [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*, the value of this parameter defines on which multigrid level data is gathered on PE0 in order to allow for a further coarsening of the grid. The finest grid defines the largest grid level. If [mg_switch_to_pe0_level](#initialization_parameters--mg_switch_to_pe0_level) = *0*, the gathering level is determined automatically and displayed in file [RUN_CONTROL](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#RUN_CONTROL). It is only possible to gather data from a level larger than the one determined automatically. A test run may be necessary to determine this level.
 
       Default setting is [mg_switch_to_pe0_level](#initialization_parameters--mg_switch_to_pe0_level) = *-1*, which prevents that data are collected on PE0 at all, i.e. coarsening of grids is limited by what the subdomains allow.
 
       **Note:** <br>
-      The default setting is significantly faster compared to automatically determining or explicitly prescribing [mg_switch_to_pe0_level](#initialization_parameters--mg_switch_to_pe0_level). Even though the divergence reduction of the multigrid solver is slightly smaller with the default setting, gathering on PE0 does not justify the additional cost so far.
+      The default setting is significantly faster compared to automatically determining or explicitly prescribing [mg_switch_to_pe0_level](#initialization_parameters--mg_switch_to_pe0_level). Even though the divergence reduction of the multigrid solver is smaller with the default setting, gathering on PE0 usually does not justify the additional costs.
 
 
 mixing_length_1d:
@@ -1497,7 +1501,10 @@ momentum_advec:
         **Note**: Due to the larger stencil of this scheme (which extends over seven grid points) vertical grid stretching should be limited. With respect to the stencil and the domain decomposition, the scheme requires three ghost layers at the subdomain boundaries along x and y, so small subdomains (less than about $15 \times 15$ grid points along x and y) will require an excessively large number of ghost points. As a consequence, the time for exchanging ghost point data via the communication network may drastically increase and so decrease the computational performance.
     - value: 'pw-scheme'
       description: |
-        The 2^nd^ order scheme of Piacsek and Williams (1970, J. Comp. Phys., 6, 392-405) with central differences in the form C3 is used. The drop-off in the energy spectrum is not as strong as for [momentun_advec](#initialization_parameters--momentum_advec) = *'ws-scheme'*, but the dispersion error is much stronger. In the vicinity of strong gradients, the scheme of Piacsek and Williams tends to produce so-called $2\Delta$ wiggles, which are well visible in results, e.g. at building corners.
+        The 2^nd^ order scheme of Piacsek and Williams (1970, J. Comp. Phys., 6, 392-405) with central differences in the form C3 is used. The drop-off in the energy spectrum is not as strong as for [momentun_advec](#initialization_parameters--momentum_advec) = *'ws-scheme'*, but the dispersion error is much stronger. In the vicinity of strong gradients, the scheme of Piacsek and Williams tends to produce so-called $2\Delta$ wiggles, which are well visible in results, e.g. at building corners, but also at non-cyclic lateral boundaries if Dirichlet boundary conditions are used.
+        
+        **Note:** The Piacsek and Williams scheme should only be used for test purposes, e.g. in order to compare results with those from other advection schemes. It is not recommended to be used for regular runs.
+
     - value: 'up-scheme'
       description: |
         1^st^ order upwind scheme. The upstream scheme guarantees a stable solution only in combination with [timestep_scheme](#initialization_parameters--timestep_scheme) = *'euler'*. Note, this scheme is very diffusive, and hence, not well-suited for turbulence-resolving simulations.
@@ -1569,9 +1576,35 @@ ngsrb:
   description:
     short: Number of Gauss-Seidel iterations to be carried out on each grid level of the multigrid Poisson solver.
     long: |
-      In case of using the multigrid method for solving the Poisson equation for perturbation pressure (see [psolver](#initialization_parameters--psolver)), this parameter defines the number of Gauss-Seidel iterations to be carried out on each grid level. High values of [ngsrb](#initialization_parameters--ngsrb) give better convergence. The default value of *2* reduces the divergence of the preliminary velocity field by about 1-2 orders of magnitude, which is sufficient in most cases.
+      In case of using the multigrid method for solving the Poisson equation for perturbation pressure (see [psolver](#initialization_parameters--psolver)), this parameter defines the number of Gauss-Seidel iterations to be carried out on each grid level. High values of [ngsrb](#initialization_parameters--ngsrb) give better convergence. The default value of *2* should reduce the divergence of the preliminary velocity field by about 1-2 orders of magnitude, which is sufficient in most cases. On the coarsest grid level, the number of Gauss-Seidel iterations is automatically increased by a factor of *2* to get better convergence on the largest spatial scales. At model initialization and during the first time steps [ngsrb](#initialization_parameters--ngsrb) = [ngsrb_initial](#initialization_parameters--ngsrb_initial) is used to reduce large values of divergence that sometimes appear with initial velocity fields (e.g. in case of buildings / orography near boundaries). The time during which [ngsrb_initial](#initialization_parameters--ngsrb_initial) is used is defined by [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps).
 
       ***Note:*** The value of [ngsrb](#initialization_parameters--ngsrb) has a significant effect on the CPU requirement of the run.
+
+
+ngsrb_initial:
+  category: Numerics
+  type: I
+  default:
+    value: 100
+  description:
+    short: Number of Gauss-Seidel iterations to be carried out on each grid level of the multigrid Poisson solver during initial time steps.
+    long: |
+      The number of initial time steps for that [ngsrb_initial](#initialization_parameters--ngsrb_initial) is used is defined via [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps).
+      
+      [ngsrb_initial](#initialization_parameters--ngsrb_initial) is only applied at the beginning of initial runs.
+
+
+ngsrb_initial_timesteps:
+  category: Numerics
+  type: I
+  default:
+    value: 0
+  description:
+    short: Number of initial timesteps during which [ngsrb_initial](#initialization_parameters--ngsrb_initial) is used.
+    long: |
+      When the default value [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps) = *0* is set, [ngsrb_initial](#initialization_parameters--ngsrb_initial) is used when the pressure solver is called for the first time (i.e. during initialization, before the time stepping) to remove the divergence from the initial velocity field.
+
+      In addition, during the initial time interval defined by [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps), a residual threshold given via [residual_limit](#initialization_parameters--residual_limit) is not strictly enforced (see [residual_limit](#initialization_parameters--residual_limit)).
 
 
 nsor:
@@ -1702,12 +1735,17 @@ outflow_damping_factor:
   type: R
   default:
     value: 0.0
+  si-unit: s^-1^
   description:
     short: Factor for damping the 3d-field of u, v, w and pt near the outflow boundary.
     long: |
       If a non-zero value is assigned to [outflow_damping_factor](#initializing_parameters--outflow_damping_factor), a Rayleigh-damping is applied to all velocity components and the potential temperature near the outflow boundary in case that non-cyclic lateral boundary conditions ([bc_lr](#initialization_parameters--bc_lr) = 'dirichlet/radiation', [bc_lr](#initialization_parameters--bc_lr) = 'radiation/dirichlet', [bc_ns](#initialization_parameters--bc_ns) = 'dirichlet/radiation', or [bc_ns](#initialization_parameters--bc_ns) = 'radiation/dirichlet') are used.
 
-      The method removes possible spurious jets that are directed into the domain, which may be produced by the radiation boundary condition if a wall normal velocity component at the outflow plane is directed into the domain. This may happen due to turbulent fluctuations or due to recirculations behind buildings/topography near the outflow. With this method the turbulent fluctuations or local recirculations will vanish so that no negative wall normal velocities can occur.
+      The method removes possible spurious jets that are directed into the domain, which may be produced by the radiation boundary condition if a wall normal velocity component at the outflow plane is directed into the domain. This may happen due to turbulent fluctuations or due to recirculations behind buildings/topography near the outflow. With this method the turbulent fluctuations or local recirculations will vanish so that no negative wall normal velocities can occur. 
+      
+      The method can also be used to damp gravity waves at the outflow. For effective gravity wave damping refer to the recommendations in [Khan (2025)](https://doi.org/10.5194/wes-10-1167-2025).
+
+      The [outflow_damping_factor](#initializing_parameters--outflow_damping_factor) must be larger than zero. Large values (close to 1.0) may cause numerical instabilities.
 
       If switched on, u, v, w and pt are forced towards the respective value of its basic state (defined by the initial profile), similar to the Rayleigh-damping that can be applied at the domain top (see [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor)) or the pt-damping that can be apllied at the inflow boundary (see [pt_damping_factor](#initialization_parameters--pt_damping_factor)). The intensity of the damping is controlled by the value of [outflow_damping_factor](#initializing_parameters--outflow_damping_factor). The damping starts weakly at a distance from the outflow boundary defined by [outflow_damping_width](#initialization_parameters--outflow_damping_width) and rises according to a sin^2^-function to its maximum value at the outflow.
 
@@ -1766,11 +1804,13 @@ psolver:
   description:
     short: Scheme to be used to solve the Poisson equation for the perturbation pressure.
     long: |
-      Solution of the Poisson equation is required after each time step (or partial time steps in the Runge-Kutta schemes) in order to keep the velocity field free of divergence.
+      Solution of the Poisson equation is required after each time step (or partial time steps in the Runge-Kutta schemes) in order to keep the velocity field free of divergence. The principle method to obtain a velocity field free of divergence is based on predictor/corrector steps. In the predictor step, the Navier-Stokes equation is solved without the pressure gradient term. The divergence of the resulting preliminary velocity field enters the right hand side of the Poisson equation for pressure. The pressure solution, i.e. the resulting pressure gradients are then used in a corrector step to get a final velocity field free of divergence.
 
-      In principle, the so-called masking method is used, meaning that the schemes run 'through' the topography/buildings, so topography flags are completely ignored (i.e. not used) and pressure boundary conditions at walls are ignored (except at the bottom surface at grid point `k`= *0*). Divergence for grid points within topography/buildings are set to zero and wall normal velocities at surface grid points are set to zero after the pressure correction has been carried out. Because of that, the divergence reduction in the vicinity of walls is less effective. For [psolver](#initialization_parameters--psolver) = *'multigrid_noopt'* the masking method can be switched off with setting [masking_method](#initialization_parameters--masking_method) = *.F.*. However, in that case pressure boundary conditions at walls are currently not well defined, so using this setting is not recommended.
+      The direct Poisson solvers ([psolver](#initialization_parameters--psolver) = *'poisfft'* or *'poisfft_sm'*) are using the so-called masking method, meaning that the schemes run 'through' the topography/buildings, so topography flags are completely ignored (i.e. not used) and pressure boundary conditions at walls are ignored (except at the bottom surface at grid point `k`= *0*). Divergence for grid points within topography/buildings are set ("masked") to zero and wall normal velocities at surface grid points are set to zero after the pressure correction has been carried out. Because of that, the divergence reduction in the vicinity of walls is less effective. In the iterative solvers ([psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*), Neumann conditions for pressure are used by default at walls in wall normal direction. This way, walls are represented in a physically correct way, and the velocity divergence near walls is significantly reduced after the corrector step. For comparison purposes, the masking method can be switched on for the multigrid solvers by setting [masking_method](#initialization_parameters--masking_method) = *.T.*.
 
-      In case of using a multistep Runge-Kutta time step scheme (see [timestep_scheme](#initialization_parameters--timestep_scheme)), the Poisson equation is by default solved after each of the substeps. In order to speed-up performance, it may be solved only for the last substep (see [call_psolver_at_all_substeps](#initialization_parameters--call_psolver_at_all_substeps)), but in general, the divergence reduction then might not be sufficient enough, resulting in a blow-up of velocities.
+      In case of using a multistep Runge-Kutta time step scheme (see [timestep_scheme](#initialization_parameters--timestep_scheme)), the Poisson equation is by default solved after each of the substeps. In order to speed-up performance, it may be solved only for the last substep (see [call_psolver_at_all_substeps](#initialization_parameters--call_psolver_at_all_substeps)), but in general, the divergence reduction after the corrector step might not be sufficient enough, resulting in a blow-up of velocities or violation of scalar budgets.
+
+      **Note:** For simulations with orography / buildings [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'* is strongly recommended.
   allowed_values:
     - value: 'poisfft'
       description: |
@@ -1790,25 +1830,25 @@ psolver:
         Respective error messages will be issued in case that the above restrictions are violated.
     - value: 'multigrid'
       description: |
-        Iterative multigrid scheme. v- and w-cycles (see [cycle_mg](#initialization_parameters--cycle_mg)) are implemented. The convergence of the iterative scheme can be steered by the number of v-/w-cycles to be carried out for each call of the scheme ([mg_cycles](#initialization_parameters--mg_cycles)) and by the number of Gauss-Seidel iterations (see [ngsrb](#initialization_parameters--ngsrb)) to be carried out on each grid level. Instead, the requested accuracy can be given via [residual_limit](#initialization_parameters--residual_limit). The smaller this limit is, the more cycles have to be carried out and the number of cycles may vary from time step to time step. Because of possible excessive CPU time demands using [residual_limit](#initialization_parameters--residual_limit) is not recommended in general.
+        Iterative multigrid scheme. v- and w-cycles (see [cycle_mg](#initialization_parameters--cycle_mg)) are implemented. The convergence of the iterative scheme can be steered by the number of v-/w-cycles to be carried out for each call of the scheme ([mg_cycles](#initialization_parameters--mg_cycles)) and by the number of Gauss-Seidel iterations (see [ngsrb](#initialization_parameters--ngsrb)) to be carried out on each grid level. Instead, the requested accuracy can be given via [residual_limit](#initialization_parameters--residual_limit). The smaller this limit is, the more cycles have to be carried out and the number of cycles may vary from time step to time step. This may cause excessive CPU time demands if [residual_limit](#initialization_parameters--residual_limit) has not been carefully chosen.
 
-        If [mg_cycles](#initialization_parameters--mg_cycles) is set to its optimal value, the computing time of the multigrid scheme amounts approximately to that of the direct solver *'poisfft'* as long as the number of grid points in the three spatial directions corresponds to a power-of-two (2^n^) where n >= *5* must hold. With large n, the multigrid scheme can even be faster than the direct solver (although its accuracy is several orders of magnitude worse, but this does not affect the accuracy of the simulation). Nevertheless, test runs may have to be carried out in order to find out the optimum value for [mg_cycles](#initialization_parameters--mg_cycles), because the CPU time of a run very critically depends on this parameter.
+        If [mg_cycles](#initialization_parameters--mg_cycles) is set to its optimal value, the computing time of the multigrid scheme amounts approximately to that of the direct solver *'poisfft'* as long as the number of grid points in the three spatial directions corresponds to a power-of-two (2^n^) where n >= *5* must hold. With large n, the multigrid scheme can even be faster than the direct solver (although its accuracy is some orders of magnitude worse, but normally this does not affect the accuracy of the simulation). Nevertheless, test runs may have to be carried out in order to find out the optimum value for [mg_cycles](#initialization_parameters--mg_cycles), because the CPU time of a run very critically depends on this parameter.
 
         This scheme requires that the number of grid points of the subdomains (or of the total domain, if only one PE is used) along each of the directions can, at least, be divided once by 2 without rest. A further side condition arising from performance optimizations is that the number of grid points along z on the coarsest grid level must not be an odd number. If this is the case, the number of possible grid levels along z is reduced by one. For example, if nz(level 1) = 150 and nz(level 2) = 75 (odd number) it results in no possible grid coarsening (only one grid level possible), while nz(level 1) = 152,  nz(level 2) = 76, nz(level 3) = 38, nz(level 4) = 19 results in 3 possible multigrid levels.
 
+        The number of automatically calculated grid levels can be restricted via parameter [max_mg_grid_levels](#initialization_parameters--max_mg_grid_levels). This may improve the solution of the pressure solver (e.g. gives a better reduction of divergence) in cases where obstactles or buildings "disappear" on the coarser grid levels.
+
         With parallel runs, starting from a certain grid level the data of all subdomains can be gathered on PE0 in order to allow for a further coarsening of the grid. The grid level for gathering can be manually set by [mg_switch_to_pe0_level](#initialization_parameters--mg_switch_to_pe0_level).
 
-        *'multigrid'* is highly optimized for better performance. Data along the `k` index (vertical direction) is sorted from alternate even and odd indices into two blocks of completely even and odd indices respectively, which allows vectorization on INTEL processors of loops in the red/black scheme. Additionally, topography flags are completely ignored (i.e. not used) meaning that setting of [masking_method](#initialization_parameters--masking_method) = *.F.* is ignored. On fine grid levels only even or odd data are send via the lateral ghost point exchange. Speedup of the multigrid solver for medium sized cases (1024*1024*192 grid points) can be about 40% compared to *'multigrid_noopt'*.
+        *'multigrid'* is highly optimized for better performance. Data along the `k` index (vertical direction) is sorted from alternate even and odd indices into two blocks of completely even and odd indices respectively, which allows vectorization of loops in the red/black scheme for compilers that don't support to vectorize loops with stride 2. On fine grid levels only even or odd data are send via the lateral ghost point exchange. Speedup of the multigrid solver for medium sized cases (1024*1024*192 grid points) can be about 40% compared to *'multigrid_noopt'*, depending very much on the respective compiler.
     - value: 'multigrid_noopt'
       description: |
-        Similar as *'multigrid'*, but less optimized. However, in contrast to *'multigrid'*, *'multigrid_noopt'* allows [masking_method](#initialization_parameters--masking_method) = *.F.*, i.e. setting of Neumann boundary conditions for the perturbation pressure at all wall boundaries.
-
-        **Please note:** In combination with [masking_method](#initialization_parameters--masking_method) = *.F.*, the *'multigrid_noopt'* can lead to a blow-up of wind velocity in case of narrow street canyons or complex building shapes resolved by only a few grid points, because of over-determination of perturbation pressure. Please see further [remarks](../../tec/bugs/#remark1).
+        Similar as *'multigrid'*, but without the even/odd optimization.
     - value: 'sor'
       description: |
-        Successive over-relaxation method (SOR). The convergence of this iterative scheme is steered with the parameters [omega_sor](#initialization_parameters--omega_sor), [nsor_ini](#initialization_parameters-nsor_ini) and [nsor](#initialization_parameters--nsor).
+        Successive over-relaxation method (SOR). The convergence of this iterative scheme is steered with the parameters [omega_sor](#initialization_parameters--omega_sor), [nsor_ini](#initialization_parameters--nsor_ini) and [nsor](#initialization_parameters--nsor).
 
-        Compared to the direct method and the multigrid method, this scheme needs substantially more computing time. It should only be used for test runs, e.g. to compare results with the other pressure solver methods.
+        Compared to the direct method and the multigrid method, this scheme needs substantially more computing time. It should only be used for test runs, e.g. to compare results with the other pressure solver methods. It only works for flat terrain with cyclic horizontal boundary conditions.
 
 
 pt_damping_factor:
@@ -1816,6 +1856,7 @@ pt_damping_factor:
   type: R
   default:
     value: 0.0
+  si-unit: s^-1^
   description:
     short: Factor for damping the 3d-field of potential temperature.
     long: |
@@ -1823,7 +1864,9 @@ pt_damping_factor:
 
       If switched on, the temperature is forced towards the value of its basic state (defined by the initial profile of the temperature). The intensity of damping is controlled by the value of [pt_damping_factor](#initializing_parameters--pt_damping_factor). The damping starts weakly at a distance from the inflow boundary defined by [pt_damping_width](#initialization_parameters--pt_damping_width) and rises according to a sin^2^-function to its maximum value at the inflow.
 
-      This method effectively damps gravity waves at the inflow boundary in case of non-cyclic lateral boundary conditions (see [bc_lr](#initialization_parameters--bc_lr) or [bc_ns](#initialization_parameters--bc_ns)). If the damping factor is too weak, gravity waves can still emerge within the damping area. If the damping factor is too strong, gravity waves may develop directly downstream of the damping area.
+      This method effectively damps gravity waves at the inflow boundary in case of non-cyclic lateral boundary conditions (see [bc_lr](#initialization_parameters--bc_lr) or [bc_ns](#initialization_parameters--bc_ns)). If the damping factor is too weak, gravity waves can still emerge within the damping area. If the damping factor is too large, gravity waves may develop directly downstream of the damping area. For effective gravity wave damping refer to the recommendations in [Khan (2025)](https://doi.org/10.5194/wes-10-1167-2025).
+
+      The [outflow_damping_factor](#initializing_parameters--outflow_damping_factor) must be larger than zero. Large values (close to 1.0) may cause numerical instabilities.
 
       Note that the method has no effect if [turbulent_inflow_mehod](#turbulent_inflow_parameters--turbulent_inflow_mehod) = *'absolute_value'* or [turbulent_inflow_mehod](#turbulent_inflow_parameters--turbulent_inflow_mehod) = *'absolute_value_thermodynamic'*.
 
@@ -2069,14 +2112,15 @@ rayleigh_damping_factor:
   type: R
   default:
     value: 0.0
+  si-unit: s^-1^
   description:
     short: Factor for Rayleigh damping.
     long: |
       A so-called Rayleigh damping is applied to all prognostic variables if a non-zero value is assigned to [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor). If switched on, horizontal velocities, temperature, humidity/scalar (if switched on) and salinity (in case of ocean mode) are forced towards the value of their respective basic states (defined by the initial profiles of the geostrophic wind, temperature, etc., or in case of offline nesting, defined by the current mean of wind components, temperature, etc. of the mesoscale model). In case of large-scale subsidence (see [subs_vertical_gradient](#initialization_parameters--subs_vertical_gradient)) the basic state of temperature and humidity is adjusted with respect to the subsidence. Scalar quantities can be excluded from the damping (see [scalar_rayleigh_damping](#initialization_parameters--scalar_rayleigh_damping)). The intensity of damping is controlled by the value the [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor) is assigned to. The damping starts weakly at a height defined by [rayleigh_damping_height](#initialization_parameters--rayleigh_damping_height) and rises according to a sin^2^-function to its maximum value at the top (ocean: bottom) boundary.
 
-      This method effectively damps gravity waves, caused by boundary layer convection, which may spread out vertically in the inversion layer and which are reflected at the top (ocean: bottom) boundary.
+      This method effectively damps gravity waves, caused by boundary layer convection or by topography, which may spread out vertically in the inversion layer and which are reflected at the top (ocean: bottom) boundary.
 
-      The Rayleigh damping factor must hold the condition *0.0* <= [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor) <= *1.0*. Large values (close to 1.0) may cause numerical instabilities.
+      The Rayleigh damping factor must be larger than zero. Large values (close to 1.0) may cause numerical instabilities. For effective gravity wave damping refer to the recommendations in [Khan (2025)](https://doi.org/10.5194/wes-10-1167-2025).
       
       Rayleigh damping is not allowed if the geostrohic wind controller is enabled (see [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller)).
 
@@ -2132,14 +2176,17 @@ residual_limit:
   category: Numerics
   type: R
   default:
-    value: 1.0E-4
-  si-unit: s^-2^m^-3^
+    value: 1.0E-6
+  si-unit: s^-1^
   description:
     short: Largest residual permitted for the multigrid scheme.
     long: |
-      This is a parameter to steer the accuracy of the multigrid scheme (see [psolver](#initialization_parameters--psolver) = *'multigrid'*). The divergence of the 3D velocity field will be reduced iteratively as long as the calculated residual is greater than [residual_limit](#initialization_parameters--residual_limit). After a maximum number of 1000 iterative cycles, PALM aborts with a corresponding error message.
+      The residual is defined as the square root of the sum (over all grid points) of the squared values (L2 norm) of the difference between the left and right hand side of the Poisson equation using the final pressure solution, devided by the number of grid points. This is a parameter to steer the accuracy of the multigrid scheme (see [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*). The divergence of the 3D velocity field will be reduced iteratively as long as the calculated residual is greater than [residual_limit](#initialization_parameters--residual_limit). If this threshold is not reached after a maximum number of 1000 iterative cycles, PALM aborts with a corresponding error message. This threshold is not taken into account during initial time steps set via [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps). During these intial time steps, a maximum of 100 cycles is performed (or less, if the threshold has been reached before), and the simulation is continued afterwards.
 
-      The reciprocal value of this parameter can be interpreted as a factor by which the divergence of the provisional velocity field is approximately reduced after the multigrid scheme has been applied (thus, the default value causes a reduction of the absolute value of divergence by approx. 6 orders of magnitude).
+      With the given default value the multigrid solver usually reduces the divergence of the velocity field by about 4 orders of magnitude at least (but this may depend on other model settings, e.g. the grid spacing). Test runs may be required to find an appropriate limit which reduces the divergence by the desired order of magnitude. To decrease the divergence by one more order of magnitude requires to decrease [residual_limit](#initialization_parameters--residual_limit) by one order of magnitude.
+      
+      **Important:** <br>
+      To activate usage of this parameter additionally requires to set [mg_cycles](#initialization_parameters--mg_cycles) = *-1*.
 
 
 restart_data_format:
@@ -2217,7 +2264,7 @@ roughness_length:
   description:
     short: Roughness length assumed for the surface layer.
     long: |
-      The [roughness_length](#initialization_parameters--roughness_length) has to be smaller than the height of the constant flux layer that is used, which is defined by `dz/2`.
+      The [roughness_length](#initialization_parameters--roughness_length) must be > *0.0*. Furthermore, it has to be smaller than the height of the constant flux layer that is used, which is defined by `dz/2`.
 
       The roughness length for scalars can be assigned a value different from the one for momentum (see [z0h_factor](#initialization_parameters--z0h_factor)).
 
@@ -2316,7 +2363,7 @@ scalar_rayleigh_damping:
   description:
     short: Application of Rayleigh damping to scalars.
     long: |
-      With Rayleigh damping switched on (see [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor)), this parameter determines if the damping is applied also to scalars (temperature, humidity/scalar, salinity) or to the horizontal velocity components only.
+      With Rayleigh damping switched on (see [rayleigh_damping_factor](#initialization_parameters--rayleigh_damping_factor)), this parameter determines if the damping is applied also to scalars (temperature, humidity/scalar, salinity) or to the velocity components only.
 
 
 spinup_time:
@@ -2378,7 +2425,7 @@ statistic_regions:
     long: |
       By default, vertical profiles and other statistical quantities are calculated as horizontal and/or volume average of the total model domain. Beyond that, these calculations can also be carried out for subdomains which can be defined using the array `rmask` within the user-defined software (see [user-defined domains](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/userint/subd)). The number of these subdomains is determined with the parameter [statistic_regions](#initialization_parameters--statistic_regions). Maximum 9 additional subdomains are allowed. The parameter [region](#user_parameters--region) can be used to assign names (identifier) to these subdomains which are then used in the headers of the output files and plots.
 
-      Data for the total domain and all defined subdomains are output to the same file(s) ([DATA_1D_PR_NETCDF](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#DATA_1D_PR_NETCDF), [DATA_1D_TS_NETCDF](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#DATA_1D_TS_NETCDF)). In case of [statistic_regions](#initialization_parameters-statistic_regions) > 0, data for the different domains can be distinguished by a suffix which is appended to the quantity names. Suffix 0 means data for the total domain, suffix 1 means data for subdomain 1, etc.
+      Data for the total domain and all defined subdomains are output to the same file(s) ([DATA_1D_PR_NETCDF](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#DATA_1D_PR_NETCDF), [DATA_1D_TS_NETCDF](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#DATA_1D_TS_NETCDF)). In case of [statistic_regions](#initialization_parameters--statistic_regions) > 0, data for the different domains can be distinguished by a suffix which is appended to the quantity names. Suffix 0 means data for the total domain, suffix 1 means data for subdomain 1, etc.
 
 
 subs_vertical_gradient:
@@ -2543,7 +2590,7 @@ topography:
   description:
     short: Topography mode.
     long: |
-      Alternatively to the available Topography modes explained below, the user may add code to the user interface subroutine [user_init_grid](https://palm.muk.uni-hannover.de/trac/browser/palm/trunk/SOURCE/user_init_grid.f90) to allow further topography modes. These require to explicitly set the [topography_grid_convention](#initialization_parameters-topography_grid_convention) to either *'cell_edge'* or *'cell_center'* .
+      Alternatively to the available Topography modes explained below, the user may add code to the user interface subroutine [user_init_grid](https://palm.muk.uni-hannover.de/trac/browser/palm/trunk/SOURCE/user_init_grid.f90) to allow further topography modes. These require to explicitly set the [topography_grid_convention](#initialization_parameters--topography_grid_convention) to either *'cell_edge'* or *'cell_center'* .
 
       Non-flat topography modes allow to assign a sensible [wall_heatflux](#initialization_parameters--wall_heatflux), a [wall_humidityflux](#initialization_parameters--wall_humidityflux) (requires [humidity](#initialization_parameters--humidity) = *.T.*), or a [wall_scalarflux](#initialization_parameters--wall_scalarflux) (requires [passive_scalar](#initialization_parameters--passive_scalar) = *.T.*) at the five topography faces using the respective parameters.
 
@@ -2903,7 +2950,7 @@ use_fixed_time:
   description:
     short: Switch to fix the time of day within a simulation.
     long: |
-      If [use_fixed_time](#initialization_parameters--use_fixed_time) = *.T.*, the time of day does not change during a simulation, i.e. the internal clock would always show the value set by [origin_date_time](#initialization_parameters-origin_date_time). This results in the sun having a fixed position during the simulation.
+      If [use_fixed_time](#initialization_parameters--use_fixed_time) = *.T.*, the time of day does not change during a simulation, i.e. the internal clock would always show the value set by [origin_date_time](#initialization_parameters--origin_date_time). This results in the sun having a fixed position during the simulation.
 
 
 use_free_convection_scaling:
@@ -3153,7 +3200,7 @@ wall_humidityflux:
       |[wall_humidityflux](#initialization_parameters--wall_humidityflux)(4) |northward facing |
       |[wall_humidityflux](#initialization_parameters--wall_humidityflux)(5) |downward facing  |
 
-      This parameter applies only in case of a non-flat topography and [humidity](#initialization_parameters--humidity) = *.T.*. Prescribing [wall_humidityflux](#initialization_parameters--wall_humidityflux) additionally requires setting of [surface_waterflux](#initialization_parameters--surface_waterflux). Furthermore, please note that wall_humidityflux(0) only describes the kinematic flux for upward facing surfaces at non-zero height, because only those surfaces are assumed to represent walls. At zero-height (bottom surface of the model) the kinematic flux is given by [surface_waterflux](#initialization_parameters-surface_waterflux) instead.
+      This parameter applies only in case of a non-flat topography and [humidity](#initialization_parameters--humidity) = *.T.*. Prescribing [wall_humidityflux](#initialization_parameters--wall_humidityflux) additionally requires setting of [surface_waterflux](#initialization_parameters--surface_waterflux). Furthermore, please note that wall_humidityflux(0) only describes the kinematic flux for upward facing surfaces at non-zero height, because only those surfaces are assumed to represent walls. At zero-height (bottom surface of the model) the kinematic flux is given by [surface_waterflux](#initialization_parameters--surface_waterflux) instead.
 
 
 wall_scalarflux:

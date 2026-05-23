@@ -12,7 +12,7 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2021  Leibniz Universitaet Hannover
+# Copyright 1997-2025  Leibniz Universitaet Hannover
 # ------------------------------------------------------------------------------ #
 #
 # Description:
@@ -30,12 +30,9 @@ attributes:
   location: T
   site: Test
   institution: Company A, City, Country
-  palm_version: 6.0
 
 settings:
   rotation_angle: 0.0
-  lai_roof_intensive: 1.5
-  lai_roof_extensive: 3.0
   lai_high_vegetation_default: 6.0
   lai_low_vegetation_default: 3.0
   lad_alpha: 5.0
@@ -57,39 +54,36 @@ domain_root:
   ny: 9
   dz: 1.0
   bridge_depth: 3.0
-  buildings_3d: False
-  allow_high_vegetation: True
+  generate_buildings_3d: False
+  replace_high_vegetation_types: False
   generate_vegetation_patches: False
   use_palm_z_axis: False
   interpolate_terrain: False
-  vegetation_on_roofs: False
-  street_trees: False
+  generate_single_trees: False
   overhanging_trees: False
 
-input_01:
+input:
   path: ./
-  pixel_size: 1.0
-  file_x_UTM: test_data.nc
-  file_y_UTM: test_data.nc
-  file_lat: test_data.nc
-  file_lon: test_data.nc
-  file_zt: test_data.nc
-  file_buildings_2d: test_data.nc
-  file_building_id: test_data.nc
-  file_building_type: test_data.nc
-  file_bridges_2d: test_data.nc
-  file_bridges_id: test_data.nc
-  file_lai: test_data.nc
-  file_vegetation_type: test_data.nc
-  file_vegetation_height: test_data.nc
-  file_pavement_type: test_data.nc
-  file_water_type: test_data.nc
-  file_soil_type: test_data.nc
-  file_street_type: test_data.nc
-  file_street_crossings: test_data.nc
-  file_tree_height: test_data.nc
-  file_tree_crown_diameter: test_data.nc
-  file_tree_trunk_diameter: test_data.nc
-  file_tree_type: test_data.nc
-  file_patch_height: test_data.nc
-  file_vegetation_on_roofs: test_data.nc
+  files:
+    x_utm: test_data.nc
+    y_utm: test_data.nc
+    lat: test_data.nc
+    lon: test_data.nc
+    zt: test_data.nc
+    buildings_2d: test_data.nc
+    building_id: test_data.nc
+    building_type: test_data.nc
+    bridges_2d: test_data.nc
+    bridges_id: test_data.nc
+    lai: test_data.nc
+    vegetation_type: test_data.nc
+    pavement_type: test_data.nc
+    water_type: test_data.nc
+    soil_type: test_data.nc
+    street_type: test_data.nc
+    street_crossings: test_data.nc
+    tree_height: test_data.nc
+    tree_crown_diameter: test_data.nc
+    tree_trunk_diameter: test_data.nc
+    tree_type: test_data.nc
+    vegetation_height: test_data.nc

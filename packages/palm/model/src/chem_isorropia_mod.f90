@@ -249,20 +249,20 @@
     INTEGER(iwp) ::  k_user     !< user (isorropia) index
 !
 !-- Derived thermodynamic state.
-    REAL(KIND=dp) ::  relative_humidity  !< RH
-    REAL(KIND=dp) ::  temperature        !< cell temperature
+    REAL(KIND=wp) ::  relative_humidity  !< RH
+    REAL(KIND=wp) ::  temperature        !< cell temperature
    
-    REAL(KIND=dp), ALLOCATABLE, DIMENSION(:) ::  gasphase_species  !< gasphase speceies concentrations
+    REAL(KIND=wp), ALLOCATABLE, DIMENSION(:) ::  gasphase_species  !< gasphase speceies concentrations
 !
 !-- ISORROPIA subroutine arguments.
     CHARACTER(LEN=isr_scasi_len) ::  case_identifier  !<
 
-    REAL(KIND=dp), DIMENSION(isr_num_aerliq) ::  aqueous_aerosol_concentrations  !< aerliq
-    REAL(KIND=dp), DIMENSION(isr_num_other)  ::  diagnostic_data                 !< other
-    REAL(KIND=dp), DIMENSION(isr_num_gas)    ::  gas_concentrations              !< gas
-    REAL(KIND=dp), DIMENSION(isr_num_w)      ::  precursors                      !< wi
-    REAL(KIND=dp), DIMENSION(isr_num_aersld) ::  solid_aerosol_concentrations    !< aersld
-    REAL(KIND=dp), DIMENSION(isr_num_w)      ::  total_concentrations            !< wt
+    REAL(KIND=wp), DIMENSION(isr_num_aerliq) ::  aqueous_aerosol_concentrations  !< aerliq
+    REAL(KIND=wp), DIMENSION(isr_num_other)  ::  diagnostic_data                 !< other
+    REAL(KIND=wp), DIMENSION(isr_num_gas)    ::  gas_concentrations              !< gas
+    REAL(KIND=wp), DIMENSION(isr_num_w)      ::  precursors                      !< wi
+    REAL(KIND=wp), DIMENSION(isr_num_aersld) ::  solid_aerosol_concentrations    !< aersld
+    REAL(KIND=wp), DIMENSION(isr_num_w)      ::  total_concentrations            !< wt
 
     
 !
@@ -295,11 +295,11 @@
                 precursors(k_species) = ppm_to_molm3( precursors(k_species), temperature, hyp(k) )
              ENDDO
 
-             total_concentrations           = 0.0_dp
-             gas_concentrations             = 0.0_dp
-             aqueous_aerosol_concentrations = 0.0_dp
-             solid_aerosol_concentrations   = 0.0_dp
-             diagnostic_data                = 0.0_dp
+             total_concentrations           = 0.0_wp
+             gas_concentrations             = 0.0_wp
+             aqueous_aerosol_concentrations = 0.0_wp
+             solid_aerosol_concentrations   = 0.0_wp
+             diagnostic_data                = 0.0_wp
 
 !
 !--          Call to ISORROPIA solver.
@@ -355,7 +355,7 @@
 !
 !-- Arguments in order of appearance
     LOGICAL                     ::  has_species     !< whether cell contains gas phase species; output
-    REAL(KIND=dp), DIMENSION(:) ::  concentrations  !< gas phase species concentrations
+    REAL(KIND=wp), DIMENSION(:) ::  concentrations  !< gas phase species concentrations
     INTEGER(iwp)                ::  k               !< cell index
     INTEGER(iwp)                ::  j               !< cell index
     INTEGER(iwp)                ::  i               !< cell index
@@ -366,7 +366,7 @@
 
 !
 !-- Reset gas psecies concentrations.
-    concentrations = 0.0_dp
+    concentrations = 0.0_wp
 
     DO  k_species = 1, nspec
         concentrations(k_species) = chem_species(k_species)%conc(k,j,i)
@@ -392,8 +392,8 @@
 !
 !-- Arguents in order of appearance.
     LOGICAL                     ::  has_precursor   !< whether cell contains precursors; output
-    REAL(KIND=dp), DIMENSION(:) ::  precursors      !< precursor concentrations
-    REAL(KIND=dp), DIMENSION(:) ::  concentrations  !< gas phase species concentrations
+    REAL(KIND=wp), DIMENSION(:) ::  precursors      !< precursor concentrations
+    REAL(KIND=wp), DIMENSION(:) ::  concentrations  !< gas phase species concentrations
 !
 !-- Local variables.
     INTEGER(iwp) ::  i        !< generic counter
@@ -404,7 +404,7 @@
 
 !
 !-- Reset precursor concentrations.
-    precursors = 0.0_dp
+    precursors = 0.0_wp
 !
 !-- Accumulate precursors.
     DO  k = 1, isr_num_w
@@ -455,10 +455,10 @@
     IMPLICIT NONE
 !
 !-- Arguments in order of appearance.
-    REAL(KIND=dp) ::  molm3        !< concentration in mol/m3
-    REAL(KIND=dp) ::  ppm          !< concentration in ppm
-    REAL(KIND=dp) ::  temperature  !< thermodynamic state
-    REAL(KIND=dp) ::  pressure  
+    REAL(KIND=wp) ::  molm3        !< concentration in mol/m3
+    REAL(KIND=wp) ::  ppm          !< concentration in ppm
+    REAL(KIND=wp) ::  temperature  !< thermodynamic state
+    REAL(KIND=wp) ::  pressure  
 
 
     molm3 = 1.0E-6 * ppm * pressure / ( rgas_univ * temperature )
@@ -479,10 +479,10 @@
     IMPLICIT NONE
 !
 !-- Arguments in order of appearance.
-    REAL(KIND=dp) ::  ppm          !< concentration in ppm
-    REAL(KIND=dp) ::  molm3        !< concentration in mol/m3
-    REAL(KIND=dp) ::  temperature  !< thermodynamic state
-    REAL(KIND=dp) ::  pressure  
+    REAL(KIND=wp) ::  ppm          !< concentration in ppm
+    REAL(KIND=wp) ::  molm3        !< concentration in mol/m3
+    REAL(KIND=wp) ::  temperature  !< thermodynamic state
+    REAL(KIND=wp) ::  pressure  
 
 
     ppm = 1.0E6 * molm3 * ( rgas_univ * temperature ) / pressure

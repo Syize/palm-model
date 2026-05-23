@@ -20,5 +20,8 @@
 ## SLUrb quantities
 {{ include_palm_output_quantities('output_quantities', scopes=['slurb_model'], types=['3d-array', '2d-array'], show_remarks=True) }}
 
+## Transport quantities
+{{ include_palm_output_quantities('output_quantities', scopes=['traffic_model'], types=['3d-array'], show_remarks=True) }}
+
 ## UV quantities
 {{ include_palm_output_quantities('output_quantities', scopes=['uv_radiation'], types=['2d-array'], show_remarks=True) }}

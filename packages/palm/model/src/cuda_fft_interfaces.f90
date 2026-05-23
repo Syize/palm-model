@@ -80,6 +80,29 @@
     END INTERFACE CUFFTDESTROY
 
 
+    INTERFACE CUFFTEXECC2R
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+! ------------
+!> @todo Missing subroutine description.
+!--------------------------------------------------------------------------------------------------!
+       SUBROUTINE CUFFTEXECC2R( plan, idata, odata ) BIND( C, name='cufftExecC2R' )
+
+          USE ISO_C_BINDING
+          USE kinds
+
+          COMPLEX(sp), DEVICE   ::  idata(:,:,:)  !<
+
+          INTEGER(C_INT), VALUE ::  plan          !<
+
+          REAL(sp), DEVICE      ::  odata(:,:,:)  !<
+
+       END SUBROUTINE CUFFTEXECC2R
+
+    END INTERFACE CUFFTEXECC2R
+
+
     INTERFACE CUFFTEXECZ2D
 
 !--------------------------------------------------------------------------------------------------!
@@ -101,6 +124,30 @@
        END SUBROUTINE CUFFTEXECZ2D
 
     END INTERFACE CUFFTEXECZ2D
+
+
+    INTERFACE CUFFTEXECR2C
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+! ------------
+!> @todo Missing subroutine description.
+!--------------------------------------------------------------------------------------------------!
+       SUBROUTINE CUFFTEXECR2C( plan, idata, odata ) bind( C, name='cufftExecR2C' )
+
+          USE ISO_C_BINDING
+
+          USE kinds
+
+          COMPLEX(sp), DEVICE   ::  odata(:,:,:)  !<
+
+          INTEGER(C_INT), VALUE ::  plan          !<
+
+          REAL(sp), DEVICE      ::  idata(:,:,:)  !<
+
+       END SUBROUTINE CUFFTEXECR2C
+
+    END INTERFACE CUFFTEXECR2C
 
 
     INTERFACE CUFFTEXECD2Z

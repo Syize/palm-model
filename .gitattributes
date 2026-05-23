@@ -8,3 +8,17 @@ packages/**/*.nc filter=lfs diff=lfs merge=lfs -text
 packages/**/*.grb filter=lfs diff=lfs merge=lfs -text
 packages/**/*.db filter=lfs diff=lfs merge=lfs -text
 packages/**/*.xlsx filter=lfs diff=lfs merge=lfs -text
+packages/dynamic_driver/palm_meteo/tests/integration_tests/simple_wrf/**/* filter=lfs diff=lfs merge=lfs -text
+packages/dynamic_driver/palm_meteo/tests/integration_tests/synthetic/**/* filter=lfs diff=lfs merge=lfs -text
+packages/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+packages/**/*.xz filter=lfs diff=lfs merge=lfs -text
+packages/**/*.cpg filter=lfs diff=lfs merge=lfs -text
+packages/**/*.dbf filter=lfs diff=lfs merge=lfs -text
+packages/**/*.prj filter=lfs diff=lfs merge=lfs -text
+packages/**/*.shp filter=lfs diff=lfs merge=lfs -text
+packages/**/*.shx filter=lfs diff=lfs merge=lfs -text
+packages/**/*.qmd filter=lfs diff=lfs merge=lfs -text
+packages/**/*.qgz filter=lfs diff=lfs merge=lfs -text
+packages/static_driver/palm_csd/tests/95_single_trees/output/**/* filter=lfs diff=lfs merge=lfs -text
+packages/static_driver/palm_csd/tests/98_lcz_application/output/**/* filter=lfs diff=lfs merge=lfs -text
+packages/static_driver/palm_csd/tests/99_full_application/output/**/* filter=lfs diff=lfs merge=lfs -text

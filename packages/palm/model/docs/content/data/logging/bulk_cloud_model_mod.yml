@@ -74,3 +74,9 @@ BCM0011:
   description: |
     It is necessary to turn on [humidity](../Namelists/#initialization_parameters--humidity) for the use of cloud physics.
 
+BCM0012:
+  loglevel: ERROR
+  message: |
+    bulk_cloud_model = .T. not allowed with the mesoscale nesting
+  description: |
+    Usage of cloud physics in case of [mesoscale nesting](../Namelists/#initialization_parameters) is not implemented so far.

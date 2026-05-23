@@ -44,6 +44,18 @@ c_vef*:
     coverage of the land surface with vegetation
   remarks: ''
 
+diss:
+  scope:
+    - palm_core
+  type:
+    - 3d-array
+    - masked array
+  si-unit: m^2^s^-3^
+  description: |
+    TKE dissipation rate
+  remarks: |
+    In LES mode `diss` is the subgrid-scale (SGS) TKE dissipation, in RANS mode it is the total TKE dissipation.
+
 div_new:
   scope:
     - palm_core
@@ -1216,60 +1228,60 @@ rtm_rad_outsw_<d>:
   remarks: |
     <d> is one of the directions: up, down, south, north, west, or east. If no resolved-scale buildings or canopies are defined in the static driver, output will contain fill values only.
 
-rtm_rad_pc_inlw_<d>:
+rtm_rad_pc_inlw:
   scope:
     - radiative_transfer_model
   type:
     - 3d-array
-  si-unit: W m^-2^
+  si-unit: W m^-3^
   description: |
     LW radiation absorbed by plant canopy
   remarks: |
-    <d> is one of the directions: up, down, south, north, west, or east. If no resolved-scale buildings or canopies are defined in the static driver, output will contain fill values only.
+    If no resolved-scale plant canopies are defined in the static driver, output will contain fill values only.
 
-rtm_rad_pc_insw_<d>:
+rtm_rad_pc_insw:
   scope:
     - radiative_transfer_model
   type:
     - 3d-array
-  si-unit: W m^-2^
+  si-unit: W m^-3^
   description: |
     SW radiation absorbed by plant canopy
   remarks: |
-    <d> is one of the directions: up, down, south, north, west, or east. If no resolved-scale buildings or canopies are defined in the static driver, output will contain fill values only.
+    If no resolved-scale plant canopies are defined in the static driver, output will contain fill values only.
 
-rtm_rad_pc_inswdif_<d>:
+rtm_rad_pc_inswdif:
   scope:
     - radiative_transfer_model
   type:
     - 3d-array
-  si-unit: W m^-2^
+  si-unit: W m^-3^
   description: |
     diffuse solar SW radiation absorbed by plant canopy
   remarks: |
-    <d> is one of the directions: up, down, south, north, west, or east. If no resolved-scale buildings or canopies are defined in the static driver, output will contain fill values only.
+    If no resolved-scale plant canopies are defined in the static driver, output will contain fill values only.
 
-rtm_rad_pc_inswdir_<d>:
+rtm_rad_pc_inswdir:
   scope:
     - radiative_transfer_model
   type:
     - 3d-array
-  si-unit: W m^-2^
+  si-unit: W m^-3^
   description: |
     direct solar SW radiation absorbed by plant canopy
   remarks: |
-    <d> is one of the directions: up, down, south, north, west, or east. If no resolved-scale buildings or canopies are defined in the static driver, output will contain fill values only.
+    If no resolved-scale plant canopies are defined in the static driver, output will contain fill values only.
 
-rtm_rad_pc_inswref_<d>:
+rtm_rad_pc_inswref:
   scope:
     - radiative_transfer_model
   type:
     - 3d-array
-  si-unit: W m^-2^
+  si-unit: W m^-3^
   description: |
     reflected SW radiation absorbed by plant canopy
   remarks: |
-    <d> is one of the directions: up, down, south, north, west, or east. If no resolved-scale buildings or canopies are defined in the static driver, output will contain fill values only.
+    If no resolved-scale plant canopies are defined in the static driver, output will contain fill values only.
 
 rtm_rad_reslw_<d>:
   scope:
@@ -2804,6 +2816,46 @@ ti:
   si-unit: s^-1^
   description: |
     curl of velocity vector (magnitude)
+  remarks: ''
+
+trm_tend_wind_front:
+  scope:
+    - traffic_model
+  type:
+    - 3d-array
+  si-unit: m/s^2
+  description: |
+    wind tendency induced by front of the cars
+  remarks: ''
+
+trm_tend_wind_side:
+  scope:
+    - traffic_model
+  type:
+    - 3d-array
+  si-unit: m/s^2
+  description: |
+    wind tendency induced by side of the cars
+  remarks: ''
+
+trm_tend_wind_top:
+  scope:
+    - traffic_model
+  type:
+    - 3d-array
+  si-unit: m/s^2
+  description: |
+    wind tendency induced by roof of the cars
+  remarks: ''
+
+trm_tend_theta:
+  scope:
+    - traffic_model
+  type:
+    - 3d-array
+  si-unit: K/s
+  description: |
+    potential temperature tendency induced by heat produced by cars
   remarks: ''
 
 tsurf*:

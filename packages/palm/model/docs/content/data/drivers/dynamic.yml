@@ -1,0 +1,1543 @@
+---
+#-------------------------------------------------------------------------------
+# Global netCDF Attributes
+#-------------------------------------------------------------------------------
+#global_attributes:
+global_attributes:
+  origin_lat:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: degree
+    description:
+      short: Geographical latitude in degrees north.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** This attribute defines latitude of the south border of the model domain. Note, that if the same attribute is given in the [static driver](../static/#static), it will affect the simulation (see [origin_lat](../static/#static--global_attribute--origin_lat)).
+
+  origin_lon:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: degree
+    description:
+      short: Geographical longitude in degrees west.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** This attribute defines longitude of the west border of the model domain. Note, that if the same attribute is given in the [static driver](../static/#static), it will affect the simulation (see [origin_lon](../static/#static--global_attribute--origin_lon)).
+
+  origin_time:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: s
+    description:
+      short: Origin time of the dynamic input data.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** Origin time of the dynamic driver data. Date and time for the model start is set via namelist parameter [origin_date_time](../../../Namelists/#initialization_parameters--origin_date_time).
+
+  origin_x:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: m
+    description:
+      short: E-UTM coordinate of the respective UTM zone.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** This attribute defines E-UTM coordinate of the west border of the model domain. Note, that if the same attribute is given in the [static driver](../static/#static), it will affect the simulation (see [origin_x](../static/#static--global_attribute--origin_x)).
+
+  origin_y:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: m
+    description:
+      short: N-UTM coordinate of the respective UTM zone.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** This attribute defines N-UTM coordinate of the west border of the model domain. Note, that if the same attribute is given in the [static driver](../static/#static), it will affect the simulation (see [origin_y](../static/#static--global_attribute--origin_x)).
+
+  origin_z:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: m
+    description:
+      short: z-coordinate of the bottom model boundary.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** This attribute defines z-coordinate of the bottom model boundary.
+
+  rotation_angle:
+    type: NC_FLOAT
+    mandatory: false
+    si-unit: degrees
+    description:
+      short: rotation angle of the model domain.
+      long: |
+        **This metadata information is purely informative and is not used in the model.** This attribute defines the clockwise rotation angle of the model domain. Note, that if the same attribute is given in the [static driver](../static/#static), it will affect the simulation (see [rotation_angle](../static/#static--global_attribute--rotation_angle)).
+
+#-------------------------------------------------------------------------------
+# netCDF Dimensions
+#-------------------------------------------------------------------------------
+dimensions:
+  time:
+    mandatory: false
+    size:
+      value_of: "time indices"
+    description:
+      short: Number of time indices.
+      long: |
+        The number of time indices given in the dynamic driver.
+        Time values can be given via variable [time](#dynamic--variable--time).
+        The time values in the dynamic driver file must cover the entire simulation time (last time value >= [end_time](#../../../Namelists/runtime_parameters--end_time)).
+
+  time_inflow:
+    mandatory: false
+    size:
+      value_of: "time indices for turbulent inflow data"
+    description:
+      short: Number of time indices for turbulent inflow data.
+      long: |
+        Time dimension of turbulent inflow data for high temporal resolution. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = 'read_from_file'.
+        Time values for turbulent inflow data can be given via variable [time_inflow](#dynamic--variable--time_inflow).
+
+  time_rad:
+    mandatory: false
+    size:
+      value_of: "time indices for external radiative forcing"
+    description:
+      short: Number of time indices for external radiative forcing.
+      long: |
+        Time dimension of external radiative forcing. Mandatory if namelist parameter [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'external'*.
+        Time values for external radiative forcing can be given via variable [time_rad](#dynamic--variable--time_rad).
+
+  x:
+    mandatory: true
+    size:
+      value_of: "namelist parameter [nx](../../../Namelists/#initialization_parameters--nx)+1"
+    description:
+      short: Number of grid points along `x`.
+      long: |
+        The number of grid points along `x` must match `nx + 1`, with [nx](../../../Namelists/#initialization_parameters--nx) as given in the initialization parameters namelist. `x` coordinates of the grid points can be given via variable [x](#dynamic--variable--x).
+
+  xu:
+    mandatory: true
+    size:
+      value_of: "namelist parameter [nx](../../../Namelists/#initialization_parameters--nx)"
+    description:
+      short: Number of grid points along `xu` (for u-velocity).
+      long: |
+        The number of grid points along `xu` must match `nx`, with [nx](../../../Namelists/#initialization_parameters--nx) as given in the initialization parameters namelist. `xu` coordinates of the grid points can be given via variable [xu](#dynamic--variable--xu).
+
+  y:
+    mandatory: true
+    size:
+      value_of: "namelist parameter [ny](../../../Namelists/#initialization_parameters--ny)+1"
+    description:
+      short: Number of grid points along `y`.
+      long: |
+        The number of grid points along `y` must match `ny + 1`, with [ny](../../../Namelists/#initialization_parameters--ny) as given in the initialization parameters namelist. `y` coordinates of the grid points can be given via variable [y](#dynamic--variable--y).
+  yv:
+    mandatory: true
+    size:
+      value_of: "namelist parameter [ny](../../../Namelists/#initialization_parameters--ny)"
+    description:
+      short: Number of grid points along `yv` (for v-velocity).
+      long: |
+        The number of grid points along `yv` must match `ny`, with [ny](../../../Namelists/#initialization_parameters--ny) as given in the initialization parameters namelist. `yv` coordinates of the grid points can be given via variable [yv](#dynamic--variable--yv).
+
+  z:
+    mandatory: true
+    size:
+      value_of: "namelist parameter [nz](../../../Namelists/#initialization_parameters--nz)"
+    description:
+      short: Number of grid points along `z`.
+      long: |
+        The number of grid points along `z` must match `nz`, with [nz](../../../Namelists/#initialization_parameters--nz) as given in the initialization parameters namelist. `z` coordinates of the grid points can be given via variable [z](#dynamic--variable--z). 
+  zw:
+    mandatory: true
+    size:
+      value_of: "namelist parameter [nz](../../../Namelists/#initialization_parameters--nz)-1"
+    description:
+      short: Number of grid points along `zw`.
+      long: |
+        The number of grid points along `zw` must match `nz-1`, with [nz](../../../Namelists/#initialization_parameters--nz) as given in the initialization parameters namelist. `zw` coordinates of the grid points can be given via variable [zw](#dynamic--variable--zw).
+
+  zsoil:
+    mandatory: false
+    size:
+      value_of: index value of deepest soil grid point.
+    description:
+      short: Number of grid points in a vertical soil column.
+      long: |
+        The number of grid points along `z` in a vertical soil column. The `zsoil`-layer depth and their indices can be fully independent on the [static driver](../static/#static) settings [zsoil](../static/#static--variable--zsoil). Values will be interpolated onto the respective levels. `zsoil` coordinates of the grid points can be given via variable [zsoil](#dynamic--variable--zsoil).
+
+#-------------------------------------------------------------------------------
+# netCDF Variables
+#-------------------------------------------------------------------------------
+variables:
+  #-----------------------------
+  # SALSA Input must be reviewed
+  #-----------------------------
+
+  # composition_name:
+  #   modules: ['SAL']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (composition_index,max_string_length)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: List of chemical components of aerosol particles.
+  #     long: |
+  #       List of chemical components of aerosol particles.
+  # init_atmosphere_aerosol:
+  #   modules: ['SAL']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (z,Dmid)
+  #   si-unit: m
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Initial profile of aerosol number concentration per aerosol size bin.
+  #     long: |
+  #       A 1-dimensional initial profiles of aerosol number concentration per aerosol size bin (# m^-3^). The bin mean diameter Dmid given in nm.
+  #       Input of this quantity becomes only effective if the aerosol module [SALSA](../../../Namelists/#salsa-parameters) is switched on.
+  #
+  # init_atmosphere_mass_fracs_a:
+  #   modules: ['SAL']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (z,composition_index)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Vertical profile of the mass fractions of aerosol concentration (subrange a).
+  #     long: |
+  #       Vertical profile of the mass fractions of background/initial aerosol concentration for subrange a.
+  #       Input of this quantity becomes only effective if the aerosol module SALSA is switched on.
+
+  inflow_plane_e:
+    modules: ["PAC"]
+    si-unit: m^2^ s^-2^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Inflow boundary data for the SGS-TKE.
+      long: |
+        Inflow boundary data for the SGS-TKE. Only `lod` = *2* allowed. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*.
+
+  inflow_plane_pt:
+    modules: ["PAC"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Inflow boundary data for the potential temperature.
+      long: |
+        Inflow boundary data for the potential temperature. Only `lod` = *2* allowed. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*
+        and [neutral](#../../../Namelists/#initialization_parameters--neutral) = *.F.*).
+
+  inflow_plane_q:
+    modules: ["PAC"]
+    si-unit: kg kg^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Inflow boundary data for the mixing ratio.
+      long: |
+        Inflow boundary data for the mixing ratio. Only `lod` = *2* allowed. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*
+        and [humidity](#../../../Namelists/#initialization_parameters--humidity) = *.T.*.
+
+  inflow_plane_u:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Inflow boundary data for the u-component.
+      long: |
+        Inflow boundary data for the u-component. Only `lod` = *2* allowed. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*.
+
+  inflow_plane_v:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow,z,yv)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Inflow boundary data for the v-component.
+      long: |
+        Inflow boundary data for the v-component. Only `lod` = *2* allowed. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*.
+
+  inflow_plane_w:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow,zw,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Inflow boundary data for the w-component.
+      long: |
+        Inflow boundary data for the w-component.Only `lod` = *2* allowed. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*.
+
+  init_atmosphere_no:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: ppm # no SI-Unit
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of nitrogen monoxide.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of nitrogen monoxide is prescribed, while for `lod` = *2* the 3-dimensional initial volume data of nitrogen monoxide is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_atmosphere_no2:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: ppm # no SI-Unit
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of nitrogen dioxide.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of nitrogen dioxide is prescribed, while for `lod` = *2* the 3-dimensional initial volume data of nitrogen dioxide is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_atmosphere_no3:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: ppm # no SI-Unit
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of nitrate.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of nitrate is prescribed, while for `lod` = *2* the 3-dimensional initial volume data of nitrate is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_atmosphere_o3:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: ppm # no SI-Unit
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of ozone.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of ozone is prescribed, while for `lod` = *2* the 3-dimensional initial volume data of ozone is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_atmosphere_pm10:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: kg m^-3^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of PM10.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of PM10 is prescribed, while for `lod` = *2* the 3-dimensional initial volume data of PM10 is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_atmosphere_pm25:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: kg m^-3^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of PM2.5.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of PM2.5 is prescribed, while for `lod` = *2* the 3-dimensional initial volume data of PM2.5 is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_atmosphere_pt:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: K
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of potential temperature.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of potential temperature is prescribed, while for `lod` = *2* 3-dimensional initial volume data of potential temperature is set.
+
+  init_atmosphere_qv:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: kg kg^-1^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of specific humidity.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of specific humidity is prescribed, while for `lod` = *2* 3-dimensional initial volume data of specific humidity is set.
+
+  init_atmosphere_s:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    si-unit: kg m^-1^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of any passive scalar.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of any passive scalar is prescribed, while for `lod` = *2* 3-dimensional initial volume data of any passive scalar is set.
+        Input of this quantity becomes only effective if [passive scalar](../../../Namelists/#initialization_parameters--passive_scalar) = *.T.*
+
+  init_atmosphere_u:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,xu)
+    si-unit: m s^-1^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of the wind velocity component in x direction.
+      long: |
+        In case `lod` = *1*, a one-dimensional initial profile of wind velocity component in x direction is prescribed, while for `lod` = *2* three-dimensional initial volume data of wind velocity component in x direction is set.
+
+  init_atmosphere_v:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,yv,x)
+    si-unit: m s^-1^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of the wind velocity component in y direction.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of wind velocity component in y direction is prescribed, while for `lod` = *2* 3-dimensional initial volume data of wind velocity component in y directionis set.
+
+  init_atmosphere_w:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zw,y,x)
+    si-unit: m s^-1^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of the wind velocity component in z direction.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of the wind velocity component in z direction is prescribed, while for `lod` = *2* 3-dimensional initial volume data of the wind velocity component in z direction is set.<br>
+        Note that PALM ignores this variable in case of `lod` = *1*. This may change in a future release.
+
+  init_atmosphere_yyy:
+    modules: ["CHM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z,y,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Initial values of further chemical species.
+      long: |
+        Replace the `_yyy` in the variable name by the name of the respective chemical species. In case `lod` = *1*, a 1-dimensional initial profile of this species is prescribed, while for `lod` = *2* 3-dimensional initial volume data of this species is set.
+        Input of this quantity becomes only effective if [chemistry model](../../../Namelists/#chemistry-parameters) is switched on.
+
+  init_soil_m:
+    modules: ["LSM"]
+    si-unit: m ^3^ m^-3^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zsoil,y,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: "namelist parameter [soil_moisture](../../../Namelists/#land_surface_parameters--soil_moisture)"
+    description:
+      short: Initial values of soil_moisture.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of soil_moisture is prescribed, while for `lod` = *2* 3-dimensional initial volume data of soil_moisture is set.
+        Input of this quantity becomes only effective if [land surface model](../../../Namelists/#land-surface-parameters) is switched on.
+        In case of a nested run and no dynamic driver file is present for the child domain, soil temperature in the child domain will be initialized by a horizontally averaged mean vertical soil moisture profile derived from the respective parent domain. 
+        Moreover, please note that [zsoil](../static/#static--dimension--zsoil) needs to have the same size as in the [static input](../static/#static) file.
+
+  init_soil_t:
+    modules: ["LSM"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zsoil,y,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default:
+      depends_on: "namelist parameter [soil_temperature](../../../Namelists/#land_surface_parameters--soil_temperature)"
+    description:
+      short: Initial values of soil temperature.
+      long: |
+        In case `lod` = *1*, a 1-dimensional initial profile of soil temperature is prescribed, while for `lod` = *2* 3-dimensional initial volume data of soil temperature is set.
+        Input of this quantity becomes only effective if [land surface model](../../../Namelists/#land-surface-parameters) is switched on.
+        In case of a nested run and no dynamic driver file is present for the child domain, soil temperature in the child domain will be initialized by a horizontally averaged mean vertical soil-temperature profile derived from the respective parent domain. 
+        Moreover, please note that [zsoil](../static/#static--dimension--zsoil) needs to have the same size as in the [static input](../static/#static) file.
+
+  #-----------------------------------------------------------------------------------------------------------------
+  # These parts of the Large Scale Forcing are not implemented yet via NetCDF but were part of the old documentation
+  #-----------------------------------------------------------------------------------------------------------------
+
+  # ls_forcing_sub_w:
+  #   modules: ["LSF"]
+  #   si-unit: m s^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Large-scale forcing data for the subsidence velocity.
+  #     long: |
+  #       Large-scale forcing data for the subsidence velocity.
+  #       Requires cyclic boundary conditions as well as large_scale_forcing = .T. to become effective.
+
+  # ls_forcing_adv_lpt:
+  #   modules: ["LSF"]
+  #   si-unit: m s^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Large­-scale forcing data for the advection tendency of potential temperature.
+  #     long: |
+  #       Large-scale forcing data for the subsidence velocity.
+  #       Requires cyclic boundary conditions as well as large_scale_forcing = .T. to become effective.
+
+  # ls_forcing_adv_qv:
+  #   modules: ["LSF"]
+  #   si-unit: m s^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Large­-scale forcing data for the advection tendency of mixing ratio.
+  #     long: |
+  #       Large-scale forcing data for the subsidence velocity.
+  #       Requires cyclic boundary conditions as well as large_scale_forcing = .T. to become effective.
+
+  ls_forcing_left_pt:
+    modules: ["PAC"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at left (west) model boundary for the potential temperature.
+      long: |
+        Boundary condition at left (west) model boundary for the potential temperature.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of potential temperature is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of potential temperature is used as a boundary condition.
+
+  ls_forcing_left_qv:
+    modules: ["PAC"]
+    si-unit: kg kg^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y) # x is not used
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at left (west) model boundary for the mixing ratio.
+      long: |
+        Boundary condition at left (west) model boundary for the mixing ratio.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the mixing ratio is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the mixing ratio is used as a boundary condition.
+
+  ls_forcing_left_u:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at left (west) model boundary for the wind component in x-direction.
+      long: |
+        Boundary condition at left (west) model boundary for the wind component in x-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in x-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in x-direction is used as a boundary condition.
+
+  ls_forcing_left_v:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,yv)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at left (west) model boundary for the wind component in y-direction.
+      long: |
+        Boundary condition at left (west) model boundary for the wind component in y-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in y-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in y-direction is used as a boundary condition.
+
+  ls_forcing_left_w:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,zw,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at left (west) model boundary for the wind component in z-direction.
+      long: |
+        Boundary condition at left (west) model boundary for the wind component in z-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, zw) of the wind component in z-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in z-direction is used as a boundary condition.
+
+  ls_forcing_north_pt:
+    modules: ["PAC"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at north model boundary for the potential temperature.
+      long: |
+        Boundary condition at north model boundary for the potential temperature.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of potential temperature is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of potential temperature is used as a boundary condition.
+
+  ls_forcing_north_qv:
+    modules: ["PAC"]
+    si-unit: kg kg^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at north model boundary for the mixing ratio.
+      long: |
+        Boundary condition at north model boundary for the mixing ratio.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the mixing ratio is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the mixing ratio is used as a boundary condition.
+
+  ls_forcing_north_u:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,xu)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at north model boundary for the wind component in x-direction.
+      long: |
+        Boundary condition at north model boundary for the wind component in x-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in x-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in x-direction is used as a boundary condition.
+
+  ls_forcing_north_v:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at north model boundary for the wind component in y-direction.
+      long: |
+        Boundary condition at north model boundary for the wind component in y-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in y-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in y-direction is used as a boundary condition.
+
+  ls_forcing_north_w:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,zw,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at north model boundary for the wind component in z-direction.
+      long: |
+        Boundary condition at north model boundary for the wind component in z-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, zw) of the wind component in z-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in z-direction is used as a boundary condition.
+
+  ls_forcing_right_pt:
+    modules: ["PAC"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at right (east) model boundary for the potential temperature.
+      long: |
+        Boundary condition at right (east) model boundary for the potential temperature.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of potential temperature is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of potential temperature is used as a boundary condition.
+
+  ls_forcing_right_qv:
+    modules: ["PAC"]
+    si-unit: kg kg^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at right (east) model boundary for the mixing ratio.
+      long: |
+        Boundary condition at right (east) model boundary for the mixing ratio.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the mixing ratio is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the mixing ratio is used as a boundary condition.
+
+  ls_forcing_right_u:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at right (east) model boundary for the wind component in x-direction.
+      long: |
+        Boundary condition at right (east) model boundary for the wind component in x-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in x-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in x-direction is used as a boundary condition.
+
+  ls_forcing_right_v:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,yv)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at right (east) model boundary for the wind component in y-direction.
+      long: |
+        Boundary condition at right (east) model boundary for the wind component in y-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in y-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in y-direction is used as a boundary condition.
+
+  ls_forcing_right_w:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at right (east) model boundary for the wind component in z-direction.
+      long: |
+        Boundary condition at right (east) model boundary for the wind component in z-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, zw) of the wind component in z-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in z-direction is used as a boundary condition.
+
+  ls_forcing_south_pt:
+    modules: ["PAC"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at south model boundary for the potential temperature.
+      long: |
+        Boundary condition at south model boundary for the potential temperature.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of potential temperature is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of potential temperature is used as a boundary condition.
+
+  ls_forcing_south_qv:
+    modules: ["PAC"]
+    si-unit: kg kg^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at south model boundary for the mixing ratio.
+      long: |
+        Boundary condition at south model boundary for the mixing ratio.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+         In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the mixing ratio is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the mixing ratio is used as a boundary condition.
+
+  ls_forcing_south_u:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,xu)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at south model boundary for the wind component in x-direction.
+      long: |
+        Boundary condition at south model boundary for the wind component in x-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in x-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in x-direction is used as a boundary condition.
+
+  ls_forcing_south_v:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at south model boundary for the wind component in y-direction.
+      long: |
+        Boundary condition at south model boundary for the wind component in y-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, z) of the wind component in y-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in y-direction is used as a boundary condition.
+
+  ls_forcing_south_w:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,zw,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at south model boundary for the wind component in z-direction.
+      long: |
+        Boundary condition at south (south) model boundary for the wind component in z-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+        In case of `lod` = *1*, a spatial 1-dimensional profile (time, zw) of the wind component in z-direction is prescribed, while for `lod` = *2* a spatial 2-dimensional plane of the wind component in z-direction is used as a boundary condition.
+
+  # Which Dimension do I need for LOD 1 forcing_top?
+  ls_forcing_top_pt:
+    modules: ["PAC"]
+    si-unit: K
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,y,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at top model boundary for the potential temperature.
+      long: |
+        Boundary condition at top model boundary for the potential temperature.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+
+  ls_forcing_top_qv:
+    modules: ["PAC"]
+    si-unit: kg kg^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,y,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at top model boundary for the mixing ratio.
+      long: |
+        Boundary condition at top model boundary for the mixing ratio.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+
+  ls_forcing_top_u:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,y,xu)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at top model boundary for the wind component in x-direction.
+      long: |
+        Boundary condition at top model boundary for the wind component in x-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+
+  ls_forcing_top_v:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,yv,x)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at top model boundary for the wind component in y-direction.
+      long: |
+        Boundary condition at top model boundary for the wind component in y-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+
+  ls_forcing_top_w:
+    modules: ["PAC"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z,y) # x is not used
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Boundary condition at top model boundary for the wind component in z-direction.
+      long: |
+        Boundary condition at top model boundary for the wind component in z-direction.
+        Requires [nesting_offl_parameters](../../../Namelists/#offline-nesting-parameters) to be enabled to become effective.
+
+  ls_forcing_ug:
+    modules: ["LSF"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Large-scale forcing data for the geostrophic wind component in x-direction.
+      long: |
+        Large-scale forcing data for the geostrophic wind component in x-direction. 
+        Initializes the x component of the geostrophic wind at t = 0 (index 1 in netCDF File). Time dimension is required for technical reasons, but any additional time steps are not taken into account.
+        Alternatively, an ASCII file can be used (see namelist parameter [large_scale_forcing](../../../Namelists/#initialization_parameters--large_scale_forcing)).
+        Only `lod` = *1* is allowed.
+
+  ls_forcing_vg:
+    modules: ["LSF"]
+    si-unit: m s^-1^
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time,z)
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Large-scale forcing data for the geostrophic wind component in y-direction.
+      long: |
+        Large-scale forcing data for the geostrophic wind component in y-direction. 
+        Initializes the x component of the geostrophic wind at t = 0 (index 1 in netCDF File). Time dimension is required for technical reasons, but any additional time steps are not taken into account.
+        Alternatively, an ASCII file can be used (see namelist parameter [large_scale_forcing](../../../Namelists/#initialization_parameters--large_scale_forcing)).
+        Only `lod` = *1* is allowed.
+
+  #---------------------------------------------------------------------------------
+  # Nudging via NetCDF File is not implemented yet but part of the old documentation
+  #---------------------------------------------------------------------------------
+
+  # nudging_pt:
+  #   modules: ['PAC']
+  #   si-unit: K
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging data for potential temperature.
+  #     long: |
+  #       Nudging data for potential temperature. Requires cyclic boundary conditions as well as nudging = .T. to become effective.
+
+  # nudging_qv:
+  #   modules: ['PAC']
+  #   si-unit: kg kg^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging data for the mixing ratio.
+  #     long: |
+  #       Nudging data for the mixing ratio. Requires cyclic boundary conditions as well as nudging = .T. and humidity = .T. to become effective.
+
+  # nudging_s:
+  #   modules: ['PAC']
+  #   si-unit: kg m^-3³^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging data for a passive scalar.
+  #     long: |
+  #       Requires cyclic boundary conditions as well as nudging = .T. and passive_scalar = .T. to become effective.
+
+  # nudging_tau:
+  #   modules: ['PAC']
+  #   si-unit: s
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging relaxation time scale.
+  #     long: |
+  #       Requires cyclic boundary conditions as well as nudging = .T. to become effective.
+
+  # nudging_u:
+  #   modules: ['PAC']
+  #   si-unit: m s^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging data for the wind in the x-direction.
+  #     long: |
+  #       Nudging data for the wind in the x-direction. Requires cyclic boundary conditions to become effective.
+
+  # nudging_v:
+  #   modules: ['PAC']
+  #   si-unit: m s^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging data for the wind in the y-direction.
+  #     long: |
+  #       Nudging data for the wind in the y-direction. Requires cyclic boundary conditions to become effective.
+
+  # nudging_w:
+  #   modules: ['PAC']
+  #   si-unit: m s^-1^
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time,z)
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Nudging data for the wind in the z-direction.
+  #     long: |
+  #       Nudging data for the wind in the z-direction. Requires cyclic boundary conditions to become effective.
+
+  rad_lw_in:
+    modules: ["RAD"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_rad)
+    si-unit: W m^-2^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: false
+    default: ~
+    description:
+      short: Longwave downwelling radiation.
+      long: |
+        Time series of longwave downwelling radiation. Only mandatory if namelist parameter [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'external'*.
+        Only `lod` = *1* is allowed
+
+  rad_sw_in:
+    modules: ["RAD"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_rad)
+    si-unit: W m^-2^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Shortwave downwelling radiation.
+      long: |
+        Time series of shortwave downwelling radiation. Only mandatory if namelist parameter [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'external'*.
+        Only `lod` = *1* is allowed.
+
+  rad_sw_in_diff:
+    modules: ["RAD"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_rad)
+    si-unit: W m^-2^
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Shortwave downwelling diffuse radiation.
+      long: |
+        Time series of shortwave downwelling diffuse radiation, which can be optionally input. Becomes only effective if namelist parameter [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'external'*. In case it is missing, the incoming shortwave radiation will be split into direct and diffuse fractions based on clear-sky assumptions. 
+        Only `lod` = *1* is allowed.
+
+  #----------------------------------------------------------
+  # LSF - Not implemented, but part of the old documentation
+  #----------------------------------------------------------
+
+  # surface_forcing_shf:
+  #   modules: ['PAC']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time)
+  #   si-unit: K m s^-1^
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Large-scale forcing for the surface sensible heat flux.
+  #     long: |
+  #       Large-scale forcing for the surface sensible heat flux. Requires [nesting_offl_parameters](../../../Namelists/##offline-nesting-parameters) to be enabled to become effective.
+  #       Only `lod` = *1* allowed.
+
+  # surface_forcing_qsws:
+  #   modules: ['PAC']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time)
+  #   si-unit: W m^-2^
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Large-scale forcing for the surface latent heat flux.
+  #     long: |
+  #       Large-scale forcing for the surface latent heat flux. Requires [nesting_offl_parameters](../../../Namelists/##offline-nesting-parameters) to be enabled to become effective.
+  #       Only `lod` = *1* allowed.
+
+  # surface_forcing_pt_surface:
+  #   modules: ['PAC']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time)
+  #   si-unit: K
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Surface pressure forcing.
+  #     long: |
+  #       Large-scale forcing for the surface pressure. Requires [nesting_offl_parameters](../../../Namelists/##offline-nesting-parameters) to be enabled to become effective.
+  #       Only `lod` = *1* allowed.
+
+  # surface_forcing_qv_surface:
+  #   modules: ['PAC']
+  #   mandatory: false
+  #   type: NC_FLOAT
+  #   shape: (time)
+  #   si-unit: kg kg^-1^
+  #   attributes:
+  #     lod:
+  #       mandatory: true
+  #   default: ~
+  #   description:
+  #     short: Surface specific humidity forcing.
+  #     long: |
+  #       Large-scale forcing for the surface specific humidity. Requires [nesting_offl_parameters](../../../Namelists/##offline-nesting-parameters) to be enabled to become effective.
+  #       Only `lod` = *1* allowed.
+
+  surface_forcing_surface_pressure:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time)
+    si-unit: Pa
+    attributes:
+      lod:
+        mandatory: true
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Large-scale value for surface pressure.
+      long: |
+        Requires [nesting_offl_parameters](../../../Namelists/##offline-nesting-parameters) to be enabled to become effective. 
+        Only `lod` = *1* is allowed.
+
+  time:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time)
+    si-unit: s
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Time variable of dynamic input data.
+      long: |
+        See also dimension [time](#dynamic--dimension--time).
+        Containes the times for which respective quantities in the dynamic driver file are given. The time values in the dynamic driver file must cover the entire simulation time (last time value >= [end_time](../../../Namelists/#../../../Namelists/runtime_parameters--end_time)).
+
+  time_inflow:
+    modules: ["PAC"] # Turbulent Inflow
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow)
+    si-unit: s
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Time variable of turbulent inflow data.
+      long: |
+        Containes the times for which turbulent inflow data is given. Mandatory if [turbulent_inflow_method](../../../Namelists/#turbulent_inflow_parameters--turbulent_inflow_method) = *'read_from_file'*.
+        Only `lod` = *1* is allowed.
+
+  time_rad:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (time_inflow)
+    si-unit: s
+    attributes:
+      _FillValue:
+        mandatory: true
+    default: ~
+    description:
+      short: Time variable of external radiation data.
+      long: |
+        Contains the times for which external radiation data is given. Mandatory if namelist parameter [radiation_scheme](../../../Namelists/#radiation_parameters--radiation_scheme) = *'external'*.
+        Only `lod` = *1* is allowed.
+
+  x:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (x)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along x-axis to the left border of the model domain.
+      long: |
+        This distance is valid for all quantities except the u-velocity component. See also dimension [x](#dynamic--dimension--x).
+
+  xu:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (xu)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along xu-axis to the left border of the model domain.
+      long: |
+        This distance is valid for the u-velocity component. See also dimension [xu](#dynamic--dimension--xu).
+
+  y:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (y)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along y-axis to the south border of the model domain.
+      long: |
+        This distance is valid for all quantities except the v-velocity component. See also dimension [y](#dynamic--dimension--y).
+
+  yv:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (yv)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along yv-axis to the south border of the model domain.
+      long: |
+        This distance is valid for the v-velocity component. See also dimension [yv](#dynamic--dimension--yv).
+
+  z:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (z)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along z-axis to the bottom of the model domain.
+      long: |
+        The `z`-levels represent the scalar levels. `z` features the half-grid level heights: `zu(k) = (k-0.5 ) * dz`. By definition, `z(0) = 0.0`. The dynamic driver begins at `z(1)`. See also dimension [z](#dynamic--dimension--z).
+
+  zw:
+    modules: ["PAC"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zw)
+    si-unit: m
+    attributes: {}
+    default: ~
+    description:
+      short: Distance along zw-axis to the bottom of the model domain.
+      long: |
+        `zw` features the full-grid level heights `zw(k) = k * dz`. The w-levels lie half between the [z](#dynamic--variable--z)-levels: `zw(k) = ( z(k) + z(k+1) ) * 0.5`, except for `k=0`, where `zw(0) = 0.0`. The dynamic driver starts at `zw(1)`. See also dimension [zw](#dynamic--dimension--zw).
+
+  zsoil:
+    modules: ["LSM"]
+    mandatory: false
+    type: NC_FLOAT
+    shape: (zsoil)
+    si-unit: m
+    attributes: {}
+    default:
+      depends_on: "namelist parameter [dz_soil](../../../Namelists/#land_surface_parameters--dz_soil)"
+    description:
+      short: Distance along z from the surface for the respective soil grid point (always positive).
+      long: |
+        The z-coordinates in m (positive downward) of the soil grid points. Describes the depth of the soil layers. Overwrites the values of the Namelist parameter [dz_soil](../../../Namelists/#land_surface_parameters--dz_soil). The `zsoil`-layer depth can be fully independent on the [static driver](../static/#static) settings [zsoil](../static/#static--variable--zsoil). Values will be interpolated onto the respective levels. See also dimension [zsoil](#dynamic--dimension--zsoil).

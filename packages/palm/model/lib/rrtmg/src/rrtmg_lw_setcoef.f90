@@ -254,7 +254,7 @@
 !  fraction of the difference (in ln(pressure)) between these
 !  two values that the layer pressure lies.
 !         plog = alog(pavel(lay))
-         plog = dlog(pavel(lay))
+         plog = log(pavel(lay))
          jp(lay) = int(36._rb - 5*(plog+0.04_rb))
          if (jp(lay) .lt. 1) then
             jp(lay) = 1

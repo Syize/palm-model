@@ -30,11 +30,25 @@ compiler:
       - "-pedantic"
       - "-Wno-format"
       - "-Wno-unused-result"
+  rrtmg_options:
+    default:
+      - "-cpp"
+      - "-O3"
+      - "-ffpe-trap=invalid,zero,overflow"
+      - "-g"
+      - "-fbacktrace"
+    debug:
+      - "-cpp"
+      - "-O0"
+      - "-ffpe-trap=invalid,zero,overflow"
+      - "-g"
+      - "-fbacktrace"
   options:
     default:
       - "-cpp"
       - "-O3"
       - "-ffpe-trap=invalid,zero,overflow"
+      - "-fimplicit-none"
       - "-g"
       - "-fbacktrace"
       - "-Wall"
@@ -51,6 +65,7 @@ compiler:
       - "-cpp"
       - "-O0"
       - "-ffpe-trap=invalid,zero,overflow"
+      - "-fimplicit-none"
       - "-g"
       - "-fbacktrace"
       - "-Wall"
@@ -67,10 +82,8 @@ compiler:
   includes:
     - "{{GNU.include.netcdf}}"
     - "{{GNU.include.fftw}}"
-    - "{{GNU.include.rrtmg}}"
 
 linker:
   options:
     - "{{GNU.lib.netcdf}}"
     - "{{GNU.lib.fftw}}"
-    - "{{GNU.lib.rrtmg}}"

@@ -721,7 +721,15 @@
 !--       direction)
           IF ( mask_loop(mid,dim,1) < 0.0_wp )  THEN
              tmp1 = mask_loop(mid,dim,1)
-             mask_loop(mid,dim,1) = zw(nzb)  !   lowest level  (default)
+             IF ( dim == 1  .OR.  dim == 2 )  THEN
+!
+!--             Start mask from left/south boundary.
+                mask_loop(mid,dim,1) = 0.0_wp
+             ELSE
+!
+!--             In case of elevated childs lowest level is not zero!
+                mask_loop(mid,dim,1) = zw(nzb)
+             ENDIF
           ENDIF
           IF ( dim == 1 .OR. dim == 2 )  THEN
              IF ( mask_loop(mid,dim,2) < 0.0_wp )  THEN

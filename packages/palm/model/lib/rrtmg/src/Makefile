@@ -23,6 +23,9 @@
 #------------------------------------------------------------------------------!
 
 SOURCES = \
+	parkind.f90 \
+	parrrsw.f90 \
+	parrrtm.f90 \
 	rrsw_aer.f90 \
 	rrsw_kg18.f90 \
 	rrsw_kg23.f90 \
@@ -41,14 +44,12 @@ SOURCES = \
 	rrsw_kg25.f90 \
 	rrsw_ncpar.f90 \
 	rrtmg_sw_rad.nomcica.f90 \
-	parkind.f90 \
 	rrsw_kg16.f90 \
 	rrsw_kg21.f90 \
 	rrsw_kg26.f90 \
 	rrsw_ref.f90 \
 	rrtmg_sw_cldprop.f90 \
 	rrtmg_sw_spcvrt.f90 \
-	parrrsw.f90 \
 	rrsw_kg17.f90 \
 	rrsw_kg22.f90 \
 	rrsw_kg27.f90 \
@@ -86,7 +87,6 @@ SOURCES = \
 	rrtmg_lw_rtrnmr.f90 \
 	rrtmg_lw_taumol.f90 \
 	rrtmg_lw_cldprop.f90 \
-	parrrtm.f90 \
 	rrtmg_lw_read_nc.f90 \
 	rrtmg_lw_rtrnmc.f90 \
 	rrtmg_lw_setcoef.f90
@@ -97,21 +97,28 @@ PROG =
 F90 =
 F90FLAGS =
 LDFLAGS =
+COPT =
 
 .SUFFIXES:
 .SUFFIXES: .o .f90
 
-all: $(PROG)
+LIB_TARGET = $(PROG).so
 
-$(PROG): $(OBJS)
-	$(F90) $(LDFLAGS) -o $(PROG).so -shared $(OBJS)
+all: $(LIB_TARGET)
+
+$(LIB_TARGET): $(OBJS)
+	$(F90) -o $(LIB_TARGET) -shared $(OBJS) $(LDFLAGS)
 
 clean:
 	rm -f $(PROG) $(OBJS) *.mod *.i *.lst *.so *.o  *.a
 
 .f90.o:
-	$(F90) $(F90FLAGS) -fpic -c $<
+	$(F90) $(F90FLAGS) $(COPT) -fpic -c $<
 
+parkind.o: \
+    parkind.f90
+parrrsw.o: \
+	parkind.o
 parrrtm.o: \
 	parkind.o
 rrtmg_lw_cldprmc.o: \
@@ -134,7 +141,8 @@ rrtmg_lw_init.o: \
 rrtmg_lw_rad.nomcica.o: \
 	parkind.o \
 	rrtmg_lw_cldprop.o \
-	rrtmg_lw_rtrn.o
+	rrtmg_lw_rtrn.o \
+	rrtmg_lw_setcoef.o
 rrtmg_lw_read_nc.o: \
 	parkind.o \
 	rrlw_kg01.o \
@@ -184,6 +192,7 @@ rrtmg_lw_taumol.o: \
 	parkind.o \
 	parrrtm.o \
 	rrlw_con.o \
+	rrlw_kg01.o \
 	rrlw_wvn.o \
 	rrlw_vsn.o
 rrlw_cld.o: \
@@ -246,8 +255,6 @@ rrlw_wvn.o: \
 	parkind.o \
 	parrrtm.o
 rrlw_tbl.o: \
-	parkind.o
-parrrsw.o: \
 	parkind.o
 rrtmg_sw_cldprop.o: \
 	parkind.o \

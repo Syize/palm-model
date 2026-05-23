@@ -4902,6 +4902,7 @@
              !$ACC LOOP PRIVATE(sr, k)
              DO  sr = 0, statistic_regions
                 DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_l_l(k,sr,tn) = sums_l_l(k,sr,tn) + ml_local_profile(k) * rmask(j,i,sr)
                 ENDDO
              ENDDO
@@ -4976,6 +4977,7 @@
              !$ACC LOOP PRIVATE(sr, k)
              DO  sr = 0, statistic_regions
                 DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_l_l(k,sr,tn) = sums_l_l(k,sr,tn) + ml_local_profile(k) * rmask(j,i,sr)
                 ENDDO
              ENDDO
@@ -5049,6 +5051,7 @@
              !$ACC LOOP PRIVATE(sr, k)
              DO  sr = 0, statistic_regions
                 DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_l_l(k,sr,tn) = sums_l_l(k,sr,tn) + ml_local_profile(k) * rmask(j,i,sr)
                 ENDDO
              ENDDO
@@ -5084,6 +5087,7 @@
              !$ACC LOOP PRIVATE(sr, k)
              DO  sr = 0, statistic_regions
                 DO  k = nzb+1, nzt
+                   !$ACC ATOMIC UPDATE
                    sums_l_l(k,sr,tn) = sums_l_l(k,sr,tn) + ml_local_profile(k) * rmask(j,i,sr)
                 ENDDO
              ENDDO
@@ -5092,10 +5096,10 @@
        ENDDO
 
     ENDIF
-
+!
+!-- Quasi boundary-condition for data output.
     !$ACC KERNELS PRESENT(sums_l_l) DEFAULT(NONE) IF(enable_openacc)
-    sums_l_l(nzt+1,:,tn) = sums_l_l(nzt,:,tn)   ! Quasi boundary-condition for
-                                                ! Data output
+    sums_l_l(nzt+1,:,tn) = sums_l_l(nzt,:,tn)
     !$ACC END KERNELS
     !$OMP END PARALLEL
 

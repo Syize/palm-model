@@ -587,32 +587,28 @@
 !> Enter horizontal and vertical surfaces.
 !--------------------------------------------------------------------------------------------------!
 #if defined( _OPENACC )
- SUBROUTINE enter_surface_arrays
+ SUBROUTINE enter_surface_arrays( nzb_soil, nzt_soil )
 
-    !$ACC ENTER DATA &
-    !$ACC COPYIN(surf_def) &
-    !$ACC COPYIN(surf_lsm) &
-    !$ACC COPYIN(surf_top) &
-    !$ACC COPYIN(surf_usm) &
-    !$ACC COPYIN(surf_u) &
-    !$ACC COPYIN(surf_v) &
-    !$ACC COPYIN(surf_w) IF(enable_openacc)
+    IMPLICIT NONE
+
+    INTEGER(iwp), INTENT(IN) ::  nzb_soil  !< lower soil index
+    INTEGER(iwp), INTENT(IN) ::  nzt_soil  !< upper soil index
+
+
 !
-!-- Copy data in surf_def, surf_lsm, surf_usm and surf_top
-    CALL enter_surface_attributes( surf_def )
-    CALL enter_surface_attributes( surf_lsm )
-    CALL enter_surface_attributes( surf_usm )
+!-- Copy data in surf_def, surf_lsm, and surf_usm.
+    CALL enter_surface_attributes_def
+    CALL enter_surface_attributes_lsm( nzb_soil, nzt_soil )
+    CALL enter_surface_attributes_usm
+
+!
+!-- Copy data in surf_top.
+    !$ACC ENTER DATA &
+    !$ACC COPYIN(surf_top,surf_u,surf_v,surf_w) IF(enable_openacc)
     CALL enter_surface_attributes_top( surf_top )
     CALL enter_surface_attributes_top( surf_u )
     CALL enter_surface_attributes_top( surf_v )
     CALL enter_surface_attributes_top( surf_w )
-!
-!-- WARNING!!!!  Following lines are a workaround because _agg arrays only exist for LSM
-!--              surfaces and therefore cannot be treated above via enter_surface_attributes.
-!-- Workaround should be removed!!!!!
-    !$ACC ENTER DATA &
-    !$ACC COPYIN(surf_lsm%shf_agg(1:surf_lsm%ns)) &
-    !$ACC COPYIN(surf_lsm%qsws_agg(1:surf_lsm%ns)) IF(enable_openacc)
 
  END SUBROUTINE enter_surface_arrays
 #endif
@@ -621,6 +617,9 @@
 ! Description:
 ! ------------
 !> Exit horizontal and vertical surfaces.
+!> ATTENTION: This routine and the called subroutines have not been updated to the newest
+!>            versions of enter_surface_arrays. They may be completely removed, because there is
+!>            no real need to delete the arrays from the device at the end of a run.
 !--------------------------------------------------------------------------------------------------!
 #if defined( _OPENACC )
  SUBROUTINE exit_surface_arrays
@@ -1185,80 +1184,283 @@
  END SUBROUTINE exit_surface_attributes
 #endif
 
+
 !--------------------------------------------------------------------------------------------------!
 ! Description:
 ! ------------
-!> Enter memory for upward and downward-facing horizontal surface types, except for top fluxes.
+!> Enter memory for upward and downward-facing default surfaces, except for top fluxes.
 !--------------------------------------------------------------------------------------------------!
 #if defined( _OPENACC )
- SUBROUTINE enter_surface_attributes( surfaces )
+ SUBROUTINE enter_surface_attributes_def
 
     IMPLICIT NONE
 
-    TYPE(surf_type) ::  surfaces  !< respective surface type
 
     !$ACC ENTER DATA &
-    !$ACC COPYIN(surfaces%start_index(nys:nyn,nxl:nxr)) &
-    !$ACC COPYIN(surfaces%end_index(nys:nyn,nxl:nxr)) &
-    !$ACC COPYIN(surfaces%i(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%j(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%k(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%ioff(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%joff(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%koff(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%iref(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%jref(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%kref(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%downward(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%eastward(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%northward(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%southward(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%upward(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%westward(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%consider_stability(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%tke_production(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%z_mo(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%uvw_abs(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%uvw_abs_uv(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%uvw_abs_w(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%ln_z_z0(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%ln_z_z0h(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%ln_z_z0q(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%n_eff(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%n_s(1:surfaces%ns,1:3)) &
-    !$ACC COPYIN(surfaces%z0(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%z0h(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%z0q(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%us(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%qs(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%us_uvgrid(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%us_wgrid(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%ol(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%rib(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%usws(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%vsws(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%qsws(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%usvs(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%vsus(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%wsus_wsvs(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%mom_flux_tke(0:1,1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%ts(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%shf(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%pt1(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%qv1(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%vpt1(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%q_surface(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%vpt_surface(1:surfaces%ns)) &
-    !$ACC COPYIN(surfaces%pt_surface(1:surfaces%ns)) IF(enable_openacc)
+    !$ACC COPYIN(surf_def) &
+    !$ACC COPYIN(surf_def%consider_stability(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%downward(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%eastward(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%end_index(nys:nyn,nxl:nxr)) &
+    !$ACC COPYIN(surf_def%i(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%ioff(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%iref(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%j(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%joff(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%jref(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%k(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%koff(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%kref(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%ln_z_z0(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%ln_z_z0h(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%ln_z_z0q(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%mom_flux_tke(0:1,1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%northward(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%n_eff(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%n_s(1:surf_def%ns,1:3)) &
+    !$ACC COPYIN(surf_def%ol(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%pt1(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%pt_surface(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%qs(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%qsws(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%qv1(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%q_surface(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%rib(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%shf(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%southward(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%start_index(nys:nyn,nxl:nxr)) &
+    !$ACC COPYIN(surf_def%tke_production(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%ts(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%upward(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%us(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%usvs(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%usws(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%us_uvgrid(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%us_wgrid(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%uvw_abs(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%uvw_abs_uv(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%uvw_abs_w(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%vpt1(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%vpt_surface(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%vsus(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%vsws(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%westward(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%wsus_wsvs(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%z0(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%z0h(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%z0q(1:surf_def%ns)) &
+    !$ACC COPYIN(surf_def%z_mo(1:surf_def%ns)) IF(enable_openacc)
 
     IF ( .NOT. constant_diffusion )  THEN
        !$ACC ENTER DATA &
-       !$ACC COPYIN(surfaces%u_0(1:surfaces%ns)) &
-       !$ACC COPYIN(surfaces%v_0(1:surfaces%ns)) IF(enable_openacc)
+       !$ACC COPYIN(surf_def%u_0(1:surf_def%ns)) &
+       !$ACC COPYIN(surf_def%v_0(1:surf_def%ns)) IF(enable_openacc)
     ENDIF
 
- END SUBROUTINE enter_surface_attributes
+ END SUBROUTINE enter_surface_attributes_def
 #endif
+
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+! ------------
+!> Enter memory for upward and downward-facing LSM surfaces, except for top fluxes.
+!--------------------------------------------------------------------------------------------------!
+#if defined( _OPENACC )
+ SUBROUTINE enter_surface_attributes_lsm( nzb_soil, nzt_soil )
+
+    IMPLICIT NONE
+
+    INTEGER(iwp), INTENT(IN) ::  nzb_soil  !< lower soil index
+    INTEGER(iwp), INTENT(IN) ::  nzt_soil  !< upper soil index
+
+
+    !$ACC ENTER DATA &
+    !$ACC COPYIN(surf_lsm) &
+    !$ACC COPYIN(surf_lsm%alpha_vg(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%consider_stability(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%c_liq(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%c_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%c_veg(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%downward(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%eastward(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%end_index(nys:nyn,nxl:nxr)) &
+    !$ACC COPYIN(surf_lsm%gamma_w(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%gamma_w_sat(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ghf(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%g_d(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%i(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ioff(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%iref(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%j(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%joff(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%jref(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%k(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%koff(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%kref(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%lai(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%lambda_h(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%lambda_h_def(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%lambda_surface_s(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%lambda_surface_u(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%lambda_w(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ln_z_z0(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ln_z_z0h(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ln_z_z0q(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%l_vg(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%mom_flux_tke(0:1,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%m_fc(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%m_res(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%m_sat(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%m_wilt(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%northward(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%nzt_pavement(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%n_eff(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%n_s(1:surf_lsm%ns,1:3)) &
+    !$ACC COPYIN(surf_lsm%n_vg(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ol(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%pavement_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%pt1(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%pt_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qs(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qsws(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qsws_agg(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qsws_liq(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qsws_soil(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qsws_veg(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%qv1(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%q_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_lw_in(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_lw_out(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_lw_out_change_0(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_net(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_net_l(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_sw_in(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rad_sw_out(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rho_c_total(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rho_c_total_def(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%rib(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%root_fr(nzb_soil:nzt_soil,1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_a(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_canopy(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_canopy_min(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_a(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_s(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_soil(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%r_soil_min(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%shf(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%shf_agg(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%southward(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%start_index(nys:nyn,nxl:nxr)) &
+    !$ACC COPYIN(surf_lsm%tke_production(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%ts(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%upward(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%us(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%usvs(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%usws(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%us_uvgrid(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%us_wgrid(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%uvw_abs(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%uvw_abs_uv(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%uvw_abs_w(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%vegetation_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%vpt1(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%vpt_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%vsus(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%vsws(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%water_surface(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%westward(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%wsus_wsvs(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%z0(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%z0h(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%z0q(1:surf_lsm%ns)) &
+    !$ACC COPYIN(surf_lsm%z_mo(1:surf_lsm%ns)) IF(enable_openacc)
+
+    IF ( .NOT. constant_diffusion )  THEN
+       !$ACC ENTER DATA &
+       !$ACC COPYIN(surf_lsm%u_0(1:surf_lsm%ns)) &
+       !$ACC COPYIN(surf_lsm%v_0(1:surf_lsm%ns)) IF(enable_openacc)
+    ENDIF
+
+ END SUBROUTINE enter_surface_attributes_lsm
+#endif
+
+
+!--------------------------------------------------------------------------------------------------!
+! Description:
+! ------------
+!> Enter memory for upward and downward-facing USM surfaces, except for top fluxes.
+!--------------------------------------------------------------------------------------------------!
+#if defined( _OPENACC )
+ SUBROUTINE enter_surface_attributes_usm
+
+    IMPLICIT NONE
+
+
+    !$ACC ENTER DATA &
+    !$ACC COPYIN(surf_usm) &
+    !$ACC COPYIN(surf_usm%consider_stability(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%downward(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%eastward(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%end_index(nys:nyn,nxl:nxr)) &
+    !$ACC COPYIN(surf_usm%i(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%ioff(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%iref(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%j(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%joff(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%jref(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%k(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%koff(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%kref(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%ln_z_z0(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%ln_z_z0h(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%ln_z_z0q(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%mom_flux_tke(0:1,1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%northward(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%n_eff(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%n_s(1:surf_usm%ns,1:3)) &
+    !$ACC COPYIN(surf_usm%ol(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%pt1(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%pt_surface(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%qs(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%qsws(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%qv1(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%q_surface(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%rib(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%shf(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%southward(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%start_index(nys:nyn,nxl:nxr)) &
+    !$ACC COPYIN(surf_usm%tke_production(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%ts(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%upward(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%us(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%usvs(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%usws(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%us_uvgrid(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%us_wgrid(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%uvw_abs(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%uvw_abs_uv(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%uvw_abs_w(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%vpt1(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%vpt_surface(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%vsus(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%vsws(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%westward(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%wsus_wsvs(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%z0(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%z0h(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%z0q(1:surf_usm%ns)) &
+    !$ACC COPYIN(surf_usm%z_mo(1:surf_usm%ns)) IF(enable_openacc)
+
+    IF ( .NOT. constant_diffusion )  THEN
+       !$ACC ENTER DATA &
+       !$ACC COPYIN(surf_usm%u_0(1:surf_usm%ns)) &
+       !$ACC COPYIN(surf_usm%v_0(1:surf_usm%ns)) IF(enable_openacc)
+    ENDIF
+
+ END SUBROUTINE enter_surface_attributes_usm
+#endif
+
 
 !--------------------------------------------------------------------------------------------------!
 ! Description:

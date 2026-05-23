@@ -33,11 +33,6 @@
 
     USE, INTRINSIC ::  ISO_C_BINDING
 
-    USE control_parameters,                                                                        &
-        ONLY:  maximum_grid_level,                                                                 &
-               message_string,                                                                     &
-               mg_switch_to_pe0_level
-
     USE indices,                                                                                   &
         ONLY:  nbgp,                                                                               &
                nnx,                                                                                &

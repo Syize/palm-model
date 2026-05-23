@@ -240,6 +240,7 @@
                mask_size_l,                                                                        &
                mask_surface,                                                                       &
                message_string,                                                                     &
+               nesting_offline,                                                                    &
                pt_surface,                                                                         &
                restart_data_format_output,                                                         &
                rho_surface,                                                                        &
@@ -840,7 +841,13 @@
                                   ' is not allowed with humidity = .FALSE.'
        CALL message( 'check_parameters', 'BCM0011', 1, 2, 0, 6, 0 )
     ENDIF
-
+!
+!-- BCM is not allowed in combination with the mesoscale offline nesting because it has not been
+!-- implemented so far.
+    IF ( nesting_offline )  THEN
+       message_string = 'bulk_cloud_model = .T. not allowed with the mesoscale nesting'
+       CALL message( 'check_parameters', 'BCM0012', 1, 2, 0, 6, 0 )
+    ENDIF
 !
 !-- Check cloud scheme
 !-- This scheme considers only saturation adjustment, i.e. water vapor surplus is converted into
@@ -5203,6 +5210,7 @@
              ENDDO
           ENDDO
        ENDDO
+       resorted = .TRUE.
     ENDIF
 
  END SUBROUTINE bcm_data_output_3d
@@ -5875,7 +5883,7 @@
           IF ( .NOT. ALLOCATED( prr ) )  ALLOCATE( prr(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
           CALL rrd_mpi_io( 'prr', prr )
        ENDIF
-       
+
        CALL rd_mpi_io_check_array( 'prr_cloud' , found = array_found )
        IF ( array_found )  THEN
           IF ( .NOT. ALLOCATED( prr_cloud ) )  ALLOCATE( prr_cloud(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
@@ -8159,8 +8167,8 @@
                    melting_rate_q = ( melt_h * fh_q + melt_v * fv_q )
 !
 !--                Assuming that xg is constant during melting
-                   melting_rate_n = MIN( MAX( ( melting_rate_q - qg(k,j,i) / dt_micro ) / xg +     &
-                                                ng(k,j,i), 0.0_wp ), ng(k,j,i) / dt_micro )
+                   melting_rate_n = MIN( MAX( ( melting_rate_q - qg(k,j,i) ) / xg +                &
+                                                ng(k,j,i), 0.0_wp ), ng(k,j,i) )
 !
 !--                Limit the melting rate to current number of graupel and graupel mass
                    melting_rate_q = MAX( MIN( qg(k,j,i) / dt_micro, melting_rate_q ), 0.0_wp )
@@ -8252,8 +8260,8 @@
              melting_rate_q = ( melt_h * fh_q + melt_v * fv_q )
 !
 !--          Assuming that xg is constant during melting
-             melting_rate_n = MIN( MAX( ( melting_rate_q - qg(k,j,i) / dt_micro ) / xg +           &
-                                          ng(k,j,i), 0.0_wp ), ng(k,j,i) / dt_micro )
+             melting_rate_n = MIN( MAX( ( melting_rate_q - qg(k,j,i) ) / xg +                      &
+                                          ng(k,j,i), 0.0_wp ), ng(k,j,i) )
 !
 !--          Limit the melting rate to current number of graupel and graupel mass
              melting_rate_q = MAX( MIN( qg(k,j,i) / dt_micro, melting_rate_q ), 0.0_wp )
@@ -9073,7 +9081,7 @@
                    nu_c = 1.0_wp !MAX( 0.0_wp, 1580.0_wp * hyrho(k) * qc(k,j,i) - 0.28_wp )
 !
 !--                Mean weight of cloud droplets:
-                   xc = hyrho(k) * qc(k,j,i) / nc_c
+                   xc = MIN( MAX( hyrho(k) * qc(k,j,i) / nc_c, xcmin), xrmax )
 !
 !--                Parameterized turbulence effects on autoconversion
 !--                (Seifert, Nuijens and Stevens, 2010)
@@ -9187,7 +9195,7 @@
              nu_c = 1.0_wp !MAX( 0.0_wp, 1580.0_wp * hyrho(k) * qc(k,j,i) - 0.28_wp )
 !
 !--          Mean weight of cloud droplets:
-             xc = hyrho(k) * qc(k,j,i) / nc_c
+             xc = MIN( MAX( hyrho(k) * qc(k,j,i) / nc_c, xcmin), xrmax )
 !
 !--          Parameterized turbulence effects on autoconversion (Seifert, Nuijens and Stevens, 2010)
              IF ( collision_turbulence )  THEN
@@ -13317,8 +13325,7 @@
 !--             Predetermine flag to mask topography
                 flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
 
-                !IF ( qr(k,j,i) > eps_sb  .AND.  nr(k,j,i) > 0.0_wp )  THEN
-                IF ( qr(k,j,i) > eps_sb )  THEN
+                IF ( qr(k,j,i) > eps_sb  .AND.  nr(k,j,i) > 0.0_wp )  THEN
 
 !
 !--                Weight averaged diameter of rain drops:
@@ -13520,14 +13527,16 @@
        REAL(wp), DIMENSION(nzb:nzt+1) ::  w_qr     !<
 
 !
-!--    Compute velocities
+!--    Compute velocities. Set w_nr and w_qr to zero to avoid uninitizalized values in case
+!--    of topography.
+       w_nr = 0.0_wp
+       w_qr = 0.0_wp
        DO  k = nzb+1, nzt
 !
 !--       Predetermine flag to mask topography
           flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
 
-!          IF ( qr(k,j,i) > eps_sb  .AND.  nr(k,j,i) > 0.0_wp )  THEN
-           IF ( qr(k,j,i) > eps_sb )  THEN
+          IF ( qr(k,j,i) > eps_sb  .AND.  nr(k,j,i) > 0.0_wp )  THEN
 
 !
 !--          Weight averaged diameter of rain drops:
@@ -13551,9 +13560,6 @@
                                                            )**( -1.0_wp * ( mu_r + 4.0_wp ) )      &
                                        )                                                           &
                           ) * flag
-          ELSE
-             w_nr(k) = 0.0_wp
-             w_qr(k) = 0.0_wp
           ENDIF
        ENDDO
 !

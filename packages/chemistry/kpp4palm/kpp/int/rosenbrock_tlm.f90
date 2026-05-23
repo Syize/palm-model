@@ -758,7 +758,7 @@ Stage: DO istage = 1, ros_S
      Err = MAX(Err, TMP)
    END DO
 
-   ros_ErrorNorm_tlm = MAX(Err,1.0d-10)
+   ros_ErrorNorm_tlm = MAX(Err,1.0e-10_dp)
    
   END FUNCTION ros_ErrorNorm_tlm
 

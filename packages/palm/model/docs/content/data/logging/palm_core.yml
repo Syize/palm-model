@@ -1837,9 +1837,9 @@ PAC0264:
 PAC0265:
   loglevel: ERROR
   message: |
-    no sufficient convergence within 1000 cycles
+    no sufficient convergence within 1000 cycles, mean residual: ...
   description: |
-    Still after 1000 cycles of the iterative multigrid-Poisson-solver (see [psolver](../Namelists/#initialization_parameters--psolver) = *'multigrid'*) the residual (remaining divergence of the flow field) is larger than the residual limit given by [residual_limit](../Namelists/#initialization_parameters--residual_limit). Try to increase the residual limit, or limit the number of multigrid cycles (see [mg_cycles](../Namelists/#initialization_parameters--mg_cycles)). In any case, carefully check if the divergence of the velocity field is sufficiently reduced by the multigrid solver. This can be done by comparing the divergence before and after the call of the multigrid solver, which is printed in the `<run-id>_rc` file (local filename [RUN_CONTROL](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#RUN_CONTROL)).
+    Still after 1000 cycles of the iterative multigrid-Poisson-solver (see [psolver](../Namelists/#initialization_parameters--psolver) = *'multigrid'*) the residual (remaining divergence of the flow field) is larger than the residual limit given by [residual_limit](../Namelists/#initialization_parameters--residual_limit). Try to increase the residual limit based on the mean residual that is given in the error message, or limit the number of multigrid cycles (see [mg_cycles](../Namelists/#initialization_parameters--mg_cycles)). In any case, carefully check if the divergence of the velocity field is sufficiently reduced by the multigrid solver. This can be done by comparing the divergence before and after the call of the multigrid solver, which is printed in the `<run-id>_rc` file (local filename [RUN_CONTROL](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#RUN_CONTROL)).
 
     If this error appears during the initial phase of a run (before the first timestep), the number of subdomain gridpoints along x/y/z probably do not allow sufficient coarsening of the grid. The number of gridpoints should allow for a division by two (without rest) at least 2-3 times (see also [PAC0245](#palm_core--PAC0245)).
 
@@ -2502,7 +2502,7 @@ PAC0358:
   message: |
     array not on device
   description: |
-    Internal error message. Exchange of ghost points is requested for a 3d-array that is not found on the device (GPU). This error should only appear if OpenACC directives have been activated, e.g. via compiler option `-acc`. Please inform the PALM developers, e.g. by submitting a trouble ticket.
+    Internal error message. Exchange of ghost points is requested for a 3d-array that is not found on the device (GPU). This error should only appear if OpenACC directives have been activated, e.g. via compiler option `-acc`. You may inform the PALM developers, e.g. by submitting a trouble ticket. Be aware that PALM's GPU mode is still a test feature and immediate support in case of problems can not be guaranteed.
 
 PAC0359:
   loglevel: ERROR
@@ -2552,4 +2552,25 @@ PAC0365:
     illegal value given for horizontal grid spacing ...: ...
   description: |
     Positive values must be given for horizontal grid spacings [dx](../Namelists/#initialization_parameters--dx) and/or [dy](../Namelists/#initialization_parameters--dy).
+
+PAC0366:
+  loglevel: ERROR
+  message: |
+    illegal value given for roughness length =  ...
+  description: |
+    The namelist parameter [roughness_length](../Namelists/#initialization_parameters--roughness_length) must have a value > *0.0*.
+
+PAC0367:
+  loglevel: ERROR
+  message: |
+    output array ... not on device
+  description: |
+    Internal error message. NetCDF output is requested for the indicated array which is not found on the device (GPU). Try to remove the respective quantity from runtime parameter `data_output`. This error should only appear if OpenACC directives have been activated, e.g. via compiler option `-acc`. You may inform the PALM developers, e.g. by submitting a trouble ticket. Be aware that PALM's GPU mode is still a test feature and immediate support in case of problems can not be guaranteed.
+
+PAC0368:
+  loglevel: ERROR
+  message: |
+    GPU mode does not allow ...
+  description: |
+    The indicated setting is not allowed in GPU mode. Be aware that PALM's GPU mode is still work in progress and that many features are unavailable in that mode.
 

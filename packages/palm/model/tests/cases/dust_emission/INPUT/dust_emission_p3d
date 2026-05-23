@@ -50,6 +50,9 @@
     constant_flux_layer        = .TRUE., ! Parameter to switch on a constant flux layer
                                          ! at the bottom boundary.
 
+    allow_negative_scalar_values = .FALSE., ! negative scalar values affect near surface dust
+                                            ! concentrations
+
 / ! end of initialization parameter namelist
 
 

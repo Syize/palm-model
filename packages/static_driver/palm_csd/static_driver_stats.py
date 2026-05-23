@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2021  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 # ------------------------------------------------------------------------------ #
 #
 # Description:
@@ -62,6 +62,15 @@ if __name__ == "__main__":
 
     parser.add_argument("-s", "--show", action="store_true", help="show a plot")
     parser.add_argument(
+        "-d",
+        "--detailed",
+        action="store_true",
+        help="detailed surface types instead of basic categories",
+    )
+    parser.add_argument(
+        "-g", "--geo-referenced", action="store_true", help="use georeferenced UTM coordinates"
+    )
+    parser.add_argument(
         "-H",
         "--height",
         action="store",
@@ -101,4 +110,6 @@ if __name__ == "__main__":
         plot_title=args.title,
         plot_width=width,
         plot_height=height,
+        detailed_plot=args.detailed,
+        geo_referenced=args.geo_referenced,
     )

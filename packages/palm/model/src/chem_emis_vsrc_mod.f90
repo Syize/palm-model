@@ -64,7 +64,7 @@
 !-- default values for initialization
     INTEGER(iwp),      PARAMETER ::  default_index =    -1         !< ijk index
     INTEGER(KIND=idp), PARAMETER ::  default_key   = -9999         !< hash key
-    REAL(KIND=dp),     PARAMETER ::  default_value =     0.0       !< volume source value
+    REAL(KIND=wp),     PARAMETER ::  default_value =     0.0       !< volume source value
 
 !
 !-- netCDF file attributes
@@ -78,7 +78,7 @@
 !-- volume source locations across all activated emission modes
     INTEGER(iwp)                                   ::  num_vsrc    !< # unique volume source locations
     INTEGER(KIND=idp), ALLOCATABLE, DIMENSION(:)   ::  vsrc_key    !< volume source hash key (kji based)
-    REAL(KIND=dp),     ALLOCATABLE, DIMENSION(:,:) ::  vsrc_value  !< vol. source values for all KPP variable species
+    REAL(KIND=wp),     ALLOCATABLE, DIMENSION(:,:) ::  vsrc_value  !< vol. source values for all KPP variable species
 
 !
 !-- interface to object construction and destruction
@@ -130,7 +130,8 @@
     PUBLIC ::  chem_emis_vsrc_append_positions, chem_emis_vsrc_assign_source,                      &
                chem_emis_vsrc_cleanup, chem_emis_vsrc_indices_from_key,                            &
                chem_emis_vsrc_init_pos_vector, chem_emis_vsrc_key_from_indices,                    &
-               chem_emis_vsrc_reset_source, chem_emis_vsrc_update_source
+               chem_emis_vsrc_reset_source, chem_emis_vsrc_update_source,                          &
+               fetch_species_source_by_indices
                
 
  CONTAINS
@@ -366,7 +367,7 @@
 !-- arguments in order of appearance
     INTEGER(iwp),      INTENT(IN) ::  ispecies  !< species index
     INTEGER(KIND=idp), INTENT(IN) ::  key       !< hash key
-    REAL(KIND=dp),     INTENT(IN) ::  vsrc      !< volume source value
+    REAL(KIND=wp),     INTENT(IN) ::  vsrc      !< volume source value
 
 !
 !-- local variables
@@ -400,7 +401,7 @@
 !-- arguments in order of appearance
     INTEGER(iwp),             INTENT(IN)               ::  ispecies     !< species index
     TYPE(chem_emis_vsrc_pos), INTENT(IN), DIMENSION(:) ::  pos_vector   !< emission volume source positions
-    REAL(KIND=dp),            INTENT(IN), DIMENSION(:) ::  vsrc_vector  !< volume sources
+    REAL(KIND=wp),            INTENT(IN), DIMENSION(:) ::  vsrc_vector  !< volume sources
 
 !
 !-- local variables
@@ -461,8 +462,8 @@
 
     LOGICAL      ::  is_gas_phase                         !< whether species is particulate
 
-    REAL(KIND=dp) ::  dt_chem                             !< chemical time step
-    REAL(KIND=dp) ::  source_term                         !< source term value
+    REAL(KIND=wp) ::  dt_chem                             !< chemical time step
+    REAL(KIND=wp) ::  source_term                         !< source term value
     REAL(wp), DIMENSION(nzb:nzt+1) ::  temperature        !< columnar thermodynamic temperature
     REAL(wp), DIMENSION(nzb:nzt+1) ::  conv_ratio         !< conversion factor mol/m3 to ppmv
                                                           !< for gas phase species
@@ -580,7 +581,7 @@
 
 !
 !-- arguments in order of appearance
-    REAL(KIND=dp)            ::  src       !< volume source
+    REAL(KIND=wp)            ::  src       !< volume source
     INTEGER(iwp), INTENT(IN) ::  ispecies  !< species index
     INTEGER(iwp), INTENT(IN) ::  i         !< cell index
     INTEGER(iwp), INTENT(IN) ::  j         !< cell index
@@ -601,6 +602,8 @@
          ((k<nzb)  .OR.  (k>nzt)) )  RETURN
 
     key = chem_emis_vsrc_key_from_indices (i,j,k)     ! get out if key out of key location set
+
+    IF ( .NOT. ALLOCATED(vsrc_key) .OR. .NOT. ALLOCATED(vsrc_value)) RETURN
     IF ( (key<vsrc_key(1))  .OR.  (key>vsrc_key(num_vsrc)) )  RETURN
 
     isrc = locate_vsrc_key_index ( vsrc_key, key )        ! and only then fetch volume source

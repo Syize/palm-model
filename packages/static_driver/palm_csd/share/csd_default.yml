@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2021  Leibniz Universitaet Hannover
+# Copyright 1997-2025  Leibniz Universitaet Hannover
 #--------------------------------------------------------------------------------#
 #
 # Description:
@@ -41,8 +41,6 @@ attributes:
 
 
 settings:
-  lai_roof_intensive: 1.5
-  lai_roof_extensive: 3.0
   lai_high_vegetation_default: 6.0
   lai_low_vegetation_default: 3.0
   lad_alpha: 5.0
@@ -75,8 +73,6 @@ input_01:
   file_tree_crown_diameter:  Berlin_trees_crown_clean_15m_DLR.nc
   file_tree_trunk_diameter:  Berlin_trees_trunk_clean_15m.nc
   file_tree_type:  Berlin_trees_type_15m_DLR.nc
-  file_patch_height:  Berlin_vegetation_patch_height_15m_DLR.nc
-  file_vegetation_on_roofs:  Berlin_vegetation_on_roofs_15m_DLR.nc
 
 input_02:
   path: /ldata2/MOSAIK/Berlin_static_driver_data
@@ -102,8 +98,6 @@ input_02:
   file_tree_crown_diameter:  Berlin_trees_crown_10m_DLR.nc
   file_tree_trunk_diameter:  Berlin_trees_trunk_clean_10m.nc
   file_tree_type:  Berlin_trees_type_10m_DLR.nc
-  file_patch_height:  Berlin_vegetation_patch_height_10m_DLR.nc
-  file_vegetation_on_roofs:  Berlin_vegetation_on_roofs_10m_DLR.nc
 
 input_03:
   path: /ldata2/MOSAIK/Berlin_static_driver_data
@@ -129,8 +123,6 @@ input_03:
   file_tree_crown_diameter:  Berlin_trees_crown_clean_1m_DLR.nc
   file_tree_trunk_diameter:  Berlin_trees_trunk_clean_1m.nc
   file_tree_type:  Berlin_trees_type_1m_DLR.nc
-  file_patch_height:  Berlin_vegetation_patch_height_1m_DLR.nc
-  file_vegetation_on_roofs:  Berlin_vegetation_on_roofs_1m_DLR.nc
 
 input_04:
   path: /ldata2/MOSAIK/Berlin_static_driver_data
@@ -156,8 +148,6 @@ input_04:
   file_tree_crown_diameter: Berlin_trees_crown_clean_2m_DLR.nc
   file_tree_trunk_diameter:  Berlin_trees_trunk_clean_2m.nc
   file_tree_type:  Berlin_trees_type_2m_DLR.nc
-  file_patch_height:  Berlin_vegetation_patch_height_2m_DLR.nc
-  file_vegetation_on_roofs:  Berlin_vegetation_on_roofs_2m_DLR.nc
 
 
 output:
@@ -172,14 +162,13 @@ domain_root:
   nx: 3119
   ny: 2573
   input: "01"
-  buildings_3d: False
+  generate_buildings_3d: False
   dz: 15.0
-  allow_high_vegetation: False
+  replace_high_vegetation_types: True
   generate_vegetation_patches: True
   use_palm_z_axis: False
   interpolate_terrain: False
-  vegetation_on_roofs: False
-  street_trees: True
+  generate_single_trees: True
   overhanging_trees: False
   bridge_depth: 8.0
 
@@ -193,15 +182,14 @@ domain_N02:
   nx: 1023
   ny: 1023
   input: "03"
-  buildings_3d: True
+  generate_buildings_3d: True
   dz: 1.0
-  allow_high_vegetation: False
+  replace_high_vegetation_types: True
   generate_vegetation_patches: True
   use_palm_z_axis: True
   interpolate_terrain: True
   domain_parent: root
-  vegetation_on_roofs: False
-  street_trees: True
+  generate_single_trees: True
   overhanging_trees: False
   bridge_depth: 3.0
 

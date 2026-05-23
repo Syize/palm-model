@@ -60,15 +60,12 @@
                conserve_volume_flow,                                                               &
                cut_cell_topography,                                                                &
                dt_3d,                                                                              &
-               gathered_size,                                                                      &
                ibc_p_b,                                                                            &
                ibc_p_t,                                                                            &
                intermediate_timestep_count,                                                        &
                intermediate_timestep_count_max,                                                    &
-               mg_switch_to_pe0_level,                                                             &
                nesting_offline,                                                                    &
                psolver,                                                                            &
-               subdomain_size,                                                                     &
                topography,                                                                         &
                use_sm_for_poisfft,                                                                 &
                volume_flow,                                                                        &
@@ -77,9 +74,7 @@
 
 #if defined( _OPENACC )
     USE control_parameters,                                                                        &
-        ONLY:  enable_lsm_openacc,                                                                 &
-               enable_openacc
-
+        ONLY:  enable_openacc
 #endif
 
     USE cpulog,                                                                                    &
@@ -104,20 +99,15 @@
                nx,                                                                                 &
                nxl,                                                                                &
                nxlg,                                                                               &
-               nxl_mg,                                                                             &
                nxr,                                                                                &
                nxrg,                                                                               &
-               nxr_mg,                                                                             &
                ny,                                                                                 &
                nys,                                                                                &
                nysg,                                                                               &
-               nys_mg,                                                                             &
                nyn,                                                                                &
                nyng,                                                                               &
-               nyn_mg,                                                                             &
                nzb,                                                                                &
                nzt,                                                                                &
-               nzt_mg,                                                                             &
                topo_flags
 
     USE kinds
@@ -150,9 +140,9 @@
 
     IMPLICIT NONE
 
-    INTEGER(iwp) ::  i  !<
-    INTEGER(iwp) ::  j  !<
-    INTEGER(iwp) ::  k  !<
+    INTEGER(iwp) ::  i           !<
+    INTEGER(iwp) ::  j           !<
+    INTEGER(iwp) ::  k           !<
 
     REAL(wp) ::  ddt_3d            !<
     REAL(wp) ::  d_weight_pres     !<
@@ -163,9 +153,8 @@
 
     REAL(wp), DIMENSION(1:3)   ::  volume_flow_l       !<
     REAL(wp), DIMENSION(1:3)   ::  volume_flow_offset  !<
-    REAL(wp), DIMENSION(nzb:nzt) ::  w_l               !<
-    REAL(wp), DIMENSION(nzb:nzt) ::  w_l_l             !<
-    !$ACC DECLARE CREATE( w_l, w_l_l )
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  w_l        !<
+    REAL(wp), DIMENSION(:), ALLOCATABLE ::  w_l_l      !<
 
 
     CALL cpu_log( log_point(8), 'pres', 'start' )
@@ -187,7 +176,6 @@
 
 !
 !-- Multigrid method expects array d to have one ghost layer.
-!--
     IF ( psolver(1:9) == 'multigrid' )  THEN
 
        DEALLOCATE( d )
@@ -199,6 +187,8 @@
 !--    advanced in every substep. Attention: Because PALM solves the anelastic system of equations,
 !--    p_loc is defined as the perturbation pressure divided by the density.
        IF ( intermediate_timestep_count <= 1 )  THEN
+          !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl-1, nxr+1
              DO  j = nys-1, nyn+1
                 DO  k = nzb, nzt+1
@@ -331,6 +321,10 @@
                      )                                                                             &
          .AND. intermediate_timestep_count /= 0 )                                                  &
     THEN
+
+       ALLOCATE( w_l(nzb:nzt), w_l_l(nzb:nzt) )
+       !$ACC DATA CREATE(w_l,w_l_l) IF(enable_openacc)
+
        !$ACC PARALLEL LOOP PRESENT( w_l, w_l_l ) IF(enable_openacc)
        DO  k = nzb, nzt
           w_l(k)   = 0.0_wp
@@ -346,20 +340,13 @@
              ENDDO
           ENDDO
        ENDDO
+
 #if defined( __parallel )
        IF ( collective_wait )  CALL MPI_BARRIER( comm2d, ierr )
 
-#if defined ( _OPENACC )
-       IF ( enable_openacc ) THEN
-           !$ACC HOST_DATA USE_DEVICE( w_l, w_l_l )
-           CALL MPI_ALLREDUCE( w_l_l(1), w_l(1), nzt, MPI_REAL, MPI_SUM, comm2d, ierr )
-           !$ACC END HOST_DATA
-       ELSE
-           CALL MPI_ALLREDUCE( w_l_l(1), w_l(1), nzt, MPI_REAL, MPI_SUM, comm2d, ierr )
-       END IF
-#else
+       !$ACC HOST_DATA USE_DEVICE( w_l, w_l_l )  IF(enable_openacc)
        CALL MPI_ALLREDUCE( w_l_l(1), w_l(1), nzt, MPI_REAL, MPI_SUM, comm2d, ierr )
-#endif
+       !$ACC END HOST_DATA
 
 #else
        !$ACC PARALLEL LOOP PRESENT( w_l, w_l_l ) IF(enable_openacc)
@@ -386,14 +373,21 @@
 !--    of the total domain must not be set. Otherwise w may continuously increase/decrease
 !--    at these points.
        CALL exchange_horiz( w, nbgp )
+
+       !$ACC END DATA
+       DEALLOCATE( w_l, W_l_l )
+
     ENDIF
 
 !
 !-- Compute the divergence of the provisional velocity field.
     CALL cpu_log( log_point_s(1), 'divergence', 'start' )
 
+    !$ACC DATA CREATE(d) IF(enable_openacc)
     IF ( psolver(1:9) == 'multigrid' )  THEN
        !$OMP PARALLEL DO PRIVATE (i,j,k) SCHEDULE( STATIC )
+       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+       !$ACC PRESENT(d) DEFAULT(NONE) IF(enable_openacc)
        DO  i = nxl-1, nxr+1
           DO  j = nys-1, nyn+1
              DO  k = nzb, nzt+1
@@ -473,6 +467,7 @@
          intermediate_timestep_count == 0 )                                                        &
     THEN
        IF ( ALLOCATED( div_old ) )  THEN
+          !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl, nxr
              DO  j = nys, nyn
                 DO  k = 1, nzt
@@ -530,7 +525,7 @@
        IF ( ibc_p_b == 1 )  THEN
           !$OMP PARALLEL DO PRIVATE (i,j) SCHEDULE( STATIC )
           !$ACC PARALLEL LOOP GANG VECTOR COLLAPSE(2) DEFAULT(NONE) &
-          !$ACC COPY(tend) IF(enable_lsm_openacc)
+          !$ACC PRESENT(tend) IF(enable_openacc)
           DO  i = nxlg, nxrg
              DO  j = nysg, nyng
                 tend(nzb,j,i) = tend(nzb+1,j,i)
@@ -541,6 +536,8 @@
 !--    Dirichlet
        ELSE
           !$OMP PARALLEL DO PRIVATE (i,j) SCHEDULE( STATIC )
+          !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j) &
+          !$ACC PRESENT(tend) IF(enable_openacc)
           DO  i = nxlg, nxrg
              DO  j = nysg, nyng
                 tend(nzb,j,i) = 0.0_wp
@@ -591,30 +588,21 @@
 !
 !--    Solve Poisson equation for perturbation pressure using Multigrid scheme, array tend is used
 !--    to store the residuals.
-
-!--    If the number of grid points of the gathered grid, which is collected on PE0, is larger than
-!--    the number of grid points of an PE, than array tend will be enlarged.
-       IF ( gathered_size > subdomain_size )  THEN
-          DEALLOCATE( tend )
-          ALLOCATE( tend(nzb:nzt_mg(mg_switch_to_pe0_level)+1,nys_mg(                              &
-                    mg_switch_to_pe0_level)-1:nyn_mg(mg_switch_to_pe0_level)+1,                    &
-                    nxl_mg(mg_switch_to_pe0_level)-1:nxr_mg(mg_switch_to_pe0_level)+1) )
-       ENDIF
-
        IF ( psolver == 'multigrid' )  THEN
-          CALL poismg( tend )
+          CALL poismg
        ELSE
-          CALL poismg_noopt( tend )
+          CALL poismg_noopt
        ENDIF
 
-       IF ( gathered_size > subdomain_size )  THEN
-          DEALLOCATE( tend )
-          ALLOCATE( tend(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       ENDIF
-
+!       IF ( gathered_size > subdomain_size )  THEN
+!          DEALLOCATE( tend )
+!          ALLOCATE( tend(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
+!       ENDIF
 !
 !--    Restore perturbation pressure on tend because this array is used further below to correct the
 !--    velocity fields
+       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl-1, nxr+1
           DO  j = nys-1, nyn+1
              DO  k = nzb, nzt+1
@@ -834,6 +822,7 @@
 !
 !--    Store the "new" divergence for diagnostic output.
        IF ( ALLOCATED( div_new ) )  THEN
+          !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl, nxr
              DO  j = nys, nyn
                 DO  k = 1, nzt
@@ -846,6 +835,7 @@
        CALL cpu_log( log_point_s(1), 'divergence', 'stop' )
 
     ENDIF
+    !$ACC END DATA
 
     CALL cpu_log( log_point(8), 'pres', 'stop' )
 

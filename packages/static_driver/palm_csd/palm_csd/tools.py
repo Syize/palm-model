@@ -11,17 +11,20 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Support routines for palm_csd."""
 
 import logging
-from typing import Any, Optional, Tuple, Type, Union
+from typing import Any, Generator, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
 
 import numpy as np
 import numpy.ma as ma
+import numpy.ma.core as ma_core
 import numpy.typing as npt
+import pandas as pd
+import pandas.api.typing as pdtypes
 from pydantic import BaseModel, model_validator
 from scipy.interpolate import RectBivariateSpline
 
@@ -189,10 +192,25 @@ def check_consistency_4(
     return tmp_array, test
 
 
+def is_missing(value: Union[float, pdtypes.NAType, ma_core.MaskedConstant]) -> bool:
+    """Check if a value is missing.
+
+    Args:
+        value: Value to check.
+
+    Returns:
+        True if the value is missing, False otherwise.
+    """
+    # pd.isna returns bool for scalar value so type should be fine.
+    return ma.is_masked(value) or pd.isna(value)  # type: ignore
+
+
 # TODO: use just ma.isin() once the bug in https://github.com/numpy/numpy/issues/19877 or
 #  https://stackoverflow.com/questions/69160969/ is fixed
 def ma_isin(array: ma.MaskedArray, comparison: npt.ArrayLike) -> ma.MaskedArray:
     """Check for each element of the input array if it is in comparison.
+
+    If a value in the input array is masked, the result is masked as well.
 
     Args:
         array: Input array to check.
@@ -320,3 +338,77 @@ class DefaultMinMax(BaseModel, validate_assignment=True):
                 if not self.default <= self.maximum:
                     raise ValueError("maximum is smaller than default.")
         return self
+
+
+T = TypeVar("T", bound="Node")
+
+
+class Node(Generic[T]):
+    """Node of a tree structure."""
+
+    def __init__(self, parent: Optional[T] = None):
+        """Create a new node.
+
+        Args:
+            parent: Parent node. Defaults to None.
+        """
+        self._parent = parent
+        self._children: List[T] = []
+
+        if parent is not None:
+            parent.add_child(self)
+
+    def add_child(self, child: T) -> None:
+        """Add a child to the node.
+
+        Args:
+            child: Child node.
+        """
+        self._children.append(child)
+        child._parent = self
+
+    def remove_child(self, child: T) -> None:
+        """Remove a child from the node.
+
+        Args:
+            child: Child node.
+        """
+        self._children.remove(child)
+        child._parent = None
+
+    def get_children(self) -> List[T]:
+        """Get the children of the node.
+
+        Returns:
+            List of children.
+        """
+        return self._children
+
+    def get_parent(self) -> Optional[T]:
+        """Get the parent of the node.
+
+        Returns:
+            Parent node or None if the node has no parent.
+        """
+        return self._parent
+
+    def find_root(self) -> T:
+        """Find the root node of the tree.
+
+        Returns:
+            Root node of the tree.
+        """
+        node = cast(T, self)
+        while node is not None and node._parent is not None:
+            node = node._parent
+        return node
+
+    def traverse(self) -> Generator[T, None, None]:
+        """Traverse the tree starting from the current node.
+
+        Yields:
+            Nodes in the tree starting from the current node.
+        """
+        yield cast(T, self)
+        for child in self._children:
+            yield from child.traverse()

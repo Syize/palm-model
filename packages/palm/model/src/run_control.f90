@@ -34,7 +34,6 @@
                current_timestep_number,                                                            &
                disturbance_created,                                                                &
                dt_3d,                                                                              &
-               mgcycles,                                                                           &
                run_control_header,                                                                 &
                runnr,                                                                              &
                simulated_time,                                                                     &
@@ -47,6 +46,9 @@
     USE kinds
 
     USE pegrid
+
+    USE poismg_mod,                                                                                &
+        ONLY:  mgcycles
 
     USE statistics,                                                                                &
         ONLY:  flow_statistics_called,                                                             &

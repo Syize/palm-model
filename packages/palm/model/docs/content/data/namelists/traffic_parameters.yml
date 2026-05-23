@@ -1,0 +1,44 @@
+---
+# This is the YAML Database file for all allowed parameters within the namelist "traffic_parameters"
+#
+
+
+continuous_tendency:
+  category: General Settings
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Set up mode for the the application of the wind and theta tendencies.
+    long: |
+      If *.T.*, the wind and temperature tendencies are applied in each timestep, if it is set to *.F.*, the tendencies are applied only in timesteps if the car is moving over the gridcell.
+
+switch_off_module:
+  category: General Settings
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switch to turn on/off the module.
+    long: |
+      If *.T.*, the Traffic module is not activated even if the namelist is present in the parameter file.
+
+theta_tendency:
+  category: General Settings
+  type: L
+  default:
+    value: .T.
+  description:
+    short: Switch off the application of the potential temperature tendencies.
+    long: |
+      If *.F.*, the potential temperature tendencies are not applied even if the module is active. Theta tendencies are only allowed in combination with [neutral](#initialization_parameters--neutral) = *.F.* 
+
+wind_tendency:
+  category: General Settings
+  type: L
+  default:
+    value: .T.
+  description:
+    short: Switch off the application of the wind tendencies.
+    long: |
+      If *.F.*, the wind tendencies are not applied even if the module is active.

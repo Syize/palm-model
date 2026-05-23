@@ -1,0 +1,125 @@
+---
+attributes:
+  author: Sebastian Schubert, schubert.2@tu-berlin.de
+  contact_person: Sebastian Schubert, schubert.2@tu-berlin.de
+  acronym: TU
+  comment: created with palm_csd
+  data_content: static driver generation test
+  dependencies: None, fortunately
+  keywords: Berlin, Tiergarten, Test
+  source: DL-DE->BY-2.0 Berlin data
+  campaign: Automatic tests
+  location: Berlin-Mitte
+  site: Berlin Tiergarten
+  institution: Technische Universität Berlin
+
+settings:
+  epsg: 25833
+  rotation_angle: 0.0
+  lad_alpha: 5.0
+  lad_beta: 3.0
+  patch_height_default: 10.0
+  replace_invalid_input_values: True
+  season: summer
+
+input_tiergarten:
+  path: tests/99_full_application/input/geo_referenced
+  files:
+    building_heat_capacity_wall_roof: heat_capacity.tif
+    vegetation_height: Berlin_vegetation_height2020.tif
+    zt: Berlin_DEM2021.tif
+    surfaces:
+      - Berlin_ALKIS2025.shp
+      - Berlin_buildings2023.shp
+    trees:
+      - Berlin_trees_park2025.shp
+      - Berlin_trees_street2025.shp
+  columns:
+    hoehe_mod: buildings_2d
+    typ: building_type
+    albedot: building_albedo_type
+    hcon_wa: building_heat_conductivity_wall
+    hcap_wag_1: building_heat_capacity_wall_gfl_1
+    kronedurch: tree_crown_diameter
+    baumhoehe: tree_height
+    stammumfg: tree_trunk_diameter
+    art_bot: tree_type_name
+    bfrac_wall: building_fraction_wall
+    bfrac_win: building_fraction_window
+    WASSERT: water_temperature
+    BEZEICH:
+      AX_Bahnverkehr: bare_soil
+      AX_FlaecheBesondererFunktionalerPraegung: asphalt_concrete_mix
+      AX_FlaecheGemischterNutzung: bare_soil
+      AX_Fliessgewaesser: river
+      AX_Flugverkehr: asphalt_concrete_mix
+      AX_Friedhof: short_grass
+      AX_Gehoelz: evergreen_shrubs
+      AX_Hafenbecken: river
+      AX_Halde: bare_soil
+      AX_Heide: short_grass
+      AX_IndustrieUndGewerbeflaeche: asphalt_concrete_mix
+      AX_Landwirtschaft: crops_mixed_farming
+      AX_Moor: bogs_marsches
+      AX_Platz: concrete
+      AX_Schiffsverkehr: river
+      AX_SportFreizeitUndErholungsflaeche: bare_soil
+      AX_StehendesGewaesser: lake
+      AX_Strassenverkehr: asphalt_concrete_mix
+      AX_Sumpf: bogs_marsches
+      AX_TagebauGrubeSteinbruch: bare_soil
+      AX_UnlandVegetationsloseFlaeche: bare_soil
+      AX_Wald: mixed_forest_woodland
+      AX_Weg: concrete
+      AX_Wohnbauflaeche: asphalt_concrete_mix
+
+output:
+  path: tests/99_full_application/
+  file_out: berlin_tiergarten_geo_referenced
+  version: 1
+
+domain_root:
+  pixel_size: 15.0
+  nx: 149
+  ny: 129
+  origin_x: 388075.0
+  origin_y: 5818575.0
+  input: tiergarten
+  generate_buildings_3d: False
+  dz: 15.0
+  building_free_border_width: 50
+  building_free_border_pavement_type: asphalt
+  replace_high_vegetation_types: True
+  generate_vegetation_patches: True
+  use_palm_z_axis: False
+  interpolate_terrain: False
+  generate_single_trees: True
+  overhanging_trees: False
+  water_temperature:
+    river: 290
+  building_heat_capacity:
+    wall_gfl: 10000
+  building_fraction:
+    wall_roof: 0.6
+    green_roof: 0.2
+    window_roof: 0.1
+
+
+domain_N02:
+  pixel_size: 3.0
+  nx: 299
+  ny: 234
+  dz: 1.0
+  origin_x: 389200.0
+  origin_y: 5819550.0
+  input: tiergarten
+  generate_buildings_3d: True
+  replace_high_vegetation_types: True
+  generate_vegetation_patches: True
+  use_palm_z_axis: True
+  interpolate_terrain: True
+  domain_parent: root
+  generate_single_trees: True
+  overhanging_trees: False
+  water_temperature:
+    river: 290

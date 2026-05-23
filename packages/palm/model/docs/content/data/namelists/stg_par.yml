@@ -23,6 +23,17 @@ compute_velocity_seeds_local:
       This option is especially useful for large length scales where the computational effort can become huge (when computation of velocity seeds requires more time than MPI communication).
       If *.T.*, velocity seeds are computed only locally and no MPI communication is necessary. This performs better when the turbulent length scales are small (when MPI communication requires more time than computation).
 
+disturb_theta:
+  category: General Settings
+  type: L
+  default:
+    value: .F.
+  description:
+    short: Switch to decide whether the potential temperature is disturbed or not.
+    long: |
+      If *.T.*, the potential temperature at the boundary will be disturbed too. Temperature perturbations correlate with the perturbations added onto the w-component featuring the same length- and time-scales. The amplitude of temperature perturbations can be specified by
+      [theta_amplitude](#stg_par--theta_amplitude). Temperature perturbations are only allowed in case of [neutral](#initialization_parameters--neutral) = *.F.*. Tests have shown that disturbing the potential temperature significantly reduces the adjustment fetch. Note, this feature is still in a test phase and should be applied with care.
+
 dt_stg_adjust:
   category: General Settings
   type: R
@@ -55,3 +66,14 @@ switch_off_module:
     short: Switch to turn on/off the module.
     long: |
       If *.T.*, the synthetic turbulence generator is not activated even if the namelist is present in the parameter file.
+
+theta_amplitude:
+  category: General Settings
+  type: R
+  default:
+    value: 0.1
+  si-unit: K
+  description:
+    short: Maximum amplitude of potential temperature perturbations.
+    long: |
+      If [disturb_theta](#stg_par--disturb_theta) = *.T.* temperature perturbations with a maximum amplitude given by [theta_amplitude](#stg_par--theta_amplitude) are imposed onto the potential temperature at the lateral boundary. Tests have shown that even small amplitudes in the order of 0.1 K already result in a signficant reduction of the adjustment fetch. To date, the disturbance amplitude is fixed to a time-constant value.

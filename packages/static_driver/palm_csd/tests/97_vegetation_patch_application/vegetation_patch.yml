@@ -1,0 +1,36 @@
+---
+attributes:
+  author: Sebastian Schubert, schubert.2@tu-berlin.de
+
+settings:
+  vegetation_type_below_trees: 8
+  lai_high_vegetation_default: 6.0
+  lai_low_vegetation_default: 3.0
+  lad_alpha: 5.0
+  lad_beta: 3.0
+  patch_height_default: 10.0
+  epsg: 25833
+  ignore_input_georeferencing: True
+
+input:
+  path: tests/97_vegetation_patch_application/input
+  files:
+    zt: zt.tif
+    lai:  lai.tif
+    pavement_type: pavement_type.tif
+    vegetation_type: vegetation_type.tif
+    vegetation_height:  patch_height.tif
+    patch_type: patch_type.tif
+
+output:
+  path: tests/97_vegetation_patch_application/
+  file_out: vegetation_patch_application
+
+domain:
+  pixel_size: 3
+  input_lower_left_x: 0
+  input_lower_left_y: 0
+  origin_x: 386890
+  origin_y: 5818570
+  generate_vegetation_patches: True
+

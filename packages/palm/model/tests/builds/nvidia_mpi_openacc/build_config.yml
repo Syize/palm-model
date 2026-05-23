@@ -17,6 +17,9 @@ compiler:
     debug:
       - "-g"
       - "-traceback"
+  rrtmg_options:
+    default: []
+    debug: []
   options:
     default:
       - "-cpp"
@@ -31,7 +34,7 @@ compiler:
       - "-g"
       - "-O0"
       - "-acc=verystrict"
-      - "-gpu=cc80,math_uniform,cuda12.3"
+      - "-gpu=cc80,math_uniform"
       - "-Mnofma"
       - "-Minfo=accel"
       - "-cuda"

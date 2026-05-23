@@ -48,13 +48,15 @@ canopy_drag_coeff:
   category: Physics
   type: R
   default:
-    value: 0.0
+    value: 0.15
   description:
     short: Drag coefficient used in the plant-canopy model.
     long: |
       The drag coefficient is used to calculate the drag force due to the plant canopy. Please refer to the documentation of the [plant-canopy model](https://palm.muk.uni-hannover.de/trac/wiki/doc/tec/canopy) for further details.
 
       [canopy_drag_coeff](#plant_canopy_parameters--canopy_drag_coeff) must be greater than zero. Typical values are *0.15* ([Shaw and Schumann, 1992](https://doi.org/10.1007/BF02033994)) or *0.20* ([Cescatti and Marcolla, 2004](https://doi.org/10.1016/j.agrformet.2003.08.028)).
+      
+      Please note that the value of [canopy_drag_coeff](#plant_canopy_parameters--canopy_drag_coeff) may heavily depend on the tree species and wind magnitude.
 
 
 canopy_mode:

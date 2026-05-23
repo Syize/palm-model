@@ -56,12 +56,18 @@ Also some additional python dependencies are needed, which can be installed usin
 python3 -m pip install -r requirements.txt
 ```
 
-Now the PALM model system can be installed with the following commands (please replace `<install-prefix>` with the desired installation directory):
+Now the PALM model system can be installed with the following three commands:
 
 ``` bash
 export install_prefix="<install-prefix>"
 bash install -p ${install_prefix}
 export PATH=${install_prefix}/bin:${PATH}
+```
+
+**When typing the first command, please replace the string `"<install-prefix>"` with the desired installation directory.** Example:
+
+``` bash
+export install_prefix=$HOME/palm
 ```
 
 The following optional command permanently adds this installation to your bash environment:

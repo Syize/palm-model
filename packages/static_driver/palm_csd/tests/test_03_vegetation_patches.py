@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Run tests for vegetation patches."""
 
@@ -59,16 +59,17 @@ def test_process_patch_LM2004(patch_input_fields, z_max_rel):
         patch_input_fields: Trigger the fixture to provide the input fields.
         z_max_rel: Relative maximum height of the canopy.
     """
-    canopy_generator = CanopyGenerator(method="LM2004", z_max_rel_LM2004=z_max_rel)
+    dz = 2.0
+    canopy_generator = CanopyGenerator(
+        method="LM2004", z_max_rel_LM2004=z_max_rel, dz=dz, pixel_size=1.0
+    )
 
     patch_height = patch_input_fields[0]
     patch_type = patch_input_fields[1]
     patch_lai = patch_input_fields[2]
 
-    dz = 2.0
-
     lad_3d, patch_id_3d, patch_type_3d = canopy_generator.process_patch(
-        dz, patch_height, patch_type, patch_lai
+        patch_height, patch_type, patch_lai
     )
 
     np.testing.assert_allclose(ma.sum(lad_3d * dz, axis=0), patch_lai)
@@ -92,18 +93,17 @@ def test_process_patch_Metal2002(patch_input_fields, alpha, beta):
         alpha: Alpha parameter.
         beta: Beta parameter.
     """
+    dz = 2.0
     canopy_generator = CanopyGenerator(
-        method="Metal2003", alpha_Metal2003=alpha, beta_Metal2003=beta
+        method="Metal2003", alpha_Metal2003=alpha, beta_Metal2003=beta, dz=dz, pixel_size=1.0
     )
 
     patch_height = patch_input_fields[0]
     patch_type = patch_input_fields[1]
     patch_lai = patch_input_fields[2]
 
-    dz = 2.0
-
     lad_3d, patch_id_3d, patch_type_3d = canopy_generator.process_patch(
-        dz, patch_height, patch_type, patch_lai
+        patch_height, patch_type, patch_lai
     )
 
     np.testing.assert_allclose(ma.sum(lad_3d * dz, axis=0), patch_lai)

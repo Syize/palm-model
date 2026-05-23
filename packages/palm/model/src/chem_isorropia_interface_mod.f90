@@ -96,10 +96,10 @@
 !
 !-- Possible values for cntrl (isoropia).
 !-- ISORROPIA solver control.
-    REAL(KIND=dp), PARAMETER ::  isr_cntrl_problem_forward    = 0.0_dp  !< forward problem (aerosol+gas)
-    REAL(KIND=dp), PARAMETER ::  isr_cntrl_problem_reverse    = 1.0_dp  !< reverse problem (aerosol only)
-    REAL(KIND=dp), PARAMETER ::  isr_cntrl_state_aqueous      = 1.0_dp  !< aqueous only aerosol state
-    REAL(KIND=dp), PARAMETER ::  isr_cntrl_state_deliquescent = 0.0_dp  !< deliquescent aerosol state
+    REAL(KIND=wp), PARAMETER ::  isr_cntrl_problem_forward    = 0.0_wp  !< forward problem (aerosol+gas)
+    REAL(KIND=wp), PARAMETER ::  isr_cntrl_problem_reverse    = 1.0_wp  !< reverse problem (aerosol only)
+    REAL(KIND=wp), PARAMETER ::  isr_cntrl_state_aqueous      = 1.0_wp  !< aqueous only aerosol state
+    REAL(KIND=wp), PARAMETER ::  isr_cntrl_state_deliquescent = 0.0_wp  !< deliquescent aerosol state
 !
 !-- Possible values for wftypi (setparm / getparm).
 !-- MDR weighting method.
@@ -108,8 +108,8 @@
     INTEGER(iwp), PARAMETER ::  isr_wftypi_mean = 2  !< RH weighted mean of dry / wet solutions
 !
 !-- Default parameters for isoropia (see subroutine definitions for details).
-    REAL(KIND=dp), PARAMETER ::  isr_cntrl_problem_default = isr_cntrl_problem_forward
-    REAL(KIND=dp), PARAMETER ::  isr_cntrl_state_default   = isr_cntrl_state_deliquescent
+    REAL(KIND=wp), PARAMETER ::  isr_cntrl_problem_default = isr_cntrl_problem_forward
+    REAL(KIND=wp), PARAMETER ::  isr_cntrl_state_default   = isr_cntrl_state_deliquescent
 !
 !-- Possible values for iacalci (setparm / getparm).
 !-- Activity coefficient calculation method.
@@ -129,8 +129,8 @@
     INTEGER(iwp),  PARAMETER ::  isr_nsweepi_default = 4
     INTEGER(iwp),  PARAMETER ::  isr_wftypi_default  = isr_wftypi_mean
     
-    REAL(KIND=dp), PARAMETER ::  isr_epsacti_default = 0.05_dp
-    REAL(KIND=dp), PARAMETER ::  isr_epsi_default    = 1.0E-6
+    REAL(KIND=wp), PARAMETER ::  isr_epsacti_default = 0.05_wp
+    REAL(KIND=wp), PARAMETER ::  isr_epsi_default    = 1.0E-6
 
 !
 !-- Descriptiosn of chemical species (w, gas, aerliq, aersld), must be of length nc_field_length
@@ -213,7 +213,7 @@
 
 !
 !-- Molar precursor concentrations (viz. Ch 6 ISORROPIA v 2.1 reference manual).
-    REAL(KIND=dp), PARAMETER, DIMENSION(isr_total_num_gas*isr_total_num_w) ::                      &
+    REAL(KIND=wp), PARAMETER, DIMENSION(isr_total_num_gas*isr_total_num_w) ::                      &
        isr_precursor_gas_molar_concentrations =                                                    &
                             !  Na   SO4  NH4  NO3  Cl   Ca   K    Mg
                             (/ 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,           &  ! NH3
@@ -221,7 +221,7 @@
                                0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 /)            ! HCl
                             !  Na   SO4  NH4  NO3  Cl   Ca   K    Mg
 
-    REAL(KIND=dp), PARAMETER, DIMENSION(isr_total_num_aerliq*isr_total_num_w) ::                   &
+    REAL(KIND=wp), PARAMETER, DIMENSION(isr_total_num_aerliq*isr_total_num_w) ::                   &
        isr_precursor_aerliq_molar_concentrations =                                                 &
                             !  Na   SO4  NH4  NO3  Cl   Ca   K    Mg
                             (/ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,           &  ! H
@@ -241,7 +241,7 @@
                                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 /)            ! Mg
                             !  Na   SO4  NH4  NO3  Cl   Ca   K    Mg
 
-    REAL(KIND=dp), PARAMETER, DIMENSION(isr_total_num_aersld*isr_total_num_w) ::                   &
+    REAL(KIND=wp), PARAMETER, DIMENSION(isr_total_num_aersld*isr_total_num_w) ::                   &
        isr_precursor_aersld_molar_concentrations =                                                 &
                             !  Na   SO4  NH4  NO3  Cl   Ca   K    Mg
                             (/ 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,           &  ! NaNO3
@@ -303,16 +303,16 @@
 
 !
 !-- Arguments in order of appearance.
-    REAL(KIND=dp), DIMENSION(isr_num_w)      ::  wi     !< precursor conentrations
-    REAL(KIND=dp)                            ::  rhi    !< relative humidity (0-1)
-    REAL(KIND=dp)                            ::  tempi  !< ambient temperature [K]
-    REAL(KIND=dp), DIMENSION(isr_num_cntrl)  ::  cntrl  !< problem control
-    REAL(KIND=dp), DIMENSION(isr_num_w)      ::  wt     !< total species concentrations
-    REAL(KIND=dp), DIMENSION(isr_num_gas)    ::  gas    !< gaeous species concentrations
-    REAL(KIND=dp), DIMENSION(isr_num_aerliq) ::  aerliq !< liquid aerosol concentrations
-    REAL(KIND=dp), DIMENSION(isr_num_aersld) ::  aersld !< solid aerosol concentrations
+    REAL(KIND=wp), DIMENSION(isr_num_w)      ::  wi     !< precursor conentrations
+    REAL(KIND=wp)                            ::  rhi    !< relative humidity (0-1)
+    REAL(KIND=wp)                            ::  tempi  !< ambient temperature [K]
+    REAL(KIND=wp), DIMENSION(isr_num_cntrl)  ::  cntrl  !< problem control
+    REAL(KIND=wp), DIMENSION(isr_num_w)      ::  wt     !< total species concentrations
+    REAL(KIND=wp), DIMENSION(isr_num_gas)    ::  gas    !< gaeous species concentrations
+    REAL(KIND=wp), DIMENSION(isr_num_aerliq) ::  aerliq !< liquid aerosol concentrations
+    REAL(KIND=wp), DIMENSION(isr_num_aersld) ::  aersld !< solid aerosol concentrations
     CHARACTER(LEN=isr_scasi_len)             ::  scasi  !< case identifier
-    REAL(KIND=dp), DIMENSION(isr_num_other)  ::  other  !< other output quantities
+    REAL(KIND=wp), DIMENSION(isr_num_other)  ::  other  !< other output quantities
  
 
 #if defined( __ISORROPIA1 ) || defined( __ISORROPIA2 )
@@ -365,10 +365,10 @@
 !-- Arguments in order of appearance.
     INTEGER(iwp)  ::  wftypi  !< mutual deliquescence region weighting
     INTEGER(iwp)  ::  iacalci !< activity coefficeint calculation method
-    REAL(KIND=dp) ::  epsi    !< general convergence criterion
+    REAL(KIND=wp) ::  epsi    !< general convergence criterion
     INTEGER(iwp)  ::  maxiti  !< general maximum iterations
     INTEGER(iwp)  ::  nsweepi !< maximum iterations for activity coefficient calculation
-    REAL(KIND=dp) ::  epsacti !< convergence criterion for activity coefficient calculation
+    REAL(KIND=wp) ::  epsacti !< convergence criterion for activity coefficient calculation
     INTEGER(iwp)  ::  ndivi   !< subdivisions for root tracking
     INTEGER(iwp)  ::  nadji   !< enforcement of mass conservation (ISORROPIA II only)
 
@@ -432,10 +432,10 @@
 !-- Arguments in order of appearance.
     INTEGER(iwp)  ::  wftypi   !< mutual deliquescence region weighting
     INTEGER(iwp)  ::  iacalci  !< activity coefficeint calculation method
-    REAL(KIND=dp) ::  epsi     !< general convergence criterion
+    REAL(KIND=wp) ::  epsi     !< general convergence criterion
     INTEGER(iwp)  ::  maxiti   !< general maximum iterations
     INTEGER(iwp)  ::  nsweepi  !< maximum iterations for activity coefficient calculation
-    REAL(KIND=dp) ::  epsacti  !< convergence criterion for activity coefficient calculation
+    REAL(KIND=wp) ::  epsacti  !< convergence criterion for activity coefficient calculation
     INTEGER(iwp)  ::  ndivi    !< subdivisions for root tracking
     INTEGER(iwp)  ::  nadji    !< enforcement of mass conservation (ISORROPIA II only)
 
@@ -546,8 +546,8 @@
     INTEGER(iwp)                   ::  nsol    !< max number of solid aerosol species
     INTEGER(iwp)                   ::  nerr    !< max size of error stack
     
-    REAL(KIND=dp)                  ::  tin     !< value of numerical zero (tiny)
-    REAL(KIND=dp)                  ::  grt     !< value of numerical infinity (great)
+    REAL(KIND=wp)                  ::  tin     !< value of numerical zero (tiny)
+    REAL(KIND=wp)                  ::  grt     !< value of numerical infinity (great)
 
 
 #if defined( __ISORROPIA1 ) || defined( __ISORROPIA2 )

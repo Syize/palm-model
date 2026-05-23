@@ -37,6 +37,7 @@
  project_build_dir=$(readlink -f "${project_root_dir}/build/")
 
     # VARIABLE DECLARATIONS + DEFAULT VALUES
+ build_rrtmg=false
  calltime=""
  clean_depository=false
  column1=""
@@ -47,7 +48,7 @@
  makefile=""
  make_options=""
  module_commands=""
- palm_version_string="PALM 25.04"  # AUTOMATICALLY SET FOR RELEASE (DO NOT CHANGE THIS LINE)
+ palm_version_string="PALM 25.10-rc.1"  # AUTOMATICALLY SET FOR RELEASE (DO NOT CHANGE THIS LINE)
  program_name=palm
  remote_ip=""
  silent=false
@@ -59,9 +60,10 @@
 
 
     # ERROR HANDLING IN CASE OF EXIT
- trap 'rm -rf  ${source_path}/${configuration_identifier}_last_make_protocol
+ trap 'rm -rf ${source_path}/${configuration_identifier}_last_make_protocol
        rm -rf ${source_path}/.compile_settings
        rm -rf ${source_path}/.compile_settings_old
+       rm -rf ${source_path}/rrtmg
        if [[ $locat != normal  &&  $locat != control_c ]]
        then
           printf "\n\n+++ palmbuild crashed \n\n"
@@ -111,9 +113,9 @@ try:
     h = dict()
     h['Content-Type'] = 'application/json'
     h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-    h['Authorization'] = f'basic cGFsbWJ1aWxkX3YyNS4wNDpBUmtuQmcxRUJqc2VEaDRCV3haMFpBPT0='
+    h['Authorization'] = f'basic cGFsbWJ1aWxkX3YyNS4xMC1yYy4xOlF5TmVXMUZDT1MwQUpnOEZSM2tKWGtvMkowRlk='
     q = '''query palmbuild($current: String!) { check_version(input: {current: $current}) { show message } }'''
-    v = {'current': 'v25.04'}
+    v = {'current': 'v25.10-rc.1'}
     c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
     c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
     r = c.getresponse()
@@ -195,11 +197,6 @@ palmbuild_check_updates
        var=`echo $line | cut -d" " -s -f1 | cut -c2-`
        value=`echo $line | cut -d" " -s -f2-`
 
-          # REPLACE ":" BY " " IN COMPILER- CPP- OR LINKER-OPTIONS,
-          # "::" IS REPLACED BY ":".
-       #value=`echo $value | sed 's/::/%DUM%/g' | sed 's/:/ /g' | sed 's/%DUM%/:/g'`
-
-
           # VALUE FROM THE CONFIGURATION-FILE IS ASSIGNED TO THE
           # ENVIRONMENT-VARIABLE, BUT ONLY IF NO VALUE HAS BEEN ALREADY
           # ASSIGNED WITHIN THIS SCRIPT (E.G. BY SCRIPT-OPTIONS).
@@ -257,6 +254,51 @@ palmbuild_check_updates
  fi
 
 
+    #CHECK CPP-OPTIONS
+ if [[ "$cpp_options" = "" ]]
+ then
+    printf "\n  +++ WARNING: no cpp-options found in configuration file"
+ fi
+
+    # ANALYSE CPP-OPTIONS AND SET RESPECTIVE SWITCHES
+ if [[ $(echo $cpp_options | grep -c "__rrtmg") != 0 ]]
+ then
+ 
+       # CHECK IF GIVEN COMPILER OR LINKER OPTIONS REFER TO AN ALREADY INSTALLED RRTMG LIBRARY
+    if [[ $(echo $compiler_options | grep -c "rrtmg") != 0  ||  $(echo $linker_options | grep -c "rrtmg") != 0 ]]
+    then
+ 
+       printf "\n  +++ WARNING: rrtmg-library will not be build/updated since an existing"
+       printf "\n               library is referenced in the compiler_options and/or"
+       printf "\n               linker_options\n"
+ 
+    else
+ 
+          # SET RRTMG COMPILER AND LINKER OPTIONS IF NOT GIVEN IN CONFIG FILE
+          # CHECK IF RRTMG COMPILER AND LINKER OPTIONS ARE GIVEN
+       [[ "$compiler_options_rrtmg" = "" ]]  &&  compiler_options_rrtmg="$compiler_options"
+       [[ "$linker_options_rrtmg"   = "" ]]  &&  linker_options_rrtmg="$linker_options"
+
+          # ADD RRTMG INCLUDE AND LIBRARY SETTINGS TO COMPILER- AND LINKER-OPTIONS
+       compiler_options="$compiler_options -I rrtmg"
+       linker_options="$linker_options rrtmg/rrtmg.so"
+       build_rrtmg=true
+
+          # CHECK RRTMG MAKEFILE
+       makefile=$source_path/../lib/rrtmg/src/Makefile
+       if [[ ! -f $makefile ]]
+       then
+          printf "\n  +++ makefile: "
+          printf "\n           $makefile"
+          printf "\n      does not exist"
+          locat=makefile; exit
+       fi
+
+    fi
+ 
+ fi
+
+
     # CHECK MAKEFILE
  makefile=$source_path/Makefile
  if [[ ! -f $makefile ]]
@@ -299,13 +341,6 @@ palmbuild_check_updates
  if [[ "$ssh_key" != "" ]]
  then
     ssh_key="-i $HOME/.ssh/$ssh_key"
- fi
-
-
-    #CHECK CPP-OPTIONS
- if [[ "$cpp_options" = "" ]]
- then
-    printf "\n  +++ WARNING: no cpp-options found in configuration file"
  fi
 
 
@@ -527,8 +562,10 @@ palmbuild_check_updates
 compiler_name = $compiler_name
 compiler_name_ser = $compiler_name_ser
 cpp_options = $cpp_options
-compiler_option = $compiler_options
+compiler_options = $compiler_options
+compiler_options_rrtmg = $compiler_options_rrtmg
 linker_options = $linker_options
+linker_options_rrtmg = $linker_options_rrtmg
 EOF
 
 
@@ -541,8 +578,16 @@ EOF
     printf "\n      $source_path\n"
  fi
 
- tar -cf  ${program_name}_sources.tar  Makefile  *.$sufc *.$suff  .compile_settings
-
+    # IF REQUIRED, INCLUDE THE RRTMG SOURCES (OPTION -p CONSERVES THE TIMESTAMPS)
+ if [[ $build_rrtmg = true ]]
+ then
+    mkdir rrtmg
+    cp -p ../lib/rrtmg/src/* rrtmg
+    tar -cf  ${program_name}_sources.tar  Makefile  *.$sufc *.$suff .compile_settings rrtmg/Makefile rrtmg/*.$suff
+    rm -rf  rrtmg
+ else
+    tar -cf  ${program_name}_sources.tar  Makefile  *.$sufc *.$suff .compile_settings
+ fi
 
     # MAKE ON REMOTE HOST
  if [[ "$remote_ip" != "" ]]
@@ -583,7 +628,7 @@ EOF
           ssh  -q  $ssh_key ${remote_username}@${remote_ip}  "[[ ! -d ${make_depository} ]]  &&  (echo \"  *** ${make_depository} will be created\"; mkdir -p  ${make_depository})"  2>&1
           scp  $ssh_key ${source_path}/${program_name}_sources.tar  ${remote_username}@${remote_ip}:${make_depository}/${program_name}_sources.tar
        else
-          if [[ $clean_depository = false ]]
+          if [[ $clean_depository = true ]]
           then
              ssh  -q  $ssh_key ${remote_username}@${remote_ip}  "rm -rf ${make_depository}"  2>&1
           fi
@@ -610,7 +655,7 @@ EOF
        ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "cd ${make_depository}; tar -xf  ${program_name}_sources.tar"  2>&1
 
 
-          # CREATE INIT AND MODULE COAMMNDS
+          # CREATE INIT AND MODULE COMMANDS
        [[ "$login_init_cmd" != "" ]]   &&  login_init_cmd=${login_init_cmd}";"
        [[ "$module_commands" != "" ]]  &&  module_commands=${module_commands}";"
 
@@ -619,6 +664,47 @@ EOF
           # COMMANDS WILL BE COMMUNICATED TO SSH VIA PIPE, SINCE THIS WAY THE SYSTEM- AND
           # USER-PROFILES OF THE SHELL ARE COMPLETELY EXECUTED (OTHERWISE, MAKE
           # MAY E.G. MISS THE COMPILER-PATHS)
+
+          # FIRST GENERATE THE RRTMG LIBRARY
+       if [[ $build_rrtmg = true ]]
+       then
+          if [[ $silent = false ]]
+          then
+             echo " "
+             echo "  *** generating RRTMG library on remote host"
+          fi
+          make_call_string="make  $make_options  PROG=rrtmg  F90=$compiler_name  COPT=\"$cpp_options\"  F90FLAGS=\"$compiler_options_rrtmg\"  LDFLAGS=\"$linker_options_rrtmg\" "
+###          echo "$login_init_cmd $module_commands cd ${make_depository}; echo $make_call_string > LAST_MAKE_CALL; chmod u+x LAST_MAKE_CALL; $make_call_string; [[ \$? != 0 ]] && echo MAKE_ERROR" | ssh  -q  $ssh_key  ${remote_username}@${remote_ip} 2>&1 | tee ${configuration_identifier}_last_make_protocol
+          ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "$login_init_cmd $module_commands cd ${make_depository}/rrtmg; echo $make_call_string > LAST_MAKE_CALL; chmod u+x LAST_MAKE_CALL; $make_call_string; [[ \$? != 0 ]] && echo MAKE_ERROR"  2>&1 | tee ${configuration_identifier}_last_make_protocol
+
+          if [[ $(grep -c MAKE_ERROR ${configuration_identifier}_last_make_protocol) != 0 ]]
+          then
+             printf "\a\n  +++ error(s) occurred during compiling / generating the RRTMG library for host configuration \"$configuration_identifier\" "
+             if [[ $silent = false ]]
+             then
+                answer=dummy
+                printf "\n"
+                while [[ "$answer" != c  &&  "$answer" != k ]]
+                do
+                   printf "  >>> continue / list errors / kill palmbuild (c/l/k) ? "
+                   read  answer
+                   if [[ "$answer" = l ]]
+                   then
+                      more ${configuration_identifier}_last_make_protocol
+                   fi
+                done
+                if [[ $answer = k ]]
+                then
+                   locat=user_abort; exit
+                fi
+             else
+                   # ABORT ANYWAY
+                locat=user_abort; exit
+             fi
+          fi
+       fi
+
+          # NOW GENERATE THE PALM EXECUTABLE
        if [[ $silent = false ]]
        then
           echo " "
@@ -659,7 +745,13 @@ EOF
        then
           printf "\n  *** tar update on remote host ..."
        fi
-       ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "cd ${make_depository}; chmod u+w *; tar -cf  ${program_name}_current_version.tar  ${program_name}  *.f90 *.o *.mod *.x"  2>&1
+
+       if [[ $build_rrtmg = true ]]
+       then
+          ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "cd ${make_depository}; chmod u+w *; tar -cf  ${program_name}_current_version.tar  ${program_name}  *.f90 *.o *.mod *.x rrtmg/Makefile rrtmg/*.$suff rrtmg/*.o rrtmg/*.mod rrtmg/rrtmg.so"  2>&1
+       else
+          ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "cd ${make_depository}; chmod u+w *; tar -cf  ${program_name}_current_version.tar  ${program_name}  *.f90 *.o *.mod *.x"  2>&1
+       fi
 
 
        # NOW COMES THE BRANCH FOR CREATING THE EXECUTABLE FOR THE CURRENT RUN
@@ -700,16 +792,63 @@ EOF
           printf "\n  *** copy ${base_directory}/${sources_for_run_catalog}"
           printf "\n      to $sources_for_run_catalog on remote host \n"
        fi
+
        scp  -q  $ssh_key  ${base_directory}/${sources_for_run_catalog}/{*,.[!.]*}  ${remote_username}@${remote_ip}:${fast_io_catalog}/${sources_for_run_catalog}
 
+
+       [[ "$login_init_cmd" != "" ]]   &&  login_init_cmd=${login_init_cmd}";"
+       [[ "$module_commands" != "" ]]  &&  module_commands=${module_commands}";"
+
+          # FIRST GENERATE THE RRTMG LIBRARY
+       if [[ $build_rrtmg = true ]]
+       then
+          if [[ $silent = false ]]
+          then
+             echo " "
+             echo "  *** generating RRTMG library on remote host"
+          fi
+
+          make_call_string="make  $make_options  PROG=rrtmg  F90=$compiler_name  COPT=\"$cpp_options\"  F90FLAGS=\"$compiler_options_rrtmg\"  LDFLAGS=\"$linker_options_rrtmg\" "
+          if [[ $silent = false ]]
+          then
+             echo "  *** execute \"make\" for generating the RRTMG library on remote host"
+          fi
+          ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "$login_init_cmd $module_commands cd ${fast_io_catalog}/${sources_for_run_catalog}/rrtmg; echo $make_call_string > LAST_MAKE_CALL; chmod u+x LAST_MAKE_CALL; $make_call_string; [[ \$? != 0 ]] && echo MAKE_ERROR"  2>&1 | tee ${configuration_identifier}_last_make_protocol
+
+          if [[ $(grep -c MAKE_ERROR ${configuration_identifier}_last_make_protocol) != 0 ]]
+          then
+             printf "\a\n  +++ error(s) occurred during compiling or linking for host configuration \"$configuration_identifier\" "
+             if [[ $silent = false ]]
+             then
+                answer=dummy
+                printf "\n"
+                while [[ "$answer" != c  &&  "$answer" != k ]]
+                do
+                   printf "  >>> continue / list errors / kill palmbuild (c/l/k) ? "
+                   read  answer
+                   if [[ "$answer" = l ]]
+                   then
+                      more ${configuration_identifier}_last_make_protocol
+                   fi
+                done
+                if [[ $answer = k ]]
+                then
+                   ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "rm -rf ${fast_io_catalog}/${sources_for_run_catalog}"  2>&1
+                   locat=user_abort; exit
+                fi
+             else
+                   # ABORT ANYWAY
+                ssh  -q  $ssh_key  ${remote_username}@${remote_ip}  "rm -rf ${fast_io_catalog}/${sources_for_run_catalog}"  2>&1
+                locat=user_abort; exit
+             fi
+          fi
+       fi
 
           # CREATE EXECUTABLE FROM THE NEW/MODIFIED SOURCE FILES, IF THERE ARE ANY
        if [[ $(ls -1 ${base_directory}/${sources_for_run_catalog}/ | grep -c .$suff) != 0  ||  $(ls -1 ${base_directory}/${sources_for_run_catalog}/ | grep -c .$sufc) != 0 ]]
        then
 
           make_call_string="make  $make_options  PROG=$program_name  CC=$c_compiler_name  CFLAGS=\"$c_compiler_options\"  F90=$compiler_name  F90_SER=$compiler_name_ser  COPT=\"$cpp_options\"  F90FLAGS=\"$compiler_options\"  LDFLAGS=\"$linker_options\" "
-          [[ "$login_init_cmd" != "" ]]   &&  login_init_cmd=${login_init_cmd}";"
-          [[ "$module_commands" != "" ]]  &&  module_commands=${module_commands}";"
           if [[ $silent = false ]]
           then
              echo "  *** execute \"make\" on remote host"
@@ -846,7 +985,51 @@ EOF
        cp  $source_path/${program_name}_sources.tar  .
        tar xf  ${program_name}_sources.tar
 
-          # CALL MAKE ON LOCAL HOST USING THE  OPTIONS DETERMINED FURTHER ABOVE
+          # CALL MAKE ON LOCAL HOST USING THE OPTIONS DETERMINED FURTHER ABOVE
+          # FIRST GENERATE THE RRTMG LIBRARY
+       if [[ $build_rrtmg = true ]]
+       then
+
+          cd rrtmg
+
+          if [[ $silent = false ]]
+          then
+             echo " "
+             echo "  *** generating RRTMG library on local host"
+          fi
+
+          make  $make_options  PROG=rrtmg  F90="$compiler_name"  COPT="$cpp_options"  F90FLAGS="$compiler_options_rrtmg"  LDFLAGS="$linker_options_rrtmg"  2>&1 | tee ${configuration_identifier}_last_make_protocol
+
+          if [[ ${PIPESTATUS[0]} != 0 ]]
+          then
+             printf "\a\n  +++ error(s) occurred during compiling / generating the RRTMG library for host configuration \"$configuration_identifier\" "
+             if [[ $silent = false ]]
+             then
+                answer=dummy
+                printf "\n"
+                while [[ "$answer" != c  &&  "$answer" != k ]]
+                do
+                   printf "  >>> continue / list errors / kill palmbuild (c/l/k) ? "
+                   read  answer
+                   if [[ "$answer" = l ]]
+                   then
+                      more ${configuration_identifier}_last_make_protocol
+                   fi
+                done
+                if [[ $answer = k ]]
+                then
+                   locat=user_abort; exit
+                fi
+             else
+                   # ABORT ANYWAY
+                locat=user_abort; exit
+             fi
+          fi
+
+          cd ..
+       fi
+
+          # NOW GENERATE THE PALM EXECUTABLE
        if [[ $silent = false ]]
        then
           echo " "
@@ -887,7 +1070,12 @@ EOF
        then
           printf "\n  *** tar update on local host ..."
        fi
-       tar -cf  ${program_name}_current_version.tar  ${program_name} *.$sufc *.$suff *.o *.mod *.x
+       if [[ $build_rrtmg = true ]]
+       then
+          tar -cf  ${program_name}_current_version.tar  ${program_name} *.$sufc *.$suff *.o *.mod *.x  rrtmg/Makefile rrtmg/*.$suff rrtmg/*.o rrtmg/*.mod rrtmg/rrtmg.so
+       else
+          tar -cf  ${program_name}_current_version.tar  ${program_name} *.$sufc *.$suff *.o *.mod *.x
+       fi
 
     else
 

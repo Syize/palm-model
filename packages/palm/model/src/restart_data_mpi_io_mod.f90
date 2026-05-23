@@ -3537,8 +3537,10 @@ END SUBROUTINE rrd_mpi_io_int4_3d_special
 
     LOGICAL                            ::  found           !<
 
-    REAL(dp)                           :: rr               !< there is no data type INTEGER*8 in MPI
-    REAL(dp)                           :: rs               !< use REAL*8 to compute max offset
+#if defined( __parallel )
+    REAL(dp) :: rr  !< there is no data type INTEGER*8 in MPI
+    REAL(dp) :: rs  !< use REAL*8 to compute max offset
+#endif
 
     TYPE(particle_type), DIMENSION(:), ALLOCATABLE, TARGET :: prt_data   !<
 
@@ -3612,8 +3614,6 @@ END SUBROUTINE rrd_mpi_io_int4_3d_special
        rs = prt_nr_bytes
        CALL MPI_ALLREDUCE( rs, rr, 1, MPI_DOUBLE_PRECISION, MPI_MAX, comm2d, ierr )
        prt_nr_bytes = rr
-#else
-       rr = rs
 #endif
        array_position = prt_nr_bytes
 

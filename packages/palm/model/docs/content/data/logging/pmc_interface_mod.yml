@@ -89,7 +89,7 @@ PMC0013:
   message: |
     nested parallel child domains (ids: ... and ...) overlap
   description: |
-    Two or more parallel nest domains overlap each other in space. Parallel nest domains must never overlap. Respective child ids that violate this condition are given in the error message. Adjust the nest coordinates via [domain_layouts](../Namelists/#nesting_parameters--domain_layouts).
+    Two or more parallel nest domains overlap each other in space. Parallel nest domains must never overlap when [nesting_mode](../Namelists/#nesting_parameters--nesting_mode) = *'two-way'*. Respective child ids that violate this condition are given in the error message. Adjust the nest coordinates via [domain_layouts](../Namelists/#nesting_parameters--domain_layouts) or set [nesting_mode](../Namelists/#nesting_parameters--nesting_mode) = *'one-way'*.
 
 PMC0014:
   loglevel: ERROR

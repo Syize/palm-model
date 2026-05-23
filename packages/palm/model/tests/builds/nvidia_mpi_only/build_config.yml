@@ -17,6 +17,9 @@ compiler:
     debug:
       - "-g"
       - "-traceback"
+  rrtmg_options:
+    default: []
+    debug: []
   options:
     default:
       - "-cpp"

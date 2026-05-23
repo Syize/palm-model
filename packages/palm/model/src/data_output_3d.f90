@@ -61,7 +61,6 @@
                nz_do3d,                                                                            &
                output_fill_value,                                                                  &
                plant_canopy,                                                                       &
-               psolver,                                                                            &
                slurb,                                                                              &
                time_since_reference_point,                                                         &
                urban_surface,                                                                      &
@@ -72,6 +71,11 @@
         ONLY:  io_blocks,                                                                          &
                io_group,                                                                           &
                output_3d_file_size
+#endif
+
+#if defined( _OPENACC )
+    USE control_parameters,                                                                        &
+        ONLY:  enable_openacc
 #endif
 
     USE cpulog,                                                                                    &
@@ -92,8 +96,7 @@
         ONLY:  exchange_horiz
 
     USE indices,                                                                                   &
-        ONLY:  nbgp,                                                                               &
-               nxl,                                                                                &
+        ONLY:  nxl,                                                                                &
                nxlg,                                                                               &
                nxr,                                                                                &
                nxrg,                                                                               &
@@ -137,6 +140,11 @@
                nc_stat,                                                                            &
                netcdf_data_format,                                                                 &
                netcdf_handle_error
+
+#if defined( _OPENACC )
+    USE openacc,                                                                                   &
+        ONLY:  acc_is_present
+#endif
 
     USE particle_attributes,                                                                       &
         ONLY:  grid_particles,                                                                     &
@@ -304,7 +312,12 @@
 !--    in some modules values are asssigned not for all grid points above topography.
 !--    Grid points below topography will be masked again further below, directly before output.
        ALLOCATE( local_pf(nxl:nxr,nys:nyn,nzb_do:nzt_do) )
-       IF ( .NOT. data_output_raw )  local_pf = output_fill_value
+       !$ACC DATA CREATE(local_pf) IF(enable_openacc)
+       IF ( .NOT. data_output_raw )  THEN
+          !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
+          local_pf = output_fill_value
+          !$ACC END KERNELS
+       ENDIF
 !
 !--    Set masking flag for topography for output arrays.
        flag_nr = 0
@@ -335,14 +348,12 @@
 
           CASE ( 'p' )
              IF ( av == 0 )  THEN
-                IF ( psolver /= 'sor' )  CALL exchange_horiz( p, nbgp )
                 to_be_resorted => p
              ELSE
                 IF ( .NOT. ALLOCATED( p_av ) )  THEN
                    ALLOCATE( p_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                    p_av = 0.0_wp
                 ENDIF
-                IF ( psolver /= 'sor' )  CALL exchange_horiz( p_av, nbgp )
                 to_be_resorted => p_av
              ENDIF
 
@@ -550,6 +561,8 @@
              flag_nr = MERGE( 0, 1, interpolate_to_grid_center )
              IF ( av == 0 )  THEN
                 IF ( interpolate_to_grid_center )  THEN
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb_do, nzt_do
@@ -573,6 +586,8 @@
              flag_nr = MERGE( 0, 2, interpolate_to_grid_center )
              IF ( av == 0 )  THEN
                 IF ( interpolate_to_grid_center )  THEN
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb_do, nzt_do
@@ -607,6 +622,8 @@
              flag_nr = MERGE( 0, 3, interpolate_to_grid_center )
              IF ( av == 0 )  THEN
                 IF ( interpolate_to_grid_center )  THEN
+                   !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                   !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                    DO  i = nxl, nxr
                       DO  j = nys, nyn
                          DO  k = nzb_do, nzt_do
@@ -720,6 +737,21 @@
 !
 !--    Resort the array to be output, if not done above.
        IF ( .NOT. resorted )  THEN
+
+#if defined( _OPENACC )
+!
+!--       Security check for arrays from modules that are still not ported.
+          IF ( enable_openacc  .AND.  .NOT. acc_is_present( to_be_resorted ) )  THEN
+             IF ( av == 0 )  THEN
+                message_string = 'output array "' // TRIM( trimvar ) // '" not on device'
+             ELSE
+                message_string = 'output array "' // TRIM( trimvar ) // '_av" not on device'
+             ENDIF
+             CALL message( 'data_output_3d', 'PAC0367', 1, 2, 0, 6, 0 )
+          ENDIF
+#endif
+          !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl, nxr
              DO  j = nys, nyn
                 DO  k = nzb_do, nzt_do
@@ -727,12 +759,15 @@
                 ENDDO
              ENDDO
           ENDDO
+
        ENDIF
 !
 !--    Set fill values at topography/building grid points, but not for debugging to be able to
 !--    check if data has been written to (wrong) locations within the topography.
 !--    Terrain following data must not be masked at all.
        IF ( .NOT. data_output_raw  .AND.  mask_topography )  THEN
+          !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl, nxr
              DO  j = nys, nyn
                 DO  k = nzb_do, nzt_do
@@ -754,6 +789,7 @@
           IF ( myid == 0 )  THEN
              WRITE ( 30 )  time_since_reference_point, do3d_time_count(av), av
           ENDIF
+          !$ACC UPDATE HOST( local_pf ) IF(enable_openacc)
           DO  i = 0, io_blocks-1
              IF ( i == io_group )  THEN
                 WRITE ( 30 )  nxl, nxr, nys, nyn, nzb_do, nzt_do
@@ -781,6 +817,7 @@
 
              ALLOCATE( f_inv(nys:nyn,nxl:nxr_x_max,1:nz_x_max_diffnz) )
              ALLOCATE( tr_out(nx+1,nys:nyn,nzb_x_diffnz:nzt_x_diffnz) )
+             !$ACC DATA CREATE(f_inv, tr_out) IF(enable_openacc)
 
              CALL resort_for_zx( local_pf, f_inv, nzb_do, nzt_do )
 !
@@ -790,6 +827,7 @@
 
              CALL cpu_log( log_point_s(58), 'output_3d 1:nx+1 PUT', 'start' )
              output_3d_file_size = output_3d_file_size + SIZE( tr_out )
+             !$ACC UPDATE HOST(tr_out) IF(enable_openacc)
              nc_stat = NF90_PUT_VAR( id_set_3d(av), id_var_do3d(av,ivar),                          &
                                      tr_out(1:nx+1,nys:nyn,nzb_x_diffnz:nzt_x_diffnz),             &
                                      start = (/ 1, nys+1, nzb_x_diffnz, do3d_time_count(av) /),    &
@@ -799,6 +837,7 @@
              CALL cpu_log( log_point_s(58), 'output_3d 1:nx+1 PUT', 'stop' )
 
              DEALLOCATE( f_inv, tr_out )
+             !$ACC END DATA
 
           ELSE
 !
@@ -809,6 +848,7 @@
              ELSE
                 output_3d_file_size = output_3d_file_size + SIZE( local_pf )
              ENDIF
+             !$ACC UPDATE HOST(local_pf) IF(enable_openacc)
              nc_stat = NF90_PUT_VAR( id_set_3d(av), id_var_do3d(av,ivar),                          &
                                       local_pf(nxl:nxr,nys:nyn,nzb_do:nzt_do),                     &
                                       start = (/ nxl+1, nys+1, 1, do3d_time_count(av) /),          &
@@ -838,6 +878,7 @@
 !
 !--    Deallocate temporary array
        DEALLOCATE ( local_pf )
+       !$ACC END DATA
 
     ENDDO
 

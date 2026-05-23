@@ -80,6 +80,9 @@
 ## Synthetic Turbulence Generator
 {{ include_palm_logging_ids('synthetic_turbulence_generator_mod') }}
 
+## Traffic
+{{ include_palm_logging_ids('traffic_mod') }}
+
 ## Turbulence Closure
 {{ include_palm_logging_ids('turbulence_closure_mod') }}
 

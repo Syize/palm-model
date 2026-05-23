@@ -387,9 +387,9 @@
 !
 !--          Prognostic equation for u-velocity component
              DO  k = nzb+1, nzt
-                u_p(k,j,i) = u(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tu_m(k,j,i) )  &
+                u_p(k,j,i) = u(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tu_m(k,j,i)    &
                                           - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) )             &
-                                          * ( u(k,j,i) - u_init(k) )                               &
+                                          * ( u(k,j,i) - u_init(k) ) )                             &
                                         ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 1 ) )
              ENDDO
 
@@ -470,9 +470,9 @@
 !
 !--          Prognostic equation for v-velocity component
              DO  k = nzb+1, nzt
-                v_p(k,j,i) = v(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tv_m(k,j,i) )  &
+                v_p(k,j,i) = v(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tv_m(k,j,i)    &
                                           - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) )             &
-                                          * ( v(k,j,i) - v_init(k) )                               &
+                                          * ( v(k,j,i) - v_init(k) ) )                             &
                                         ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 2 ) )
              ENDDO
 
@@ -550,8 +550,8 @@
 !
 !--       Prognostic equation for w-velocity component
           DO  k = nzb+1, nzt-1
-             w_p(k,j,i) = w(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tw_m(k,j,i) )     &
-                                       - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) ) * w(k,j,i)     &
+             w_p(k,j,i) = w(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tw_m(k,j,i)       &
+                                       - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) ) * w(k,j,i) )   &
                                      ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 3 ) )
           ENDDO
 
@@ -633,9 +633,9 @@
 !--          Prognostic equation for potential temperature
              DO  k = nzb+1, nzt
                 pt_p(k,j,i) = pt(k,j,i) +                                                          &
-                              ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tpt_m(k,j,i) )           &
+                              ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tpt_m(k,j,i)             &
                                 - tsc(5) * ( pt(k,j,i) - pt_init(k) )                              &
-                                * MAX( rdf_sc(k), ptdf_x(i), ptdf_y(j), odf_x(i), odf_y(j) )       &
+                                * MAX( rdf_sc(k), ptdf_x(i), ptdf_y(j), odf_x(i), odf_y(j) ) )     &
                               ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
              ENDDO
 
@@ -709,8 +709,8 @@
 !
 !--          Prognostic equation for total water content / scalar
              DO  k = nzb+1, nzt
-                q_p(k,j,i) = q(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tq_m(k,j,i) )  &
-                                          - tsc(5) * rdf_sc(k) * ( q(k,j,i) - q_init(k) )          &
+                q_p(k,j,i) = q(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tq_m(k,j,i)    &
+                                          - tsc(5) * rdf_sc(k) * ( q(k,j,i) - q_init(k) ) )        &
                                         )* MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
                 IF ( q_p(k,j,i) < 0.0_wp )  q_p(k,j,i) = 0.1_wp * q(k,j,i)
              ENDDO
@@ -786,8 +786,8 @@
 !
 !--          Prognostic equation for scalar
              DO  k = nzb+1, nzt
-                s_p(k,j,i) = s(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * ts_m(k,j,i) )  &
-                                          - tsc(5) * rdf_sc(k) * ( s(k,j,i) - s_init(k) )          &
+                s_p(k,j,i) = s(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * ts_m(k,j,i)    &
+                                          - tsc(5) * rdf_sc(k) * ( s(k,j,i) - s_init(k) ) )        &
                                         ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
                 IF ( s_p(k,j,i) < 0.0_wp  .AND.  .NOT. allow_negative_scalar_values )  THEN
                    s_p(k,j,i) = 0.1_wp * s(k,j,i)
@@ -913,9 +913,9 @@
 !--       Following directive is required to vectorize on Intel19
           !DIR$ IVDEP
           DO  k = nzb+1, nzt
-             u_p(k,j,i) = u(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tu_m(k,j,i) )     &
+             u_p(k,j,i) = u(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tu_m(k,j,i)       &
                                        - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) )                &
-                                       * ( u(k,j,i) - u_init(k) )                                  &
+                                       * ( u(k,j,i) - u_init(k) ) )                                &
                                      ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 1 ) )
           ENDDO
        ENDDO
@@ -938,7 +938,8 @@
 
 !
 !-- Add turbulence generated by wave breaking (in ocean mode only)
-    IF ( wave_breaking .AND. intermediate_timestep_count == intermediate_timestep_count_max )  THEN
+    IF ( wave_breaking  .AND.  intermediate_timestep_count == intermediate_timestep_count_max )    &
+    THEN
        CALL wave_breaking_term( 1 )
     ENDIF
 
@@ -1031,9 +1032,9 @@
 !--       Following directive is required to vectorize on Intel19
           !DIR$ IVDEP
           DO  k = nzb+1, nzt
-             v_p(k,j,i) = v(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tv_m(k,j,i) )     &
+             v_p(k,j,i) = v(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tv_m(k,j,i)       &
                                        - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) )                &
-                                       * ( v(k,j,i) - v_init(k) )                                  &
+                                       * ( v(k,j,i) - v_init(k) ) )                                &
                                      ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 2 ) )
           ENDDO
        ENDDO
@@ -1056,7 +1057,8 @@
 
 !
 !-- Add turbulence generated by wave breaking (in ocean mode only)
-    IF ( wave_breaking .AND. intermediate_timestep_count == intermediate_timestep_count_max )  THEN
+    IF ( wave_breaking  .AND.  intermediate_timestep_count == intermediate_timestep_count_max )    &
+    THEN
        CALL wave_breaking_term( 2 )
     ENDIF
 
@@ -1145,8 +1147,8 @@
 !--       Following directive is required to vectorize on Intel19
           !DIR$ IVDEP
           DO  k = nzb+1, nzt-1
-             w_p(k,j,i) = w(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tw_m(k,j,i) )     &
-                                       - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) ) * w(k,j,i)     &
+             w_p(k,j,i) = w(k,j,i) + ( dt_3d * ( tsc(2) * tend(k,j,i) + tsc(3) * tw_m(k,j,i)       &
+                                       - tsc(5) * MAX( rdf(k), odf_x(i), odf_y(j) ) * w(k,j,i) )  &
                                      ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 3 ) )
           ENDDO
        ENDDO
@@ -1283,9 +1285,9 @@
              !DIR$ IVDEP
              DO  k = nzb+1, nzt
                 pt_p(k,j,i) = pt(k,j,i) +                                                          &
-                              ( dt_3d * ( sbt * tend(k,j,i) + tsc(3) * tpt_m(k,j,i) )              &
+                              ( dt_3d * ( sbt * tend(k,j,i) + tsc(3) * tpt_m(k,j,i)                &
                                 - tsc(5) * ( pt(k,j,i) - pt_init(k) )                              &
-                                * MAX( rdf_sc(k), ptdf_x(i), ptdf_y(j), odf_x(i), odf_y(j) )       &
+                                * MAX( rdf_sc(k), ptdf_x(i), ptdf_y(j), odf_x(i), odf_y(j) ) )     &
                               ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
              ENDDO
           ENDDO
@@ -1411,8 +1413,8 @@
 !--          Following directive is required to vectorize on Intel19
              !DIR$ IVDEP
              DO  k = nzb+1, nzt
-                q_p(k,j,i) = q(k,j,i) + ( dt_3d * ( sbt * tend(k,j,i) + tsc(3) * tq_m(k,j,i) )     &
-                                          - tsc(5) * rdf_sc(k) * ( q(k,j,i) - q_init(k) )          &
+                q_p(k,j,i) = q(k,j,i) + ( dt_3d * ( sbt * tend(k,j,i) + tsc(3) * tq_m(k,j,i)       &
+                                          - tsc(5) * rdf_sc(k) * ( q(k,j,i) - q_init(k) ) )         &
                                         ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
                 IF ( q_p(k,j,i) < 0.0_wp )  q_p(k,j,i) = 0.1_wp * q(k,j,i)
              ENDDO
@@ -1528,15 +1530,15 @@
        CALL module_interface_actions( 's-tendency' )
 
 !
-!--    Prognostic equation for total water content
+!--    Prognostic equation for scalar
        DO  i = nxl, nxr
           DO  j = nys, nyn
 !
 !--          Following directive is required to vectorize on Intel19
              !DIR$ IVDEP
              DO  k = nzb+1, nzt
-                s_p(k,j,i) = s(k,j,i) + ( dt_3d * ( sbt * tend(k,j,i) + tsc(3) * ts_m(k,j,i) )     &
-                                          - tsc(5) * rdf_sc(k) * ( s(k,j,i) - s_init(k) )          &
+                s_p(k,j,i) = s(k,j,i) + ( dt_3d * ( sbt * tend(k,j,i) + tsc(3) * ts_m(k,j,i)       &
+                                          - tsc(5) * rdf_sc(k) * ( s(k,j,i) - s_init(k) ) )        &
                                         ) * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
                 IF ( s_p(k,j,i) < 0.0_wp  .AND.  .NOT. allow_negative_scalar_values )  THEN
                    s_p(k,j,i) = 0.1_wp * s(k,j,i)

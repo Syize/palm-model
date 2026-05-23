@@ -23,6 +23,18 @@ compiler:
     debug:
       - "-g"
       - "-traceback"
+  rrtmg_options:
+    default:
+      - "-cpp"
+      - "-O3"
+      - "-fp-model source"
+      - "-fpe0"
+    debug:
+      - "-cpp"
+      - "-O0"
+      - "-g"
+      - "-fpe0"
+      - "-traceback"
   options:
     default:
       - "-cpp"
@@ -58,10 +70,8 @@ compiler:
   includes:
     - "{{Intel.include.netcdf}}"
     - "{{Intel.include.fftw}}"
-    - "{{Intel.include.rrtmg}}"
 
 linker:
   options:
     - "{{Intel.lib.netcdf}}"
     - "{{Intel.lib.fftw}}"
-    - "{{Intel.lib.rrtmg}}"

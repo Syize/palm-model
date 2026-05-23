@@ -20,8 +20,6 @@ flight_angle:
       - [flight_angle](#virtual_flight_parameters--flight_angle) = *180.0* - aircraft moves to the west
       - [flight_angle](#virtual_flight_parameters--flight_angle) = *270.0* - aircraft moves to the south
 
-      ![virtual-flight-angle](/Guide/LES_Model/Figures/virtual-flight_angle.svg){ align=center }
-
 
 flight_begin:
   category: General Settings

@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Tools for testing."""
 
@@ -46,15 +46,15 @@ def ncdf_equal(
         # metadata diff, a Dataset does not yet load the values of the fields
         # exclude "_grpid" and "_varid" because they are expected to differ and
         #  do not have an impact on the content of a netCDF file
-        exclude = ["_grpid", "_varid", "_dimid"]
+        exclude = ["_grpid", "_varid", "_dimid", "_grp"]
         if metadata_exclude_regex_paths is not None:
             exclude.extend(metadata_exclude_regex_paths)
         if fields_exclude is not None:
             exclude.extend(fields_exclude)
 
         metadata_diff = DeepDiff(
-            nc_data_ref,
-            nc_data_com,
+            nc_data_ref.__dict__ | nc_data_ref.variables | nc_data_ref.dimensions,
+            nc_data_com.__dict__ | nc_data_com.variables | nc_data_com.dimensions,
             exclude_regex_paths=exclude,
             significant_digits=metadata_significant_digits,
             number_format_notation="e",
@@ -84,6 +84,8 @@ def ncdf_equal(
             else:
                 if not ma.allclose(field_ref, field_com):
                     value_diff.update({variable: "field values differ"})
+            if not ma.allequal(ma.getmaskarray(field_ref), ma.getmaskarray(field_com)):
+                value_diff.update({variable: "field masks differ"})
         diff.update(value_diff)
 
     nc_data_ref.close()
@@ -127,8 +129,8 @@ def geotiff_equal(geotiff_ref: Union[Path, str], geotiff_com: Union[Path, str]) 
 
 
 def modify_configuration(
-    config_in: str,
-    config_out: Optional[str] = None,
+    config_in: Union[str, Path],
+    config_out: Optional[Union[str, Path]] = None,
     to_delete: Optional[Sequence[Sequence[str]]] = None,
     to_set: Optional[Sequence[Tuple[Sequence[str], Union[str, float]]]] = None,
     to_replace: Optional[Sequence[Tuple[Sequence[str], str, str]]] = None,
@@ -207,3 +209,49 @@ def modify_configuration(
             yaml.dump(complete_dict, file)
 
     return complete_dict
+
+
+def modify_configuration_output(
+    config_in: Union[str, Path], config_out: Union[str, Path], output_path: Path
+) -> Dict:
+    """Update a configuration YAML for output files.
+
+    Args:
+        config_in: Input configuration file.
+        config_out: Output configuration file.
+        output_path: Path for output files.
+
+    Returns:
+        Updated dictionary.
+    """
+    return modify_configuration(
+        config_in, config_out, to_set=[(["output", "path"], str(output_path))]
+    )
+
+
+def add_to_stem(file_path: Path, addition: str) -> Path:
+    """Add a string to the stem of a file path.
+
+    Args:
+        file_path: Original file path.
+        addition: String to add to the stem.
+
+    Returns:
+        New file path with the added string in the stem.
+    """
+    return file_path.with_stem(file_path.stem + addition)
+
+
+def add_root_n02(file_path: Path) -> Tuple[Path, Path]:
+    """Add '_root' and '_N02' to the stem of a file path.
+
+    Args:
+        file_path: Original file path.
+
+    Returns:
+        Tuple containing the new file path with '_root' and '_N02' added to the stem.
+    """
+    return (
+        add_to_stem(file_path, "_root"),
+        add_to_stem(file_path, "_N02"),
+    )

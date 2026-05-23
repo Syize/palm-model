@@ -36,19 +36,24 @@
                dzw,                                                                                &
                pt,                                                                                 &
                pt_init,                                                                            &
+               pt_p,                                                                               &
                q,                                                                                  &
                q_init,                                                                             &
+               q_p,                                                                                &
                rdf,                                                                                &
                rdf_sc,                                                                             &
                rho_air,                                                                            &
                rho_air_zw,                                                                         &
                u,                                                                                  &
                u_init,                                                                             &
+               u_p,                                                                                &
                ug,                                                                                 &
                v,                                                                                  &
                v_init,                                                                             &
+               v_p,                                                                                &
                vg,                                                                                 &
                w,                                                                                  &
+               w_p,                                                                                &
                zu,                                                                                 &
                zw
 
@@ -249,17 +254,19 @@
 
     END TYPE nest_offl_type
 
-    INTEGER(iwp) ::  i_bound     !< boundary grid point in x-direction for scalars, v, and w
-    INTEGER(iwp) ::  i_bound_u   !< boundary grid point in x-direction for u
-    INTEGER(iwp) ::  i_end       !< end index for array allocation along x-direction at norther/southern boundary
-    INTEGER(iwp) ::  i_start     !< start index for array allocation along x-direction at norther/southern boundary (scalars, v, w)
-    INTEGER(iwp) ::  i_start_u   !< start index for array allocation along x-direction at norther/southern boundary (u)
-    INTEGER(iwp) ::  j_bound     !< boundary grid point in y-direction for scalars, u, and w
-    INTEGER(iwp) ::  j_bound_v   !< boundary grid point in y-direction for v
-    INTEGER(iwp) ::  j_end       !< end index for array allocation along y-direction at eastern/western boundary
-    INTEGER(iwp) ::  j_start     !< start index for array allocation along y-direction at eastern/western boundary (scalars, u, w)
-    INTEGER(iwp) ::  j_start_v   !< start index for array allocation along y-direction at eastern/western boundary (v)
-    INTEGER(iwp) ::  lod         !< level-of-detail of lateral input data
+    INTEGER(iwp) ::  i_bound_l     !< left boundary grid point in x-direction for scalars, v, and w
+    INTEGER(iwp) ::  i_bound_l_u   !< left boundary grid point in x-direction for u
+    INTEGER(iwp) ::  i_bound_r     !< right boundary grid point in x-direction for scalars, v, and w
+    INTEGER(iwp) ::  i_end         !< end index for array allocation along x-direction at norther/southern boundary
+    INTEGER(iwp) ::  i_start       !< start index for array allocation along x-direction at norther/southern boundary (scalars, v, w)
+    INTEGER(iwp) ::  i_start_u     !< start index for array allocation along x-direction at norther/southern boundary (u)
+    INTEGER(iwp) ::  j_bound_n     !< north boundary grid point in y-direction for scalars, u, and w
+    INTEGER(iwp) ::  j_bound_s     !< boundary grid point in y-direction for scalars, u, and w
+    INTEGER(iwp) ::  j_bound_s_v   !< boundary grid point in y-direction for v
+    INTEGER(iwp) ::  j_end         !< end index for array allocation along y-direction at eastern/western boundary
+    INTEGER(iwp) ::  j_start       !< start index for array allocation along y-direction at eastern/western boundary (scalars, u, w)
+    INTEGER(iwp) ::  j_start_v     !< start index for array allocation along y-direction at eastern/western boundary (v)
+    INTEGER(iwp) ::  lod           !< level-of-detail of lateral input data
 
     REAL(wp) ::  fac_dt              !< interpolation factor
 
@@ -1096,6 +1103,7 @@
           DO  k = nzt, nzt + 1
              w(k,j,i) = w(k,j,i) + w_correct                                                       &
                                    * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 3 ) )
+             w_p(k,j,i) = w(k,j,i)
           ENDDO
        ENDDO
     ENDDO
@@ -1181,17 +1189,18 @@
        IF ( lod == 2 )  THEN
           DO  j = nys, nyn
              DO  k = nzb+1, nzt
-                u(k,j,i_bound_u) = interpolate_linear( nest_offl%u_l(0,k,j),                       &
-                                                       nest_offl%u_l(1,k,j),                       &
-                                                       fac_dt ) *                                  &
-                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_u), 1 ) )
+                u(k,j,i_bound_l_u) = interpolate_linear( nest_offl%u_l(0,k,j),                     &
+                                                         nest_offl%u_l(1,k,j),                     &
+                                                         fac_dt ) *                                &
+                                     MERGE( 1.0_wp, 0.0_wp,                                        &
+                                            BTEST( topo_flags(k,j,i_bound_l_u), 1 ) )
              ENDDO
-             u(:,j,i_bound_u-1) = u(:,j,i_bound_u)
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_u) *                  &
+             u(:,j,i_bound_l_u-1) = u(:,j,i_bound_l_u)
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_l_u) *                &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_l_u), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_l_u), 1 ) )
           ENDDO
        ELSE
 !
@@ -1202,15 +1211,15 @@
                                              fac_dt )
           ENDDO
           DO  j = nys, nyn
-             u(nzb+1:nzt,j,i_bound_u) = var_1d(nzb+1:nzt) *                                        &
-                                        MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
-             u(:,j,i_bound_u-1) = u(:,j,i_bound_u)
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_u) *                  &
+             u(nzb+1:nzt,j,i_bound_l_u) = var_1d(nzb+1:nzt) *                                      &
+                                          MERGE( 1.0_wp, 0.0_wp,                                   &
+                                                 BTEST( topo_flags(nzb+1:nzt,j,i_bound_l_u), 1 ) )
+             u(:,j,i_bound_l_u-1) = u(:,j,i_bound_l_u)
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_l_u) *                &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_l_u), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_l_u), 1 ) )
           ENDDO
        ENDIF
 !
@@ -1218,12 +1227,12 @@
        IF ( lod == 2 )  THEN
           DO  j = nys, nyn
              DO  k = nzb+1, nzt-1
-                w(k,j,i_bound) = interpolate_linear( nest_offl%w_l(0,k,j),                         &
-                                                     nest_offl%w_l(1,k,j),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound), 3 ) )
+                w(k,j,i_bound_l) = interpolate_linear( nest_offl%w_l(0,k,j),                       &
+                                                       nest_offl%w_l(1,k,j),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_l), 3 ) )
              ENDDO
-             w(nzt,j,i_bound) = w(nzt-1,j,i_bound)
+             w(nzt,j,i_bound_l) = w(nzt-1,j,i_bound_l)
           ENDDO
        ELSE
           DO  k = nzb+1, nzt-1
@@ -1232,10 +1241,10 @@
                                              fac_dt )
           ENDDO
           DO  j = nys, nyn
-             w(nzb+1:nzt-1,j,i_bound) = var_1d(nzb+1:nzt-1) *                                      &
-                                      MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt-1,j,i_bound), 3 ) )
-             w(nzt,j,i_bound) = w(nzt-1,j,i_bound)
+             w(nzb+1:nzt-1,j,i_bound_l) = var_1d(nzb+1:nzt-1) *                                    &
+                                          MERGE( 1.0_wp, 0.0_wp,                                   &
+                                                 BTEST( topo_flags(nzb+1:nzt-1,j,i_bound_l), 3 ) )
+             w(nzt,j,i_bound_l) = w(nzt-1,j,i_bound_l)
           ENDDO
        ENDIF
 !
@@ -1243,16 +1252,16 @@
        IF ( lod == 2 )  THEN
           DO  j = nysv, nyn
              DO  k = nzb+1, nzt
-                v(k,j,i_bound) = interpolate_linear( nest_offl%v_l(0,k,j),                         &
-                                                     nest_offl%v_l(1,k,j),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound), 2 ) )
+                v(k,j,i_bound_l) = interpolate_linear( nest_offl%v_l(0,k,j),                       &
+                                                       nest_offl%v_l(1,k,j),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_l), 2 ) )
              ENDDO
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound) *                    &
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound_l) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 2 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1261,14 +1270,14 @@
                                              fac_dt )
           ENDDO
           DO  j = nysv, nyn
-             v(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt) *                                          &
-                                      MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound) *                    &
+             v(nzb+1:nzt,j,i_bound_l) = var_1d(nzb+1:nzt) *                                        &
+                                        MERGE( 1.0_wp, 0.0_wp,                                     &
+                                               BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 2 ) )
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound_l) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 2 ) )
           ENDDO
        ENDIF
 !
@@ -1277,15 +1286,15 @@
           IF ( lod == 2 )  THEN
              DO  j = nys, nyn
                 DO  k = nzb+1, nzt
-                   pt(k,j,i_bound) = interpolate_linear( nest_offl%pt_l(0,k,j),                    &
-                                                         nest_offl%pt_l(1,k,j),                    &
-                                                         fac_dt )
+                   pt(k,j,i_bound_l) = interpolate_linear( nest_offl%pt_l(0,k,j),                  &
+                                                           nest_offl%pt_l(1,k,j),                  &
+                                                           fac_dt )
                 ENDDO
-                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound) *              &
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound_l) *            &
                                       MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1294,12 +1303,12 @@
                                                 fac_dt )
              ENDDO
              DO  j = nys, nyn
-                pt(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt)
-                pt_ref_l(nzb+1:nzt)     = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound) *          &
-                                          MERGE( 1.0_wp, 0.0_wp,                                   &
-                                                 BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                pt(nzb+1:nzt,j,i_bound_l) = var_1d(nzb+1:nzt)
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound_l) *            &
+                                      MERGE( 1.0_wp, 0.0_wp,                                       &
+                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1309,13 +1318,13 @@
           IF ( lod == 2 )  THEN
              DO  j = nys, nyn
                 DO  k = nzb+1, nzt
-                   q(k,j,i_bound) = interpolate_linear( nest_offl%q_l(0,k,j),                      &
-                                                        nest_offl%q_l(1,k,j),                      &
-                                                        fac_dt )
+                   q(k,j,i_bound_l) = interpolate_linear( nest_offl%q_l(0,k,j),                    &
+                                                          nest_offl%q_l(1,k,j),                    &
+                                                         fac_dt )
                 ENDDO
-                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound) *                 &
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound_l) *               &
                                      MERGE( 1.0_wp, 0.0_wp,                                        &
-                                            BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                            BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1324,10 +1333,10 @@
                                                 fac_dt )
              ENDDO
              DO  j = nys, nyn
-                q(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt)
-                q_ref_l(nzb+1:nzt)     = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound) *             &
-                                         MERGE( 1.0_wp, 0.0_wp,                                    &
-                                                BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                q(nzb+1:nzt,j,i_bound_l) = var_1d(nzb+1:nzt)
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound_l) *               &
+                                     MERGE( 1.0_wp, 0.0_wp,                                        &
+                                            BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1339,15 +1348,15 @@
                 IF ( lod == 2 )  THEN
                    DO  j = nys, nyn
                       DO  k = nzb+1, nzt
-                         chem_species(n)%conc(k,j,i_bound) = interpolate_linear(                   &
+                         chem_species(n)%conc(k,j,i_bound_l) = interpolate_linear(                 &
                                                                         nest_offl%chem_l(0,k,j,n), &
                                                                         nest_offl%chem_l(1,k,j,n), &
                                                                         fac_dt )
                       ENDDO
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound_l) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
                    ENDDO
                 ELSE
                    DO  k = nzb+1, nzt
@@ -1356,11 +1365,11 @@
                                                       fac_dt )
                    ENDDO
                    DO  j = nys, nyn
-                      chem_species(n)%conc(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt)
+                      chem_species(n)%conc(nzb+1:nzt,j,i_bound_l) = var_1d(nzb+1:nzt)
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound_l) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j,i_bound_l), 0 ) )
                    ENDDO
                 ENDIF
              ENDIF
@@ -1375,16 +1384,16 @@
        IF ( lod == 2 )  THEN
           DO  j = nys, nyn
              DO  k = nzb+1, nzt
-                u(k,j,i_bound_u) = interpolate_linear( nest_offl%u_r(0,k,j),                       &
+                u(k,j,i_bound_r) = interpolate_linear( nest_offl%u_r(0,k,j),                       &
                                                        nest_offl%u_r(1,k,j),                       &
                                                        fac_dt ) *                                  &
-                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_u), 1 ) )
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_r), 1 ) )
              ENDDO
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_u) *                  &
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_r) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 1 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1393,14 +1402,14 @@
                                              fac_dt )
           ENDDO
           DO  j = nys, nyn
-             u(nzb+1:nzt,j,i_bound_u) = var_1d(nzb+1:nzt) *                                        &
+             u(nzb+1:nzt,j,i_bound_r) = var_1d(nzb+1:nzt) *                                        &
                                         MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
-             u_ref_l(nzb+1:nzt)       = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_u) *            &
+                                               BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 1 ) )
+             u_ref_l(nzb+1:nzt)       = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j,i_bound_r) *            &
                                         MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                               BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_u), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 1 ) )
           ENDDO
        ENDIF
 !
@@ -1408,12 +1417,12 @@
        IF ( lod == 2 )  THEN
           DO  j = nys, nyn
              DO  k = nzb+1, nzt-1
-                w(k,j,i_bound) = interpolate_linear( nest_offl%w_r(0,k,j),                         &
-                                                     nest_offl%w_r(1,k,j),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound), 3 ) )
+                w(k,j,i_bound_r) = interpolate_linear( nest_offl%w_r(0,k,j),                       &
+                                                       nest_offl%w_r(1,k,j),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_r), 3 ) )
              ENDDO
-             w(nzt,j,i_bound) = w(nzt-1,j,i_bound)
+             w(nzt,j,i_bound_r) = w(nzt-1,j,i_bound_r)
           ENDDO
        ELSE
           DO  k = nzb+1, nzt-1
@@ -1422,10 +1431,10 @@
                                              fac_dt )
           ENDDO
           DO  j = nys, nyn
-             w(nzb+1:nzt-1,j,i_bound) = var_1d(nzb+1:nzt-1) *                                      &
+             w(nzb+1:nzt-1,j,i_bound_r) = var_1d(nzb+1:nzt-1) *                                    &
                                         MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt-1,j,i_bound), 3 ) )
-             w(nzt,j,i_bound) = w(nzt-1,j,i_bound)
+                                               BTEST( topo_flags(nzb+1:nzt-1,j,i_bound_r), 3 ) )
+             w(nzt,j,i_bound_r) = w(nzt-1,j,i_bound_r)
           ENDDO
        ENDIF
 !
@@ -1433,16 +1442,16 @@
        IF ( lod == 2 )  THEN
           DO  j = nysv, nyn
              DO  k = nzb+1, nzt
-                v(k,j,i_bound) = interpolate_linear( nest_offl%v_r(0,k,j),                         &
-                                                     nest_offl%v_r(1,k,j),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound), 2 ) )
+                v(k,j,i_bound_r) = interpolate_linear( nest_offl%v_r(0,k,j),                       &
+                                                       nest_offl%v_r(1,k,j),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i_bound_r), 2 ) )
              ENDDO
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound) *                    &
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound_r) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 2 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1451,14 +1460,14 @@
                                              fac_dt )
           ENDDO
           DO  j = nysv, nyn
-             v(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt) *                                          &
+             v(nzb+1:nzt,j,i_bound_r) = var_1d(nzb+1:nzt) *                                        &
                                       MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
-             v_ref_l(nzb+1:nzt)     = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound) *                &
-                                      MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 2 ) )
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j,i_bound_r) *                  &
+                                  MERGE( 1.0_wp, 0.0_wp,                                           &
+                                         BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 2 ) )
           ENDDO
        ENDIF
 !
@@ -1467,15 +1476,15 @@
           IF ( lod == 2 )  THEN
              DO  j = nys, nyn
                 DO  k = nzb+1, nzt
-                   pt(k,j,i_bound) = interpolate_linear( nest_offl%pt_r(0,k,j),                    &
+                   pt(k,j,i_bound_r) = interpolate_linear( nest_offl%pt_r(0,k,j),                  &
                                                          nest_offl%pt_r(1,k,j),                    &
                                                          fac_dt )
                 ENDDO
-                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound) *              &
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound_r) *            &
                                       MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1484,12 +1493,12 @@
                                                 fac_dt )
              ENDDO
              DO  j = nys, nyn
-                pt(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt)
-                pt_ref_l(nzb+1:nzt)     = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound) *          &
-                                          MERGE( 1.0_wp, 0.0_wp,                                   &
-                                                 BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                pt(nzb+1:nzt,j,i_bound_r) = var_1d(nzb+1:nzt)
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j,i_bound_r) *            &
+                                      MERGE( 1.0_wp, 0.0_wp,                                       &
+                                             BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1499,13 +1508,13 @@
           IF ( lod == 2 )  THEN
              DO  j = nys, nyn
                 DO  k = nzb+1, nzt
-                   q(k,j,i_bound) = interpolate_linear( nest_offl%q_r(0,k,j),                      &
-                                                        nest_offl%q_r(1,k,j),                      &
-                                                        fac_dt )
+                   q(k,j,i_bound_r) = interpolate_linear( nest_offl%q_r(0,k,j),                    &
+                                                          nest_offl%q_r(1,k,j),                    &
+                                                          fac_dt )
                 ENDDO
-                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound) *                 &
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound_r) *               &
                                      MERGE( 1.0_wp, 0.0_wp,                                        &
-                                            BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                            BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1514,10 +1523,10 @@
                                                 fac_dt )
              ENDDO
              DO  j = nys, nyn
-                q(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt)
-                q_ref_l(nzb+1:nzt)     = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound) *             &
-                                         MERGE( 1.0_wp, 0.0_wp,                                    &
-                                                BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                q(nzb+1:nzt,j,i_bound_r) = var_1d(nzb+1:nzt)
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j,i_bound_r) *               &
+                                     MERGE( 1.0_wp, 0.0_wp,                                        &
+                                            BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1529,15 +1538,15 @@
                 IF ( lod == 2 )  THEN
                    DO  j = nys, nyn
                       DO  k = nzb+1, nzt
-                         chem_species(n)%conc(k,j,i_bound) = interpolate_linear(                   &
+                         chem_species(n)%conc(k,j,i_bound_r) = interpolate_linear(                 &
                                                                         nest_offl%chem_r(0,k,j,n), &
                                                                         nest_offl%chem_r(1,k,j,n), &
                                                                         fac_dt )
                       ENDDO
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound_r) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
                    ENDDO
                 ELSE
                    DO  k = nzb+1, nzt
@@ -1546,11 +1555,11 @@
                                                       fac_dt )
                    ENDDO
                    DO  j = nys, nyn
-                      chem_species(n)%conc(nzb+1:nzt,j,i_bound) = var_1d(nzb+1:nzt)
+                      chem_species(n)%conc(nzb+1:nzt,j,i_bound_r) = var_1d(nzb+1:nzt)
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j,i_bound_r) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j,i_bound), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j,i_bound_r), 0 ) )
                    ENDDO
                 ENDIF
              ENDIF
@@ -1565,16 +1574,16 @@
        IF ( lod == 2 )  THEN
           DO  i = nxl, nxr
              DO  k = nzb+1, nzt
-                v(k,j_bound_v,i) = interpolate_linear( nest_offl%v_n(0,k,i),                       &
+                v(k,j_bound_n,i) = interpolate_linear( nest_offl%v_n(0,k,i),                       &
                                                        nest_offl%v_n(1,k,i),                       &
                                                        fac_dt ) *                                  &
-                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_v,i), 2 ) )
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_n,i), 2 ) )
              ENDDO
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_v,i) *                  &
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_n,i) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 2 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1583,14 +1592,14 @@
                                              fac_dt )
           ENDDO
           DO  i = nxl, nxr
-             v(nzb+1:nzt,j_bound_v,i) = var_1d(nzb+1:nzt) *                                        &
+             v(nzb+1:nzt,j_bound_n,i) = var_1d(nzb+1:nzt) *                                        &
                                         MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_v,i) *                  &
+                                               BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 2 ) )
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_n,i) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 2 ) )
           ENDDO
        ENDIF
 !
@@ -1598,12 +1607,12 @@
        IF ( lod == 2 )  THEN
           DO  i = nxl, nxr
              DO  k = nzb+1, nzt-1
-                w(k,j_bound,i) = interpolate_linear( nest_offl%w_n(0,k,i),                         &
-                                                     nest_offl%w_n(1,k,i),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound,i), 3 ) )
+                w(k,j_bound_n,i) = interpolate_linear( nest_offl%w_n(0,k,i),                       &
+                                                       nest_offl%w_n(1,k,i),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_n,i), 3 ) )
              ENDDO
-             w(nzt,j_bound,i) = w(nzt-1,j_bound,i)
+             w(nzt,j_bound_n,i) = w(nzt-1,j_bound_n,i)
           ENDDO
        ELSE
           DO  k = nzb+1, nzt-1
@@ -1612,10 +1621,10 @@
                                              fac_dt )
           ENDDO
           DO  i = nxl, nxr
-             w(nzb+1:nzt-1,j_bound,i) = var_1d(nzb+1:nzt-1) *                                      &
-                                        MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt-1,j_bound,i), 3 ) )
-             w(nzt,j_bound,i) = w(nzt-1,j_bound,i)
+             w(nzb+1:nzt-1,j_bound_n,i) = var_1d(nzb+1:nzt-1) *                                    &
+                                          MERGE( 1.0_wp, 0.0_wp,                                   &
+                                                 BTEST( topo_flags(nzb+1:nzt-1,j_bound_n,i), 3 ) )
+             w(nzt,j_bound_n,i) = w(nzt-1,j_bound_n,i)
           ENDDO
        ENDIF
 !
@@ -1623,16 +1632,16 @@
        IF ( lod == 2 )  THEN
           DO  i = nxlu, nxr
              DO  k = nzb+1, nzt
-                u(k,j_bound,i) = interpolate_linear( nest_offl%u_n(0,k,i),                         &
-                                                     nest_offl%u_n(1,k,i),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound,i), 1 ) )
+                u(k,j_bound_n,i) = interpolate_linear( nest_offl%u_n(0,k,i),                       &
+                                                       nest_offl%u_n(1,k,i),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_n,i), 1 ) )
              ENDDO
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound,i) *                    &
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound_n,i) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 1 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1641,14 +1650,14 @@
                                              fac_dt )
           ENDDO
           DO  i = nxlu, nxr
-             u(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt) *                                          &
-                                      MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound,i) *                    &
+             u(nzb+1:nzt,j_bound_n,i) = var_1d(nzb+1:nzt) *                                        &
+                                        MERGE( 1.0_wp, 0.0_wp,                                     &
+                                               BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 1 ) )
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound_n,i) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 1 ) )
           ENDDO
        ENDIF
 !
@@ -1657,15 +1666,15 @@
           IF ( lod == 2 )  THEN
              DO  i = nxl, nxr
                 DO  k = nzb+1, nzt
-                   pt(k,j_bound,i) = interpolate_linear( nest_offl%pt_n(0,k,i),                    &
-                                                         nest_offl%pt_n(1,k,i),                    &
-                                                         fac_dt )
+                   pt(k,j_bound_n,i) = interpolate_linear( nest_offl%pt_n(0,k,i),                  &
+                                                           nest_offl%pt_n(1,k,i),                  &
+                                                           fac_dt )
                 ENDDO
-                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound,i) *              &
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound_n,i) *            &
                                       MERGE( 1.0_wp, 0.0_wp,                                       &
-                                              BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                             BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1674,12 +1683,12 @@
                                                 fac_dt )
              ENDDO
              DO  i = nxl, nxr
-                pt(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt)
-                pt_ref_l(nzb+1:nzt)     = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound,i) *          &
-                                          MERGE( 1.0_wp, 0.0_wp,                                   &
-                                                 BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                pt(nzb+1:nzt,j_bound_n,i) = var_1d(nzb+1:nzt)
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound_n,i) *            &
+                                      MERGE( 1.0_wp, 0.0_wp,                                       &
+                                             BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1689,13 +1698,13 @@
           IF ( lod == 2 )  THEN
              DO  i = nxl, nxr
                 DO  k = nzb+1, nzt
-                   q(k,j_bound,i) = interpolate_linear( nest_offl%q_n(0,k,i),                      &
-                                                        nest_offl%q_n(1,k,i),                      &
-                                                        fac_dt )
+                   q(k,j_bound_n,i) = interpolate_linear( nest_offl%q_n(0,k,i),                    &
+                                                          nest_offl%q_n(1,k,i),                    &
+                                                          fac_dt )
                 ENDDO
-                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound,i) *                 &
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound_n,i) *               &
                                      MERGE( 1.0_wp, 0.0_wp,                                        &
-                                            BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                            BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1704,10 +1713,10 @@
                                                 fac_dt )
              ENDDO
              DO  i = nxl, nxr
-                q(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt)
-                q_ref_l(nzb+1:nzt)     = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound,i) *             &
-                                         MERGE( 1.0_wp, 0.0_wp,                                    &
-                                                BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                q(nzb+1:nzt,j_bound_n,i) = var_1d(nzb+1:nzt)
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound_n,i) *               &
+                                     MERGE( 1.0_wp, 0.0_wp,                                        &
+                                            BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1719,15 +1728,15 @@
                 IF ( lod == 2 )  THEN
                    DO  i = nxl, nxr
                       DO  k = nzb+1, nzt
-                         chem_species(n)%conc(k,j_bound,i) = interpolate_linear(                   &
+                         chem_species(n)%conc(k,j_bound_n,i) = interpolate_linear(                 &
                                                                      nest_offl%chem_n(0,k,i,n),    &
                                                                      nest_offl%chem_n(1,k,i,n),    &
                                                                      fac_dt    )
                       ENDDO
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j_bound,i) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j_bound_n,i) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
                    ENDDO
                 ELSE
                    DO  k = nzb+1, nzt
@@ -1736,11 +1745,11 @@
                                                       fac_dt )
                    ENDDO
                    DO  i = nxl, nxr
-                      chem_species(n)%conc(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt)
+                      chem_species(n)%conc(nzb+1:nzt,j_bound_n,i) = var_1d(nzb+1:nzt)
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j_bound,i) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j_bound_n,i) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j_bound_n,i), 0 ) )
                    ENDDO
                 ENDIF
              ENDIF
@@ -1754,17 +1763,18 @@
        IF ( lod == 2 )  THEN
           DO  i = nxl, nxr
              DO  k = nzb+1, nzt
-                v(k,j_bound_v,i) = interpolate_linear( nest_offl%v_s(0,k,i),                       &
-                                                       nest_offl%v_s(1,k,i),                       &
-                                                       fac_dt ) *                                  &
-                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_v,i), 2 ) )
+                v(k,j_bound_s_v,i) = interpolate_linear( nest_offl%v_s(0,k,i),                     &
+                                                         nest_offl%v_s(1,k,i),                     &
+                                                         fac_dt ) *                                &
+                                     MERGE( 1.0_wp, 0.0_wp,                                        &
+                                            BTEST( topo_flags(k,j_bound_s_v,i), 2 ) )
              ENDDO
-             v(:,j_bound_v-1,i) = v(:,j_bound_v,i)
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_v,i) *                  &
+             v(:,j_bound_s_v-1,i) = v(:,j_bound_s_v,i)
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_s_v,i) *                &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_s_v,i), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_s_v,i), 2 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1773,15 +1783,15 @@
                                              fac_dt )
           ENDDO
           DO  i = nxl, nxr
-             v(nzb+1:nzt,j_bound_v,i) = var_1d(nzb+1:nzt) *                                        &
-                                        MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
-             v(:,j_bound_v-1,i) = v(:,j_bound_v,i)
-             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_v,i) *                  &
+             v(nzb+1:nzt,j_bound_s_v,i) = var_1d(nzb+1:nzt) *                                      &
+                                          MERGE( 1.0_wp, 0.0_wp,                                   &
+                                                 BTEST( topo_flags(nzb+1:nzt,j_bound_s_v,i), 2 ) )
+             v(:,j_bound_s_v-1,i) = v(:,j_bound_s_v,i)
+             v_ref_l(nzb+1:nzt) = v_ref_l(nzb+1:nzt) + v(nzb+1:nzt,j_bound_s_v,i) *                &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_s_v,i), 2 ) )
              ngp_v(nzb+1:nzt) = ngp_v(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_v,i), 2 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_s_v,i), 2 ) )
           ENDDO
        ENDIF
 !
@@ -1789,12 +1799,12 @@
        IF ( lod == 2 )  THEN
           DO  i = nxl, nxr
              DO  k = nzb+1, nzt-1
-                w(k,j_bound,i) = interpolate_linear( nest_offl%w_s(0,k,i),                         &
-                                                     nest_offl%w_s(1,k,i),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound,i), 3 ) )
+                w(k,j_bound_s,i) = interpolate_linear( nest_offl%w_s(0,k,i),                       &
+                                                       nest_offl%w_s(1,k,i),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_s,i), 3 ) )
              ENDDO
-             w(nzt,j_bound,i) = w(nzt-1,j_bound,i)
+             w(nzt,j_bound_s,i) = w(nzt-1,j_bound_s,i)
           ENDDO
        ELSE
           DO  k = nzb+1, nzt-1
@@ -1803,10 +1813,10 @@
                                              fac_dt )
           ENDDO
           DO  i = nxl, nxr
-             w(nzb+1:nzt-1,j_bound,i) = var_1d(nzb+1:nzt-1) *                                      &
-                                        MERGE( 1.0_wp, 0.0_wp,                                     &
-                                               BTEST( topo_flags(nzb+1:nzt-1,j_bound,i), 3 ) )
-             w(nzt,j_bound,i) = w(nzt-1,j_bound,i)
+             w(nzb+1:nzt-1,j_bound_s,i) = var_1d(nzb+1:nzt-1) *                                    &
+                                          MERGE( 1.0_wp, 0.0_wp,                                   &
+                                                 BTEST( topo_flags(nzb+1:nzt-1,j_bound_s,i), 3 ) )
+             w(nzt,j_bound_s,i) = w(nzt-1,j_bound_s,i)
           ENDDO
        ENDIF
 !
@@ -1814,16 +1824,16 @@
        IF ( lod == 2 )  THEN
           DO  i = nxlu, nxr
              DO  k = nzb+1, nzt
-                u(k,j_bound,i) = interpolate_linear( nest_offl%u_s(0,k,i),                         &
-                                                     nest_offl%u_s(1,k,i),                         &
-                                                     fac_dt ) *                                    &
-                                 MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound,i), 1 ) )
+                u(k,j_bound_s,i) = interpolate_linear( nest_offl%u_s(0,k,i),                       &
+                                                       nest_offl%u_s(1,k,i),                       &
+                                                       fac_dt ) *                                  &
+                                   MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j_bound_s,i), 1 ) )
              ENDDO
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound,i) *                    &
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound_s,i) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 1 ) )
           ENDDO
        ELSE
           DO  k = nzb+1, nzt
@@ -1832,14 +1842,14 @@
                                              fac_dt )
           ENDDO
           DO  i = nxlu, nxr
-             u(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt) *                                          &
-                                      MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
-             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound,i) *                    &
+             u(nzb+1:nzt,j_bound_s,i) = var_1d(nzb+1:nzt) *                                        &
+                                        MERGE( 1.0_wp, 0.0_wp,                                     &
+                                               BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 1 ) )
+             u_ref_l(nzb+1:nzt) = u_ref_l(nzb+1:nzt) + u(nzb+1:nzt,j_bound_s,i) *                  &
                                   MERGE( 1.0_wp, 0.0_wp,                                           &
-                                         BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                         BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 1 ) )
              ngp_u(nzb+1:nzt) = ngp_u(nzb+1:nzt) +                                                 &
-                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 1 ) )
+                                MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 1 ) )
           ENDDO
        ENDIF
 !
@@ -1848,15 +1858,15 @@
           IF ( lod == 2 )  THEN
              DO  i = nxl, nxr
                 DO  k = nzb+1, nzt
-                   pt(k,j_bound,i) = interpolate_linear( nest_offl%pt_s(0,k,i),                    &
-                                                         nest_offl%pt_s(1,k,i),                    &
-                                                         fac_dt )
+                   pt(k,j_bound_s,i) = interpolate_linear( nest_offl%pt_s(0,k,i),                  &
+                                                           nest_offl%pt_s(1,k,i),                  &
+                                                           fac_dt )
                 ENDDO
-                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound,i) *              &
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound_s,i) *            &
                                       MERGE( 1.0_wp, 0.0_wp,                                       &
-                                             BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                             BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1865,12 +1875,12 @@
                                                 fac_dt )
              ENDDO
              DO  i = nxl, nxr
-                pt(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt)
-                pt_ref_l(nzb+1:nzt)     = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound,i) *          &
-                                          MERGE( 1.0_wp, 0.0_wp,                                   &
-                                                 BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                pt(nzb+1:nzt,j_bound_s,i) = var_1d(nzb+1:nzt)
+                pt_ref_l(nzb+1:nzt) = pt_ref_l(nzb+1:nzt) + pt(nzb+1:nzt,j_bound_s,i) *            &
+                                      MERGE( 1.0_wp, 0.0_wp,                                       &
+                                             BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
                 ngp_s(nzb+1:nzt) = ngp_s(nzb+1:nzt) +                                              &
-                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                   MERGE( 1, 0, BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1880,13 +1890,13 @@
           IF ( lod == 2 )  THEN
              DO  i = nxl, nxr
                 DO  k = nzb+1, nzt
-                   q(k,j_bound,i) = interpolate_linear( nest_offl%q_s(0,k,i),                      &
-                                                        nest_offl%q_s(1,k,i),                      &
-                                                        fac_dt )
+                   q(k,j_bound_s,i) = interpolate_linear( nest_offl%q_s(0,k,i),                    &
+                                                          nest_offl%q_s(1,k,i),                    &
+                                                          fac_dt )
                 ENDDO
-                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound,i) *                 &
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound_s,i) *               &
                                      MERGE( 1.0_wp, 0.0_wp,                                        &
-                                            BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                            BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
              ENDDO
           ELSE
              DO  k = nzb+1, nzt
@@ -1895,10 +1905,10 @@
                                                 fac_dt )
              ENDDO
              DO  i = nxl, nxr
-                q(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt)
-                q_ref_l(nzb+1:nzt)     = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound,i) *             &
-                                         MERGE( 1.0_wp, 0.0_wp,                                    &
-                                                BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                q(nzb+1:nzt,j_bound_s,i) = var_1d(nzb+1:nzt)
+                q_ref_l(nzb+1:nzt) = q_ref_l(nzb+1:nzt) + q(nzb+1:nzt,j_bound_s,i) *               &
+                                     MERGE( 1.0_wp, 0.0_wp,                                        &
+                                            BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
              ENDDO
           ENDIF
        ENDIF
@@ -1910,15 +1920,15 @@
                 IF ( lod == 2 )  THEN
                    DO  i = nxl, nxr
                       DO  k = nzb+1, nzt
-                         chem_species(n)%conc(k,j_bound,i) = interpolate_linear(                   &
+                         chem_species(n)%conc(k,j_bound_s,i) = interpolate_linear(                 &
                                                                         nest_offl%chem_s(0,k,i,n), &
                                                                         nest_offl%chem_s(1,k,i,n), &
                                                                         fac_dt )
                       ENDDO
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j_bound,i) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j_bound_s,i) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
                    ENDDO
                 ELSE
                    DO  k = nzb+1, nzt
@@ -1927,11 +1937,11 @@
                                                       fac_dt )
                    ENDDO
                    DO  i = nxl, nxr
-                      chem_species(n)%conc(nzb+1:nzt,j_bound,i) = var_1d(nzb+1:nzt)
+                      chem_species(n)%conc(nzb+1:nzt,j_bound_s,i) = var_1d(nzb+1:nzt)
                       ref_chem_l(nzb+1:nzt,n) = ref_chem_l(nzb+1:nzt,n) +                          &
-                                                chem_species(n)%conc(nzb+1:nzt,j_bound,i) *        &
+                                                chem_species(n)%conc(nzb+1:nzt,j_bound_s,i) *      &
                                                 MERGE( 1.0_wp, 0.0_wp,                             &
-                                                       BTEST( topo_flags(nzb+1:nzt,j_bound,i), 0 ) )
+                                                     BTEST( topo_flags(nzb+1:nzt,j_bound_s,i), 0 ) )
                    ENDDO
                 ENDIF
              ENDIF
@@ -1968,8 +1978,8 @@
                       SUM( MERGE( 1, 0, BTEST( topo_flags(nzt+1,nys:nyn,nxlu:nxr), 1 ) ) )
     ENDIF
 !
-!--    For left boundary set boundary condition for u-component also at top grid point.
-!--    Note, this has no effect on the numeric solution, only for data output.
+!-- For left boundary set boundary condition for u-component also at top grid point.
+!-- This has no effect on the numeric solution, only for data output.
     IF ( bc_dirichlet_l )  u(nzt+1,:,nxl) = u(nzt+1,:,nxlu)
 !
 !-- v-component
@@ -2052,7 +2062,7 @@
        ENDIF
     ENDIF
 !
-!--    humidity
+!-- Humidity
     IF ( humidity )  THEN
        IF ( lod == 2 )  THEN
           DO  i = nxl, nxr
@@ -2113,36 +2123,112 @@
        IF (  bc_dirichlet_s )  diss(:,nys-1,:) = diss(:,nys,:)
        IF (  bc_dirichlet_n )  diss(:,nyn+1,:) = diss(:,nyn,:)
     ENDIF
-!        IF ( .NOT. constant_diffusion )  THEN
-!           IF (  bc_dirichlet_l )  e(:,:,nxl-1) = e(:,:,nxl)
-!           IF (  bc_dirichlet_r )  e(:,:,nxr+1) = e(:,:,nxr)
-!           IF (  bc_dirichlet_s )  e(:,nys-1,:) = e(:,nys,:)
-!           IF (  bc_dirichlet_n )  e(:,nyn+1,:) = e(:,nyn,:)
-!           e(nzt+1,:,:) = e(nzt,:,:)
-!        ENDIF
-!        IF ( passive_scalar )  THEN
-!           IF (  bc_dirichlet_l )  s(:,:,nxl-1) = s(:,:,nxl)
-!           IF (  bc_dirichlet_r )  s(:,:,nxr+1) = s(:,:,nxr)
-!           IF (  bc_dirichlet_s )  s(:,nys-1,:) = s(:,nys,:)
-!           IF (  bc_dirichlet_n )  s(:,nyn+1,:) = s(:,nyn,:)
-!        ENDIF
+!     IF ( .NOT. constant_diffusion )  THEN
+!        IF (  bc_dirichlet_l )  e(:,:,nxl-1) = e(:,:,nxl)
+!        IF (  bc_dirichlet_r )  e(:,:,nxr+1) = e(:,:,nxr)
+!        IF (  bc_dirichlet_s )  e(:,nys-1,:) = e(:,nys,:)
+!        IF (  bc_dirichlet_n )  e(:,nyn+1,:) = e(:,nyn,:)
+!        e(nzt+1,:,:) = e(nzt,:,:)
+!     ENDIF
+!     IF ( passive_scalar )  THEN
+!        IF (  bc_dirichlet_l )  s(:,:,nxl-1) = s(:,:,nxl)
+!        IF (  bc_dirichlet_r )  s(:,:,nxr+1) = s(:,:,nxr)
+!        IF (  bc_dirichlet_s )  s(:,nys-1,:) = s(:,nys,:)
+!        IF (  bc_dirichlet_n )  s(:,nyn+1,:) = s(:,nyn,:)
+!     ENDIF
+!
+!-- Finally, set second time level. This is required to have the same boundary values at
+!-- all following RK3 timesteps.
+    IF ( bc_dirichlet_l )  THEN
+       u_p(:,:,nxlu-1) = u(:,:,nxlu-1)
+       v_p(:,:,nxl-1)  = v(:,:,nxl-1)
+       w_p(:,:,nxl-1)  = w(:,:,nxl-1)
+       IF ( .NOT. neutral )  pt_p(:,:,nxl-1) = pt(:,:,nxl-1)
+       IF ( humidity )  q_p(:,:,nxl-1) = q(:,:,nxl-1)
+       DO  n = 1, UBOUND( chem_species, 1 )
+          IF ( nest_offl%chem_from_file_t(n) )  THEN
+             chem_species(n)%conc_p(:,:,nxl-1) = chem_species(n)%conc(:,:,nxl-1)
+          ENDIF
+       ENDDO
+    ENDIF
+    IF ( bc_dirichlet_r )  THEN
+       u_p(:,:,nxr+1) = u(:,:,nxr+1)
+       v_p(:,:,nxr+1) = v(:,:,nxr+1)
+       w_p(:,:,nxr+1) = w(:,:,nxr+1)
+       IF ( .NOT. neutral )  pt_p(:,:,nxr+1) = pt(:,:,nxr+1)
+       IF ( humidity )  q_p(:,:,nxr+1) = q(:,:,nxr+1)
+       DO  n = 1, UBOUND( chem_species, 1 )
+          IF ( nest_offl%chem_from_file_t(n) )  THEN
+             chem_species(n)%conc_p(:,:,nxr+1) = chem_species(n)%conc(:,:,nxr+1)
+          ENDIF
+       ENDDO
+    ENDIF
+    IF ( bc_dirichlet_s )  THEN
+       u_p(:,nys-1,:)  = u(:,nys-1,:)
+       v_p(:,nysv-1,:) = v(:,nysv-1,:)
+       w_p(:,nys-1,:)  = w(:,nys-1,:)
+       IF ( .NOT. neutral )  pt_p(:,nys-1,:) = pt(:,nys-1,:)
+       IF ( humidity )  q_p(:,nys+1,:) = q(:,nys-1,:)
+       DO  n = 1, UBOUND( chem_species, 1 )
+          IF ( nest_offl%chem_from_file_t(n) )  THEN
+             chem_species(n)%conc_p(:,nys-1,:) = chem_species(n)%conc(:,nys-1,:)
+          ENDIF
+       ENDDO
+    ENDIF
+    IF ( bc_dirichlet_n )  THEN
+       u_p(:,nyn+1,:) = u(:,nyn+1,:)
+       v_p(:,nyn+1,:) = v(:,nyn+1,:)
+       w_p(:,nyn+1,:) = w(:,nyn+1,:)
+       IF ( .NOT. neutral )  pt_p(:,nyn+1,:) = pt(:,nyn+1,:)
+       IF ( humidity )  q_p(:,nyn+1,:) = q(:,nyn+1,:)
+       DO  n = 1, UBOUND( chem_species, 1 )
+          IF ( nest_offl%chem_from_file_t(n) )  THEN
+             chem_species(n)%conc_p(:,nyn+1,:) = chem_species(n)%conc(:,nyn+1,:)
+          ENDIF
+       ENDDO
+    ENDIF
+
+    u_p(nzt+1,:,:) = u(nzt+1,:,:)
+    v_p(nzt+1,:,:) = v(nzt+1,:,:)
+    w_p(nzt,:,:)   = w(nzt,:,:)
+    w_p(nzt+1,:,:) = w(nzt,:,:)
+    IF ( .NOT. neutral )  pt_p(nzt+1,:,:) = pt(nzt+1,:,:)
+    IF ( humidity )  q_p(nzt+1,:,:) = q(nzt+1,:,:)
+    DO  n = 1, UBOUND( chem_species, 1 )
+       IF ( nest_offl%chem_from_file_t(n) )  THEN
+          chem_species(n)%conc_p(nzt+1,:,:) = chem_species(n)%conc(nzt+1,:,:)
+       ENDIF
+    ENDDO
 
     CALL exchange_horiz( u, nbgp )
+    CALL exchange_horiz( u_p, nbgp )
     CALL exchange_horiz( v, nbgp )
+    CALL exchange_horiz( v_p, nbgp )
     CALL exchange_horiz( w, nbgp )
-    IF ( .NOT. neutral )  CALL exchange_horiz( pt, nbgp )
-    IF ( humidity      )  CALL exchange_horiz( q,  nbgp )
+    CALL exchange_horiz( w_p, nbgp )
+    IF ( .NOT. neutral )  THEN
+       CALL exchange_horiz( pt, nbgp )
+       CALL exchange_horiz( pt_p, nbgp )
+    ENDIF
+    IF ( humidity )  THEN
+       CALL exchange_horiz( q,  nbgp )
+       CALL exchange_horiz( q_p,  nbgp )
+    ENDIF
     IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
        DO  n = 1, UBOUND( chem_species, 1 )
 !
 !--       Do local exchange only when necessary, i.e. when data is coming from dynamic file.
-          IF ( nest_offl%chem_from_file_t(n) )  CALL exchange_horiz( chem_species(n)%conc, nbgp )
+          IF ( nest_offl%chem_from_file_t(n) )  THEN
+             CALL exchange_horiz( chem_species(n)%conc, nbgp )
+             CALL exchange_horiz( chem_species(n)%conc_p, nbgp )
+          ENDIF
        ENDDO
     ENDIF
 !
 !-- Set top boundary condition at all horizontal grid points, also at the lateral boundary grid
 !-- points.
-    w(nzt+1,:,:) = w(nzt,:,:)
+    w(nzt+1,:,:)   = w(nzt,:,:)
+    w_p(nzt+1,:,:) = w(nzt+1,:,:)
 !
 !-- Mesoscale offline nesting for other modules.
     CALL nesting_offl_bc_modules
@@ -2265,7 +2351,7 @@
  END SUBROUTINE nesting_offl_bc_modules
 
 
-! !--------------------------------------------------------------------------------------------------!
+!--------------------------------------------------------------------------------------------------!
 ! Description:
 !--------------------------------------------------------------------------------------------------!
 !> Determine the interpolation constant for time interpolation. The calculation is separated from
@@ -2292,13 +2378,14 @@
 
     REAL(wp), PARAMETER ::  ri_bulk_crit = 0.25_wp  !< critical bulk Richardson number
 
-    INTEGER(iwp) :: i                             !< loop index in x-direction
-    INTEGER(iwp) :: j                             !< loop index in y-direction
-    INTEGER(iwp) :: k                             !< loop index in z-direction
-    INTEGER(iwp) :: k_max_loc                     !< index of maximum wind speed along z-direction
-    INTEGER(iwp) :: k_surface                     !< topography top index in z-direction
-    INTEGER(iwp) :: num_boundary_gp_non_cyclic    !< number of non-cyclic boundaries, used for averaging ABL depth
-    INTEGER(iwp) :: num_boundary_gp_non_cyclic_l  !< number of non-cyclic boundaries, used for averaging ABL depth
+    INTEGER(iwp) ::  i                             !< loop index in x-direction
+    INTEGER(iwp) ::  j                             !< loop index in y-direction
+    INTEGER(iwp) ::  k                             !< loop index in z-direction
+    INTEGER(iwp) ::  k_max_loc                     !< index of maximum wind speed along z-direction
+    INTEGER(iwp) ::  k_surface                     !< topography top index in z-direction
+    INTEGER(iwp) ::  lb                            !< running index over multiple boundaries
+    INTEGER(iwp) ::  num_boundary_gp_non_cyclic    !< number of non-cyclic boundaries, used for averaging ABL depth
+    INTEGER(iwp) ::  num_boundary_gp_non_cyclic_l  !< number of non-cyclic boundaries, used for averaging ABL depth
 
     REAL(wp) ::  ri_bulk                 !< bulk Richardson number
     REAL(wp) ::  vpt_surface             !< near-surface virtual potential temperature
@@ -2319,55 +2406,72 @@
     num_boundary_gp_non_cyclic_l = 0
     IF ( bc_dirichlet_l  .OR.  bc_dirichlet_r )  THEN
 !
-!--    Sum-up and store number of boundary grid points used for averaging ABL depth
-       num_boundary_gp_non_cyclic_l = num_boundary_gp_non_cyclic_l + nyn - nys + 1
+!--    Consider the special case of a 1-dimensional decomposition along y, where
+!--    both, bc_dirichlet_l and bc_dirichlet_r being true on the subdomain. This case,
+!--    run the loop twice.
+       DO  lb = 1, MERGE( 2, 1, bc_dirichlet_l  .AND.  bc_dirichlet_r )
 !
-!--    Determine index along x. Please note, index indicates boundary grid point for scalars.
-       i = MERGE( -1, nxr + 1, bc_dirichlet_l )
-
-       DO  j = nys, nyn
+!--       Sum-up and store number of boundary grid points used for averaging ABL depth
+          num_boundary_gp_non_cyclic_l = num_boundary_gp_non_cyclic_l + nyn - nys + 1
 !
-!--       Determine topography top index at current (j,i) index
-          k_surface = topo_top_ind(j,i,0)
-!
-!--       Pre-compute surface virtual temperature. Therefore, use 2nd prognostic level according to
-!--       Heinze et al. (2017).
-          IF ( humidity )  THEN
-             vpt_surface = pt(k_surface+2,j,i) * ( 1.0_wp + 0.61_wp * q(k_surface+2,j,i) )
-             vpt_col     = pt(:,j,i) * ( 1.0_wp + 0.61_wp * q(:,j,i) )
+!--       Determine boundary index. Index indicates boundary grid point for scalars.
+          IF ( MERGE( 2, 1, bc_dirichlet_l  .AND.  bc_dirichlet_r ) == 1 )  THEN
+             i = MERGE( -1, nxr + 1, bc_dirichlet_l )
           ELSE
-             vpt_surface = pt(k_surface+2,j,i)
-             vpt_col     = pt(:,j,i)
-          ENDIF
-!
-!--       Calculate local boundary layer height from bulk Richardson number, i.e. the height where
-!--       the bulk Richardson number exceeds its critical value of 0.25
-!--       (according to Heinze et al., 2017).
-!--       Note, no interpolation of u- and v-component is made, as both are mainly mean inflow
-!--       profiles with very small spatial variation.
-!--       Add a safety factor in case the velocity term becomes zero. This may happen if overhanging
-!--       3D structures are directly located at the boundary, where velocity inside the building is
-!--       zero (k_surface is the index of the lowest upward-facing surface).
-          uv_abs(:) = SQRT( MERGE( u(:,j,i+1), u(:,j,i), bc_dirichlet_l )**2 + v(:,j,i)**2 )
-!
-!--       Determine index of the maximum wind speed
-          k_max_loc = MAXLOC( uv_abs(:), DIM = 1 ) - 1
-
-          zi_local = 0.0_wp
-          DO  k = k_surface+1, nzt
-             ri_bulk = zu(k) * g / vpt_surface *                                                   &
-                       ( vpt_col(k) - vpt_surface ) / ( uv_abs(k) + 1E-5_wp )
-!
-!--          Check if critical Richardson number is exceeded. Further, check if there is a maxium in
-!--          the wind profile in order to detect also ABL heights in the stable boundary layer.
-             IF ( zi_local == 0.0_wp  .AND.  ( ri_bulk > ri_bulk_crit .OR. k == k_max_loc ) )  THEN
-                zi_local = zu(k)
+             IF ( lb == 1 )  THEN
+                i = -1
+             ELSE
+                i = nxr + 1
              ENDIF
-          ENDDO
+          ENDIF
+
+          DO  j = nys, nyn
 !
-!--       Assure that the minimum local boundary-layer depth is at least at the second vertical grid
-!--       level.
-          zi_l = zi_l + MAX( zi_local, zu(k_surface+2) )
+!--          Determine topography top index at current (j,i) index
+             k_surface = topo_top_ind(j,i,0)
+!
+!--          Pre-compute surface virtual temperature. Therefore, use 2nd prognostic level according to
+!--          Heinze et al. (2017).
+             IF ( humidity )  THEN
+                vpt_surface = pt(k_surface+2,j,i) * ( 1.0_wp + 0.61_wp * q(k_surface+2,j,i) )
+                vpt_col     = pt(:,j,i) * ( 1.0_wp + 0.61_wp * q(:,j,i) )
+             ELSE
+                vpt_surface = pt(k_surface+2,j,i)
+                vpt_col     = pt(:,j,i)
+             ENDIF
+!
+!--          Calculate local boundary layer height from bulk Richardson number, i.e. the
+!--          height where the bulk Richardson number exceeds its critical value of 0.25
+!--          (according to Heinze et al., 2017).
+!--          Note, no interpolation of u- and v-component is made, as both are mainly mean inflow
+!--          profiles with very small spatial variation.
+!--          Add a safety factor in case the velocity term becomes zero. This may happen if
+!--          overhanging 3D structures are directly located at the boundary, where velocity inside
+!--           the building is zero (k_surface is the index of the lowest upward-facing surface).
+             uv_abs(:) = SQRT( MERGE( u(:,j,i+1), u(:,j,i), bc_dirichlet_l )**2 + v(:,j,i)**2 )
+!
+!--          Determine index of the maximum wind speed
+             k_max_loc = MAXLOC( uv_abs(:), DIM = 1 ) - 1
+
+             zi_local = 0.0_wp
+             DO  k = k_surface+1, nzt
+                ri_bulk = zu(k) * g / vpt_surface *                                                &
+                          ( vpt_col(k) - vpt_surface ) / ( uv_abs(k) + 1E-5_wp )
+!
+!--             Check if critical Richardson number is exceeded. Further, check if there is a
+!--             maxium in the wind profile in order to detect also ABL heights in the stable
+!--             boundary layer.
+                IF ( zi_local == 0.0_wp  .AND.  ( ri_bulk > ri_bulk_crit .OR. k == k_max_loc ) )   &
+                THEN
+                   zi_local = zu(k)
+                ENDIF
+             ENDDO
+!
+!--          Assure that the minimum local boundary-layer depth is at least at the second vertical
+!--          grid level.
+             zi_l = zi_l + MAX( zi_local, zu(k_surface+2) )
+
+          ENDDO
 
        ENDDO
 
@@ -2375,39 +2479,57 @@
 !
 !-- Do the same at the north and south boundaries.
     IF ( bc_dirichlet_s  .OR.  bc_dirichlet_n )  THEN
+!
+!--    Consider the special case of a 1-dimensional decomposition along x, where
+!--    both, bc_dirichlet_s and bc_dirichlet_n being true on the subdomain. This case,
+!--    run the loop twice.
+       DO  lb = 1, MERGE( 2, 1, bc_dirichlet_n  .AND.  bc_dirichlet_s )
 
-       num_boundary_gp_non_cyclic_l = num_boundary_gp_non_cyclic_l + nxr - nxl + 1
-
-       j = MERGE( -1, nyn + 1, bc_dirichlet_s )
-
-       DO  i = nxl, nxr
-          k_surface = topo_top_ind(j,i,0)
-
-          IF ( humidity )  THEN
-             vpt_surface = pt(k_surface+2,j,i) * ( 1.0_wp + 0.61_wp * q(k_surface+2,j,i) )
-             vpt_col     = pt(:,j,i) * ( 1.0_wp + 0.61_wp * q(:,j,i) )
+          num_boundary_gp_non_cyclic_l = num_boundary_gp_non_cyclic_l + nxr - nxl + 1
+!
+!--       Determine boundary index. Index indicates boundary grid point for scalars.
+          IF ( MERGE( 2, 1, bc_dirichlet_n  .AND.  bc_dirichlet_s ) == 1 )  THEN
+             j = MERGE( -1, nyn + 1, bc_dirichlet_s )
           ELSE
-             vpt_surface = pt(k_surface+2,j,i)
-             vpt_col  = pt(:,j,i)
+             IF ( lb == 1 )  THEN
+                j = -1
+             ELSE
+                j = nyn + 1
+             ENDIF
           ENDIF
 
-          uv_abs(:) = SQRT( u(:,j,i)**2 + MERGE( v(:,j+1,i), v(:,j,i), bc_dirichlet_s )**2 )
-!
-!--       Determine index of the maximum wind speed
-          k_max_loc = MAXLOC( uv_abs(:), DIM = 1 ) - 1
+          DO  i = nxl, nxr
+             k_surface = topo_top_ind(j,i,0)
 
-          zi_local = 0.0_wp
-          DO  k = k_surface+1, nzt
-             ri_bulk = zu(k) * g / vpt_surface *                                                   &
-                       ( vpt_col(k) - vpt_surface ) / ( uv_abs(k) + 1E-5_wp )
-!
-!--          Check if critical Richardson number is exceeded. Further, check if there is a maxium in
-!--          the wind profile in order to detect also ABL heights in the stable boundary layer.
-             IF ( zi_local == 0.0_wp  .AND.  ( ri_bulk > ri_bulk_crit .OR. k == k_max_loc ) )  THEN
-                zi_local = zu(k)
+             IF ( humidity )  THEN
+                vpt_surface = pt(k_surface+2,j,i) * ( 1.0_wp + 0.61_wp * q(k_surface+2,j,i) )
+                vpt_col     = pt(:,j,i) * ( 1.0_wp + 0.61_wp * q(:,j,i) )
+             ELSE
+                vpt_surface = pt(k_surface+2,j,i)
+                vpt_col  = pt(:,j,i)
              ENDIF
+
+             uv_abs(:) = SQRT( u(:,j,i)**2 + MERGE( v(:,j+1,i), v(:,j,i), bc_dirichlet_s )**2 )
+!
+!--          Determine index of the maximum wind speed
+             k_max_loc = MAXLOC( uv_abs(:), DIM = 1 ) - 1
+
+             zi_local = 0.0_wp
+             DO  k = k_surface+1, nzt
+                ri_bulk = zu(k) * g / vpt_surface *                                                &
+                          ( vpt_col(k) - vpt_surface ) / ( uv_abs(k) + 1E-5_wp )
+!
+!--             Check if critical Richardson number is exceeded. Further, check if there is a
+!--             maxium in the wind profile in order to detect also ABL heights in the stable
+!--             boundary layer.
+                IF ( zi_local == 0.0_wp  .AND.  ( ri_bulk > ri_bulk_crit .OR. k == k_max_loc ) )   &
+                THEN
+                   zi_local = zu(k)
+                ENDIF
+             ENDDO
+             zi_l = zi_l + MAX( zi_local, zu(k_surface+2) )
+
           ENDDO
-          zi_l = zi_l + MAX( zi_local, zu(k_surface+2) )
 
        ENDDO
 
@@ -2582,48 +2704,48 @@
     CALL get_attribute( pids_id, char_lod, nest_offl%lod_east_w,   .FALSE., 'ls_forcing_left_w',   &
                         ignore_error = .TRUE. )
 
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_pt, .FALSE., 'ls_forcing_north_pt',  &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_pt, .FALSE., 'ls_forcing_north_pt', &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_qv, .FALSE., 'ls_forcing_north_qv',  &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_qv, .FALSE., 'ls_forcing_north_qv', &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_u,  .FALSE., 'ls_forcing_north_u',   &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_u,  .FALSE., 'ls_forcing_north_u',  &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_v,  .FALSE., 'ls_forcing_north_v',   &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_v,  .FALSE., 'ls_forcing_north_v',  &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_w,  .FALSE., 'ls_forcing_north_w',   &
-                        ignore_error = .TRUE. )
-
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_pt, .FALSE., 'ls_forcing_south_pt',  &
-                        ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_qv, .FALSE., 'ls_forcing_south_qv',  &
-                        ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_u,  .FALSE., 'ls_forcing_south_u',   &
-                        ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_v,  .FALSE., 'ls_forcing_south_v',   &
-                        ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_w,  .FALSE., 'ls_forcing_south_w',   &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_north_w,  .FALSE., 'ls_forcing_north_w',  &
                         ignore_error = .TRUE. )
 
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_pt,  .FALSE., 'ls_forcing_right_pt',  &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_pt, .FALSE., 'ls_forcing_south_pt', &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_qv,  .FALSE., 'ls_forcing_right_qv',  &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_qv, .FALSE., 'ls_forcing_south_qv', &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_u,   .FALSE., 'ls_forcing_right_u',   &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_u,  .FALSE., 'ls_forcing_south_u',  &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_v,   .FALSE., 'ls_forcing_right_v',   &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_v,  .FALSE., 'ls_forcing_south_v',  &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_w,   .FALSE., 'ls_forcing_right_w',   &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_south_w,  .FALSE., 'ls_forcing_south_w',  &
                         ignore_error = .TRUE. )
 
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_pt,   .FALSE., 'ls_forcing_top_pt',    &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_pt,  .FALSE., 'ls_forcing_right_pt', &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_qv,   .FALSE., 'ls_forcing_top_qv',    &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_qv,  .FALSE., 'ls_forcing_right_qv', &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_u,    .FALSE., 'ls_forcing_top_u',     &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_u,   .FALSE., 'ls_forcing_right_u',  &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_v,    .FALSE., 'ls_forcing_top_v',     &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_v,   .FALSE., 'ls_forcing_right_v',  &
                         ignore_error = .TRUE. )
-    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_w,    .FALSE., 'ls_forcing_top_w',     &
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_west_w,   .FALSE., 'ls_forcing_right_w',  &
+                        ignore_error = .TRUE. )
+
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_pt,   .FALSE., 'ls_forcing_top_pt',   &
+                        ignore_error = .TRUE. )
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_qv,   .FALSE., 'ls_forcing_top_qv',   &
+                        ignore_error = .TRUE. )
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_u,    .FALSE., 'ls_forcing_top_u',    &
+                        ignore_error = .TRUE. )
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_v,    .FALSE., 'ls_forcing_top_v',    &
+                        ignore_error = .TRUE. )
+    CALL get_attribute( pids_id, char_lod, nest_offl%lod_top_w,    .FALSE., 'ls_forcing_top_w',    &
                         ignore_error = .TRUE. )
 
     CALL close_input_file( pids_id )
@@ -2889,13 +3011,19 @@
     ENDIF
 !
 !-- Set indicies for boundary grid points
-    IF ( bc_dirichlet_l  .OR.  bc_dirichlet_r )  THEN
-       i_bound   = MERGE( nxl  - 1, nxr + 1, bc_dirichlet_l )
-       i_bound_u = MERGE( nxlu - 1, nxr + 1, bc_dirichlet_l )
+    IF ( bc_dirichlet_l )  THEN
+       i_bound_l   = nxl  - 1
+       i_bound_l_u = nxlu - 1
     ENDIF
-    IF ( bc_dirichlet_n  .OR.  bc_dirichlet_s )  THEN
-       j_bound   = MERGE( nys  - 1, nyn + 1, bc_dirichlet_s )
-       j_bound_v = MERGE( nysv - 1, nyn + 1, bc_dirichlet_s )
+    IF ( bc_dirichlet_r )  THEN
+       i_bound_r   = nxr + 1
+    ENDIF
+    IF ( bc_dirichlet_n )  THEN
+       j_bound_n   = nyn + 1
+    ENDIF
+    IF ( bc_dirichlet_s )  THEN
+       j_bound_s   = nys  - 1
+       j_bound_s_v = nysv - 1
     ENDIF
 !
 !-- Initialize boundary data. Please note, do not initialize boundaries in case of restart runs.
@@ -2906,30 +3034,30 @@
 !--    Distinguish between LOD = 1 and LOD = 2 inititialization
        IF ( lod == 2 )  THEN
           IF ( bc_dirichlet_l )  THEN
-             u(nzb+1:nzt,nys:nyn,i_bound_u) = nest_offl%u_l(0,nzb+1:nzt,nys:nyn)
-             v(nzb+1:nzt,nysv:nyn,i_bound)  = nest_offl%v_l(0,nzb+1:nzt,nysv:nyn)
-             w(nzb+1:nzt-1,nys:nyn,i_bound) = nest_offl%w_l(0,nzb+1:nzt-1,nys:nyn)
-             IF ( .NOT. neutral )  pt(nzb+1:nzt,nys:nyn,i_bound) = nest_offl%pt_l(0,nzb+1:nzt,nys:nyn)
-             IF ( humidity      )  q(nzb+1:nzt,nys:nyn,i_bound)  = nest_offl%q_l(0,nzb+1:nzt,nys:nyn)
+             u(nzb+1:nzt,nys:nyn,i_bound_l_u) = nest_offl%u_l(0,nzb+1:nzt,nys:nyn)
+             v(nzb+1:nzt,nysv:nyn,i_bound_l)  = nest_offl%v_l(0,nzb+1:nzt,nysv:nyn)
+             w(nzb+1:nzt-1,nys:nyn,i_bound_l) = nest_offl%w_l(0,nzb+1:nzt-1,nys:nyn)
+             IF ( .NOT. neutral )  pt(nzb+1:nzt,nys:nyn,i_bound_l) = nest_offl%pt_l(0,nzb+1:nzt,nys:nyn)
+             IF ( humidity      )  q(nzb+1:nzt,nys:nyn,i_bound_l)  = nest_offl%q_l(0,nzb+1:nzt,nys:nyn)
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_l(n) )  THEN
-                      chem_species(n)%conc(nzb+1:nzt,nys:nyn,i_bound) =                            &
+                      chem_species(n)%conc(nzb+1:nzt,nys:nyn,i_bound_l) =                          &
                                                              nest_offl%chem_l(0,nzb+1:nzt,nys:nyn,n)
                    ENDIF
                 ENDDO
              ENDIF
           ENDIF
           IF ( bc_dirichlet_r )  THEN
-             u(nzb+1:nzt,nys:nyn,i_bound_u) = nest_offl%u_r(0,nzb+1:nzt,nys:nyn)
-             v(nzb+1:nzt,nysv:nyn,i_bound)  = nest_offl%v_r(0,nzb+1:nzt,nysv:nyn)
-             w(nzb+1:nzt-1,nys:nyn,i_bound) = nest_offl%w_r(0,nzb+1:nzt-1,nys:nyn)
-             IF ( .NOT. neutral )  pt(nzb+1:nzt,nys:nyn,i_bound) = nest_offl%pt_r(0,nzb+1:nzt,nys:nyn)
-             IF ( humidity      )  q(nzb+1:nzt,nys:nyn,i_bound)  = nest_offl%q_r(0,nzb+1:nzt,nys:nyn)
+             u(nzb+1:nzt,nys:nyn,i_bound_r) = nest_offl%u_r(0,nzb+1:nzt,nys:nyn)
+             v(nzb+1:nzt,nysv:nyn,i_bound_r)  = nest_offl%v_r(0,nzb+1:nzt,nysv:nyn)
+             w(nzb+1:nzt-1,nys:nyn,i_bound_r) = nest_offl%w_r(0,nzb+1:nzt-1,nys:nyn)
+             IF ( .NOT. neutral )  pt(nzb+1:nzt,nys:nyn,i_bound_r) = nest_offl%pt_r(0,nzb+1:nzt,nys:nyn)
+             IF ( humidity      )  q(nzb+1:nzt,nys:nyn,i_bound_r)  = nest_offl%q_r(0,nzb+1:nzt,nys:nyn)
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_r(n) )  THEN
-                      chem_species(n)%conc(nzb+1:nzt,nys:nyn,i_bound) =                            &
+                      chem_species(n)%conc(nzb+1:nzt,nys:nyn,i_bound_r) =                          &
                                                              nest_offl%chem_r(0,nzb+1:nzt,nys:nyn,n)
                    ENDIF
                 ENDDO
@@ -2937,30 +3065,30 @@
           ENDIF
 
           IF ( bc_dirichlet_n)  THEN
-             u(nzb+1:nzt,j_bound,nxlu:nxr)  = nest_offl%u_n(0,nzb+1:nzt,nxlu:nxr)
-             v(nzb+1:nzt,j_bound_v,nxl:nxr) = nest_offl%v_n(0,nzb+1:nzt,nxl:nxr)
-             w(nzb+1:nzt-1,j_bound,nxl:nxr) = nest_offl%w_n(0,nzb+1:nzt-1,nxl:nxr)
-             IF ( .NOT. neutral )  pt(nzb+1:nzt,j_bound,nxl:nxr) = nest_offl%pt_n(0,nzb+1:nzt,nxl:nxr)
-             IF ( humidity      )  q(nzb+1:nzt,j_bound,nxl:nxr)  = nest_offl%q_n(0,nzb+1:nzt,nxl:nxr)
+             u(nzb+1:nzt,j_bound_n,nxlu:nxr)  = nest_offl%u_n(0,nzb+1:nzt,nxlu:nxr)
+             v(nzb+1:nzt,j_bound_n,nxl:nxr) = nest_offl%v_n(0,nzb+1:nzt,nxl:nxr)
+             w(nzb+1:nzt-1,j_bound_n,nxl:nxr) = nest_offl%w_n(0,nzb+1:nzt-1,nxl:nxr)
+             IF ( .NOT. neutral )  pt(nzb+1:nzt,j_bound_n,nxl:nxr) = nest_offl%pt_n(0,nzb+1:nzt,nxl:nxr)
+             IF ( humidity      )  q(nzb+1:nzt,j_bound_n,nxl:nxr)  = nest_offl%q_n(0,nzb+1:nzt,nxl:nxr)
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_n(n) )  THEN
-                      chem_species(n)%conc(nzb+1:nzt,j_bound,nxl:nxr) =                            &
+                      chem_species(n)%conc(nzb+1:nzt,j_bound_n,nxl:nxr) =                          &
                                                              nest_offl%chem_n(0,nzb+1:nzt,nxl:nxr,n)
                    ENDIF
                 ENDDO
              ENDIF
           ENDIF
           IF ( bc_dirichlet_s)  THEN
-             u(nzb+1:nzt,j_bound,nxlu:nxr)  = nest_offl%u_s(0,nzb+1:nzt,nxlu:nxr)
-             v(nzb+1:nzt,j_bound_v,nxl:nxr) = nest_offl%v_s(0,nzb+1:nzt,nxl:nxr)
-             w(nzb+1:nzt-1,j_bound,nxl:nxr) = nest_offl%w_s(0,nzb+1:nzt-1,nxl:nxr)
-             IF ( .NOT. neutral )  pt(nzb+1:nzt,j_bound,nxl:nxr) = nest_offl%pt_s(0,nzb+1:nzt,nxl:nxr)
-             IF ( humidity      )  q(nzb+1:nzt,j_bound,nxl:nxr)  = nest_offl%q_s(0,nzb+1:nzt,nxl:nxr)
+             u(nzb+1:nzt,j_bound_s,nxlu:nxr)  = nest_offl%u_s(0,nzb+1:nzt,nxlu:nxr)
+             v(nzb+1:nzt,j_bound_s_v,nxl:nxr) = nest_offl%v_s(0,nzb+1:nzt,nxl:nxr)
+             w(nzb+1:nzt-1,j_bound_s,nxl:nxr) = nest_offl%w_s(0,nzb+1:nzt-1,nxl:nxr)
+             IF ( .NOT. neutral )  pt(nzb+1:nzt,j_bound_s,nxl:nxr) = nest_offl%pt_s(0,nzb+1:nzt,nxl:nxr)
+             IF ( humidity      )  q(nzb+1:nzt,j_bound_s,nxl:nxr)  = nest_offl%q_s(0,nzb+1:nzt,nxl:nxr)
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_s(n) )  THEN
-                      chem_species(n)%conc(nzb+1:nzt,j_bound,nxl:nxr) =                            &
+                      chem_species(n)%conc(nzb+1:nzt,j_bound_s,nxl:nxr) =                          &
                                                              nest_offl%chem_s(0,nzb+1:nzt,nxl:nxr,n)
                    ENDIF
                 ENDDO
@@ -2986,27 +3114,27 @@
        ELSE
           IF ( bc_dirichlet_l )  THEN
              DO  j = nys, nyn
-                u(nzb+1:nzt,j,i_bound_u) = nest_offl%u_l(0,nzb+1:nzt,1)
-                w(nzb+1:nzt-1,j,i_bound) = nest_offl%w_l(0,nzb+1:nzt-1,1)
+                u(nzb+1:nzt,j,i_bound_l_u) = nest_offl%u_l(0,nzb+1:nzt,1)
+                w(nzb+1:nzt-1,j,i_bound_l) = nest_offl%w_l(0,nzb+1:nzt-1,1)
              ENDDO
              DO  j = nysv, nyn
-                v(nzb+1:nzt,j,i_bound)  = nest_offl%v_l(0,nzb+1:nzt,1)
+                v(nzb+1:nzt,j,i_bound_l)  = nest_offl%v_l(0,nzb+1:nzt,1)
              ENDDO
              IF ( .NOT. neutral )  THEN
                 DO  j = nys, nyn
-                   pt(nzb+1:nzt,j,i_bound) = nest_offl%pt_l(0,nzb+1:nzt,1)
+                   pt(nzb+1:nzt,j,i_bound_l) = nest_offl%pt_l(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( humidity      )  THEN
                 DO  j = nys, nyn
-                   q(nzb+1:nzt,j,i_bound)  = nest_offl%q_l(0,nzb+1:nzt,1)
+                   q(nzb+1:nzt,j,i_bound_l)  = nest_offl%q_l(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_l(n) )  THEN
                       DO  j = nys, nyn
-                         chem_species(n)%conc(nzb+1:nzt,j,i_bound) =                               &
+                         chem_species(n)%conc(nzb+1:nzt,j,i_bound_l) =                             &
                                                                    nest_offl%chem_l(0,nzb+1:nzt,1,n)
                       ENDDO
                    ENDIF
@@ -3015,27 +3143,27 @@
           ENDIF
           IF ( bc_dirichlet_r )  THEN
              DO  j = nys, nyn
-                u(nzb+1:nzt,j,i_bound_u) = nest_offl%u_r(0,nzb+1:nzt,1)
-                w(nzb+1:nzt-1,j,i_bound) = nest_offl%w_r(0,nzb+1:nzt-1,1)
+                u(nzb+1:nzt,j,i_bound_r) = nest_offl%u_r(0,nzb+1:nzt,1)
+                w(nzb+1:nzt-1,j,i_bound_r) = nest_offl%w_r(0,nzb+1:nzt-1,1)
              ENDDO
              DO  j = nysv, nyn
-                v(nzb+1:nzt,j,i_bound)  = nest_offl%v_r(0,nzb+1:nzt,1)
+                v(nzb+1:nzt,j,i_bound_r)  = nest_offl%v_r(0,nzb+1:nzt,1)
              ENDDO
              IF ( .NOT. neutral )  THEN
                 DO  j = nys, nyn
-                   pt(nzb+1:nzt,j,i_bound) = nest_offl%pt_r(0,nzb+1:nzt,1)
+                   pt(nzb+1:nzt,j,i_bound_r) = nest_offl%pt_r(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( humidity      )  THEN
                 DO  j = nys, nyn
-                   q(nzb+1:nzt,j,i_bound)  = nest_offl%q_r(0,nzb+1:nzt,1)
+                   q(nzb+1:nzt,j,i_bound_r)  = nest_offl%q_r(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_r(n) )  THEN
                       DO  j = nys, nyn
-                         chem_species(n)%conc(nzb+1:nzt,j,i_bound) =                               &
+                         chem_species(n)%conc(nzb+1:nzt,j,i_bound_r) =                             &
                                                                    nest_offl%chem_r(0,nzb+1:nzt,1,n)
                       ENDDO
                    ENDIF
@@ -3044,27 +3172,27 @@
           ENDIF
           IF ( bc_dirichlet_n )  THEN
              DO  i = nxlu, nxr
-                u(nzb+1:nzt,j_bound,i)  = nest_offl%u_n(0,nzb+1:nzt,1)
+                u(nzb+1:nzt,j_bound_n,i)  = nest_offl%u_n(0,nzb+1:nzt,1)
              ENDDO
              DO  i = nxl, nxr
-                v(nzb+1:nzt,j_bound_v,i) = nest_offl%v_n(0,nzb+1:nzt,1)
-                w(nzb+1:nzt-1,j_bound,i) = nest_offl%w_n(0,nzb+1:nzt-1,1)
+                v(nzb+1:nzt,j_bound_n,i) = nest_offl%v_n(0,nzb+1:nzt,1)
+                w(nzb+1:nzt-1,j_bound_n,i) = nest_offl%w_n(0,nzb+1:nzt-1,1)
              ENDDO
              IF ( .NOT. neutral )  THEN
                 DO  i = nxl, nxr
-                   pt(nzb+1:nzt,j_bound,i) = nest_offl%pt_n(0,nzb+1:nzt,1)
+                   pt(nzb+1:nzt,j_bound_n,i) = nest_offl%pt_n(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( humidity      )  THEN
                 DO  i = nxl, nxr
-                   q(nzb+1:nzt,j_bound,i)  = nest_offl%q_n(0,nzb+1:nzt,1)
+                   q(nzb+1:nzt,j_bound_n,i)  = nest_offl%q_n(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_n(n) )  THEN
                       DO  i = nxl, nxr
-                         chem_species(n)%conc(nzb+1:nzt,j_bound,i) =                               &
+                         chem_species(n)%conc(nzb+1:nzt,j_bound_n,i) =                             &
                                                                    nest_offl%chem_n(0,nzb+1:nzt,1,n)
                       ENDDO
                    ENDIF
@@ -3073,27 +3201,27 @@
           ENDIF
           IF ( bc_dirichlet_s )  THEN
              DO  i = nxlu, nxr
-                u(nzb+1:nzt,j_bound,i)  = nest_offl%u_s(0,nzb+1:nzt,1)
+                u(nzb+1:nzt,j_bound_s,i)  = nest_offl%u_s(0,nzb+1:nzt,1)
              ENDDO
              DO  i = nxl, nxr
-                v(nzb+1:nzt,j_bound_v,i) = nest_offl%v_s(0,nzb+1:nzt,1)
-                w(nzb+1:nzt-1,j_bound,i) = nest_offl%w_s(0,nzb+1:nzt-1,1)
+                v(nzb+1:nzt,j_bound_s_v,i) = nest_offl%v_s(0,nzb+1:nzt,1)
+                w(nzb+1:nzt-1,j_bound_s,i) = nest_offl%w_s(0,nzb+1:nzt-1,1)
              ENDDO
              IF ( .NOT. neutral )  THEN
                 DO  i = nxl, nxr
-                   pt(nzb+1:nzt,j_bound,i) = nest_offl%pt_s(0,nzb+1:nzt,1)
+                   pt(nzb+1:nzt,j_bound_s,i) = nest_offl%pt_s(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( humidity      )  THEN
                 DO  i = nxl, nxr
-                   q(nzb+1:nzt,j_bound,i)  = nest_offl%q_s(0,nzb+1:nzt,1)
+                   q(nzb+1:nzt,j_bound_s,i)  = nest_offl%q_s(0,nzb+1:nzt,1)
                 ENDDO
              ENDIF
              IF ( air_chemistry  .AND.  nesting_offline_chem )  THEN
                 DO  n = 1, UBOUND( chem_species, 1 )
                    IF( nest_offl%chem_from_file_s(n) )  THEN
                       DO  i = nxl, nxr
-                         chem_species(n)%conc(nzb+1:nzt,j_bound,i) =                               &
+                         chem_species(n)%conc(nzb+1:nzt,j_bound_s,i) =                             &
                                                                    nest_offl%chem_s(0,nzb+1:nzt,1,n)
                       ENDDO
                    ENDIF
@@ -3116,6 +3244,18 @@
           ENDIF
        ENDIF
 !
+!--    Set also the prognostic level to assure that boundary values are the same at all timelevels.
+       u_p = u
+       v_p = v
+       w_p = w
+       IF ( .NOT. neutral )  pt_p = pt
+       IF ( humidity )  q_p = q
+       DO  n = 1, UBOUND( chem_species, 1 )
+          IF ( nest_offl%chem_from_file_t(n) )  THEN
+             chem_species(n)%conc_p = chem_species(n)%conc
+          ENDIF
+       ENDDO
+!
 !--    In case of offline nesting the pressure forms itself based on the prescribed lateral
 !--    boundary conditions. Hence, explicit forcing by pressure gradients via geostrophic wind
 !--    components is not necessary and would be canceled out by the perturbation pressure otherwise.
@@ -3130,6 +3270,10 @@
     u = MERGE( u, 0.0_wp, BTEST( topo_flags, 1 ) )
     v = MERGE( v, 0.0_wp, BTEST( topo_flags, 2 ) )
     w = MERGE( w, 0.0_wp, BTEST( topo_flags, 3 ) )
+
+    u_p = MERGE( u_p, 0.0_wp, BTEST( topo_flags, 1 ) )
+    v_p = MERGE( v_p, 0.0_wp, BTEST( topo_flags, 2 ) )
+    w_p = MERGE( w_p, 0.0_wp, BTEST( topo_flags, 3 ) )
 !
 !-- After boundary data is initialized, ensure mass conservation. Not necessary in restart runs.
     IF ( TRIM( initializing_actions ) /= 'read_restart_data' )  THEN

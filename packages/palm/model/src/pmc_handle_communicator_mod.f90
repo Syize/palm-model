@@ -264,8 +264,9 @@
 
 !
 !-- Create intercommunicator between the parent and children.
-!-- MPI_INTERCOMM_CREATE creates an intercommunicator between 2 groups of different colors. The
-!-- grouping was done above with MPI_COMM_SPLIT. A duplicate of MPI_COMM_WORLD is created and used
+!-- MPI_INTERCOMM_CREATE creates intercommunicators between the local communicator
+!-- comm and a copy of MPI_COMM_WORLD for each pair of models. The grouping was done 
+!-- above with MPI_COMM_SPLIT. A duplicate of MPI_COMM_WORLD is created and used
 !-- as peer communicator (peer_comm) for MPI_INTERCOMM_CREATE.
     CALL MPI_COMM_DUP( MPI_COMM_WORLD, peer_comm, ierr )
     DO  i = 2, m_ncpl

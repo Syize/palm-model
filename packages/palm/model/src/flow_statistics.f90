@@ -121,9 +121,7 @@
 
 #if defined( _OPENACC )
     USE control_parameters,                                                                        &
-        ONLY:  enable_lsm_openacc,                                                                 &
-               enable_openacc
-
+        ONLY:  enable_openacc
 #endif
 
     USE cpulog,                                                                                    &
@@ -274,28 +272,23 @@
     DO  sr = 0, statistic_regions
 !
 !--    Initialize (local) summation array
-       sums_l = 0.0_wp
-#if defined( _OPENACC )
        !$ACC KERNELS &
-       !$ACC PRESENT(sums_l) &
-       !$ACC DEFAULT(NONE) IF(enable_openacc)
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        sums_l = 0.0_wp
        !$ACC END KERNELS
-#endif
 
-       !$ACC KERNELS &
-       !$ACC PRESENT(heatflux_output_conversion, sums_l, sums_l_l, sums_wsts_bc_l) &
-       !$ACC DEFAULT(NONE) IF(enable_openacc)
 !
-!--    Store sums that have been computed in other subroutines in summation array
+!--    Store sums that have been computed in other subroutines in summation array.
+       !$ACC KERNELS &
+       !$ACC COPYIN(sums_divold_l, sums_divnew_l) &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        sums_l(:,11,:) = sums_l_l(:,sr,:)      ! mixing length from diffusivities
 !--    WARNING: next line still has to be adjusted for OpenMP
        sums_l(:,21,0) = sums_wsts_bc_l(:,sr) *                                                     &
                         heatflux_output_conversion  ! heat flux from advec_s_bc
-       !$ACC END KERNELS
-
        sums_l(nzb+9,pr_palm,0)  = sums_divold_l(sr)  ! old divergence from pres
        sums_l(nzb+10,pr_palm,0) = sums_divnew_l(sr)  ! new divergence from pres
+       !$ACC END KERNELS
 
 !
 !--    When calcuating horizontally-averaged total (resolved- plus subgrid-scale) vertical fluxes
@@ -322,24 +315,21 @@
 
           DO  i = 0, threads_per_task-1
 
-             !$ACC KERNELS &
-             !$ACC PRESENT(momentumflux_output_conversion, sums_l, sums_us2_ws_l, sums_vs2_ws_l, sums_wsus_ws_l, sums_wsvs_ws_l) &
-             !$ACC DEFAULT(NONE) IF(enable_openacc)
 !
 !--          Swap the turbulent quantities evaluated in advec_ws.
+             !$ACC KERNELS &
+             !$ACC DEFAULT(PRESENT) IF(enable_openacc)
              sums_l(:,13,i) = sums_wsus_ws_l(:,i) * momentumflux_output_conversion ! w*u*
              sums_l(:,15,i) = sums_wsvs_ws_l(:,i) * momentumflux_output_conversion ! w*v*
              sums_l(:,30,i) = sums_us2_ws_l(:,i)                                   ! u*2
              sums_l(:,31,i) = sums_vs2_ws_l(:,i)                                   ! v*2
              !$ACC END KERNELS
 
-             !$ACC PARALLEL LOOP GANG VECTOR &
-             !$ACC COPYOUT(sums_l) &
-             !$ACC PRESENT(momentumflux_output_conversion, sums_us2_ws_l, sums_vs2_ws_l, sums_ws2_ws_l) &
-             !$ACC DEFAULT(NONE) IF(enable_openacc)
 !
 !--          For w'w' output conversion is required too (density is included in the flux).
 !--          Therefore, interpolate the conversion factor onto the s-grid.
+             !$ACC PARALLEL LOOP GANG VECTOR &
+             !$ACC DEFAULT(PRESENT) IF(enable_openacc)
              DO  k = nzb+1, nzt
                 cfac = 0.5_wp * ( momentumflux_output_conversion(k)                                &
                                 + momentumflux_output_conversion(k+1) )
@@ -356,20 +346,18 @@
 
           DO  i = 0, threads_per_task-1
 
-             sums_l(:,17,i)                         = sums_wspts_ws_l(:,i)                         &
-                                                      * heatflux_output_conversion   ! w*pt*
-
-             !$ACC UPDATE DEVICE(sums_l) IF(enable_openacc)
+             !$ACC KERNELS &
+             !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+             sums_l(:,17,i)  = sums_wspts_ws_l(:,i) * heatflux_output_conversion   ! w*pt*
+             !$ACC END KERNELS
 
              IF ( ocean_mode     )  sums_l(:,66,i)  = sums_wssas_ws_l(:,i)                         &
                                                       * scalarflux_output_conversion ! w*sa*
              IF ( humidity       ) THEN
 
                 !$ACC KERNELS &
-                !$ACC PRESENT(sums_l, sums_wsqs_ws_l, waterflux_output_conversion) &
-                !$ACC DEFAULT(NONE) IF(enable_openacc)
-                sums_l(:,49,i)  = sums_wsqs_ws_l(:,i)                          &
-                                  * waterflux_output_conversion  ! w*q*
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
+                sums_l(:,49,i)  = sums_wsqs_ws_l(:,i) * waterflux_output_conversion  ! w*q*
                 !$ACC END KERNELS
              END IF
 
@@ -379,7 +367,6 @@
 
        ENDIF
 
-       !$ACC UPDATE DEVICE(sums_l) IF(enable_openacc)
 !
 !--    Horizontally averaged profiles of horizontal velocities and temperature.
 !--    They must have been computed before, because they are already required for other horizontal
@@ -388,53 +375,34 @@
        !$OMP PARALLEL PRIVATE( i, j, k, tn, flag )
        !$ tn = omp_get_thread_num()
        !$OMP DO
-       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k, flag) &
-       !$ACC PRESENT(pt, rmask, sums_l, topo_flags, u, v) &
-       !$ACC DEFAULT(NONE) IF(enable_openacc)
+       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k, flag) DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl, nxr
           DO  j =  nys, nyn
              DO  k = nzb, nzt+1
                 flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 22 ) )
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,1,tn)  = sums_l(k,1,tn)  + u(k,j,i)  * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,2,tn)  = sums_l(k,2,tn)  + v(k,j,i)  * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,4,tn)  = sums_l(k,4,tn)  + pt(k,j,i) * rmask(j,i,sr) * flag
              ENDDO
           ENDDO
        ENDDO
-       !$ACC UPDATE HOST(sums_l) IF(enable_openacc)
-
-!
-!--    Horizontally averaged profile of salinity
-       IF ( ocean_mode )  THEN
-          !$OMP DO
-          DO  i = nxl, nxr
-             DO  j =  nys, nyn
-                DO  k = nzb, nzt+1
-                   sums_l(k,23,tn)  = sums_l(k,23,tn) + sa(k,j,i)                                  &
-                                      * rmask(j,i,sr)                                              &
-                                      * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 22 ) )
-                ENDDO
-             ENDDO
-          ENDDO
-       ENDIF
 
 !
 !--    Horizontally averaged profiles of virtual potential temperature, total water content, water
 !--    vapor mixing ratio and liquid water potential temperature
        IF ( humidity )  THEN
           !$OMP DO
-
-          !$ACC PARALLEL LOOP GANG &
-          !$ACC PRESENT(q, rmask, sums_l, topo_flags, vpt) &
-          !$ACC DEFAULT(NONE) IF(enable_openacc)
+          !$ACC PARALLEL LOOP GANG DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl, nxr
              DO  j =  nys, nyn
                 DO  k = nzb, nzt+1
                    flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 22 ) )
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,44,tn)  = sums_l(k,44,tn) + vpt(k,j,i) * rmask(j,i,sr) * flag
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,41,tn)  = sums_l(k,41,tn) + q(k,j,i) * rmask(j,i,sr)   * flag
                 ENDDO
              ENDDO
@@ -459,6 +427,21 @@
        ENDIF
 
 !
+!--    Horizontally averaged profile of salinity
+       IF ( ocean_mode )  THEN
+          !$OMP DO
+          DO  i = nxl, nxr
+             DO  j =  nys, nyn
+                DO  k = nzb, nzt+1
+                   sums_l(k,23,tn)  = sums_l(k,23,tn) + sa(k,j,i)                                  &
+                                      * rmask(j,i,sr)                                              &
+                                      * MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 22 ) )
+                ENDDO
+             ENDDO
+          ENDDO
+       ENDIF
+
+!
 !--    Horizontally averaged profiles of passive scalar
        IF ( passive_scalar )  THEN
           !$OMP DO
@@ -475,6 +458,7 @@
        !$OMP END PARALLEL
 !
 !--    Summation of thread sums
+       !$ACC UPDATE HOST(sums_l) IF(enable_openacc)
        IF ( threads_per_task > 1 )  THEN
           DO  i = 1, threads_per_task-1
              sums_l(:,1,0) = sums_l(:,1,0) + sums_l(:,1,i)
@@ -552,10 +536,6 @@
        IF ( passive_scalar )  sums(:,115) = sums_l(:,115,0)
 #endif
 
-       !$ACC KERNELS &
-       !$ACC PRESENT(hom, ngp_2dh, ngp_2dh_s_inner) &
-       !$ACC COPY(sums) &
-       !$ACC DEFAULT(NONE) IF(enable_openacc)
 !
 !--    Final values are obtained by division by the total number of grid points used for summation.
 !--    After that store profiles.
@@ -565,8 +545,7 @@
        hom(:,1,1,sr) = sums(:,1)             ! u
        hom(:,1,2,sr) = sums(:,2)             ! v
        hom(:,1,4,sr) = sums(:,4)             ! pt
-       !$ACC END KERNELS
-       !$ACC UPDATE HOST(hom(:,1,1,sr), hom(:,1,2,sr), hom(:,1,4,sr)) IF(enable_openacc)
+       !$ACC UPDATE DEVICE(hom(:,1,1,sr), hom(:,1,2,sr), hom(:,1,4,sr)) IF(enable_openacc)
 
 !
 !--    Salinity
@@ -594,8 +573,6 @@
 !--    Passive scalar
        IF ( passive_scalar )  hom(:,1,115,sr) = sums(:,115) / ngp_2dh_s_inner(:,sr)  ! s
 
-       !$ACC UPDATE DEVICE(sums_l) IF(enable_openacc)
-
 !
 !--    Horizontally averaged profiles of the remaining prognostic variables, variances, the total
 !--    and the perturbation energy (single values in last column of sums_l) and some diagnostic
@@ -604,23 +581,19 @@
 !--    ----  k-loop would have to be split up and rearranged according to the staggered grid.
 !--          However, this implies no error since staggered velocity components are zero at the
 !--          walls and inside buildings.
+!--    ATTENTION: explicit PRESENT clauses are required for the surf_... arrays, although they
+!--               are on the device. Maybe a bug of nvfortran compiler.
        tn = 0
        !$OMP PARALLEL PRIVATE( i, j, k, pts, sums_ll,                          &
        !$OMP                   sums_l_etot, tn, ust, ust2, u2, vst, vst2, v2,  &
        !$OMP                   w2, flag, m )
        !$ tn = omp_get_thread_num()
        !$OMP DO
-       !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j, k, m) &
-       !$ACC PRIVATE(sums_l_etot, flag, du_dx, du_dy, du_dz) &
-       !$ACC PRIVATE(dv_dx, dv_dy, dv_dz, dw_dx, dw_dy, dw_dz) &
-       !$ACC PRIVATE(s11, s21, s31, s12, s22, s32, s13, s23, s33) &
-       !$ACC PRIVATE(dissipation, eta) &
-       !$ACC PRESENT(topo_flags, rmask, momentumflux_output_conversion) &
-       !$ACC PRESENT(hom(:,1,1:2,sr), hom(:,1,4,sr)) &
-       !$ACC PRESENT(e, u, v, w, km, kh, p, pt) &
-       !$ACC PRESENT(ddx, ddy, ddzu, ddzw) &
+       !$ACC PARALLEL LOOP COLLAPSE(2) &
+       !$ACC PRIVATE(dissipation, du_dx, du_dy, du_dz, dv_dx, dv_dy, dv_dz, dw_dx, dw_dy, dw_dz ) &
+       !$ACC PRIVATE(eta, flag, i, j, k, m, sums_l_etot, s11, s21, s31, s12, s22, s32, s13, s23, s33) &
        !$ACC PRESENT(surf_def, surf_lsm, surf_top, surf_usm) &
-       !$ACC PRESENT(sums_l) DEFAULT(NONE) IF(enable_openacc)
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl, nxr
           DO  j =  nys, nyn
              sums_l_etot = 0.0_wp
@@ -628,19 +601,19 @@
                 flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 22 ) )
 !
 !--             Prognostic and diagnostic variables
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,3,tn)  = sums_l(k,3,tn)  + w(k,j,i)  * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,8,tn)  = sums_l(k,8,tn)  + e(k,j,i)  * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,9,tn)  = sums_l(k,9,tn)  + km(k,j,i) * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,10,tn) = sums_l(k,10,tn) + kh(k,j,i) * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,40,tn) = sums_l(k,40,tn) + ( p(k,j,i)                                     &
                                          / momentumflux_output_conversion(k) ) * flag
 
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,33,tn) = sums_l(k,33,tn) + &
                                   ( pt(k,j,i)-hom(k,1,4,sr) )**2 * rmask(j,i,sr) * flag
 #if ! defined( _OPENACC )
@@ -656,7 +629,7 @@
 !
 !--             Higher moments
 !--             (Computation of the skewness of w further below)
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,38,tn) = sums_l(k,38,tn) + w(k,j,i)**3 * rmask(j,i,sr) * flag
 
                 sums_l_etot  = sums_l_etot + 0.5_wp * ( u(k,j,i)**2 + v(k,j,i)**2 + w(k,j,i)**2 )  &
@@ -736,7 +709,7 @@
                                   s13*s13 + s23*s23 + s33*s33 )
                    eta         = ( km(k,j,i)**3.0_wp / ( dissipation+1.0E-12 ) )**(1.0_wp/4.0_wp)
 
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,121,tn) = sums_l(k,121,tn) + eta * rmask(j,i,sr) * flag
 
 
@@ -748,7 +721,7 @@
 !--          Total and perturbation energy for the total domain (being collected in the last column
 !--          of sums_l). Summation of these quantities is seperated from the previous loop in order
 !--          to allow vectorization of that loop.
-             !$ACC ATOMIC
+             !$ACC ATOMIC UPDATE
              sums_l(nzb+4,pr_palm,tn) = sums_l(nzb+4,pr_palm,tn) + sums_l_etot
 !
 !--          2D-arrays (being collected in the last column of sums_l)
@@ -757,16 +730,16 @@
                 IF ( surf_def%upward(m) )  THEN
 
                    k = surf_def%k(m) + surf_def%koff(m)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb,pr_palm,tn)   = sums_l(nzb,pr_palm,tn) + surf_def%us(m) *            &
                                                                        rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+1,pr_palm,tn) = sums_l(nzb+1,pr_palm,tn) + surf_def%usws(m) *        &
                                               momentumflux_output_conversion(k) * rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+2,pr_palm,tn) = sums_l(nzb+2,pr_palm,tn) + surf_def%vsws(m) *        &
                                               momentumflux_output_conversion(k) * rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+3,pr_palm,tn) = sums_l(nzb+3,pr_palm,tn) + surf_def%ts(m) *          &
                                                                          rmask(j,i,sr)
 #if ! defined( _OPENACC )
@@ -781,7 +754,7 @@
 #endif
 !
 !--                Summation of surface temperature.
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+14,pr_palm,tn) = sums_l(nzb+14,pr_palm,tn) + surf_def%pt_surface(m) *&
                                                                            rmask(j,i,sr)
                 ENDIF
@@ -791,16 +764,16 @@
                 IF ( surf_lsm%upward(m) )  THEN
 
                    k = surf_lsm%k(m) + surf_lsm%koff(m)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb,pr_palm,tn)   = sums_l(nzb,pr_palm,tn) + surf_lsm%us(m) *            &
                                                                        rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+1,pr_palm,tn) = sums_l(nzb+1,pr_palm,tn) + surf_lsm%usws(m) *        &
                                               momentumflux_output_conversion(k) * rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+2,pr_palm,tn) = sums_l(nzb+2,pr_palm,tn) + surf_lsm%vsws(m) *        &
                                               momentumflux_output_conversion(k) * rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+3,pr_palm,tn) = sums_l(nzb+3,pr_palm,tn) + surf_lsm%ts(m) *          &
                                                                          rmask(j,i,sr)
 #if ! defined( _OPENACC )
@@ -815,7 +788,7 @@
 #endif
 !
 !--                Summation of surface temperature.
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+14,pr_palm,tn) = sums_l(nzb+14,pr_palm,tn) + surf_lsm%pt_surface(m) *&
                                                                            rmask(j,i,sr)
                 ENDIF
@@ -826,16 +799,16 @@
                 IF ( surf_usm%upward(m) )  THEN
 
                    k = surf_usm%k(m) + surf_usm%koff(m)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb,pr_palm,tn)   = sums_l(nzb,pr_palm,tn) + surf_usm%us(m) *            &
                                                                        rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+1,pr_palm,tn) = sums_l(nzb+1,pr_palm,tn) + surf_usm%usws(m) *        &
                                               momentumflux_output_conversion(k) * rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+2,pr_palm,tn) = sums_l(nzb+2,pr_palm,tn) + surf_usm%vsws(m) *        &
                                               momentumflux_output_conversion(k) * rmask(j,i,sr)
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+3,pr_palm,tn) = sums_l(nzb+3,pr_palm,tn) + surf_usm%ts(m) *          &
                                                                          rmask(j,i,sr)
 #if ! defined( _OPENACC )
@@ -850,22 +823,21 @@
 #endif
 !
 !--                Summation of surface temperature.
-                   !$ACC ATOMIC
+                   !$ACC ATOMIC UPDATE
                    sums_l(nzb+14,pr_palm,tn) = sums_l(nzb+14,pr_palm,tn) + surf_usm%pt_surface(m) *&
                                                                            rmask(j,i,sr)
                 ENDIF
              ENDDO
           ENDDO !j-loop
        ENDDO !i-loop
-       !$ACC UPDATE HOST(sums_l) IF(enable_openacc)
+
 !
 !--    Computation of statistics when ws-scheme is not used. Else these
 !--    quantities are evaluated in the advection routines.
        IF ( .NOT. ws_scheme_mom .OR. sr /= 0 .OR. simulated_time == 0.0_wp )  THEN
           !$OMP DO
           !$ACC PARALLEL LOOP GANG &
-          !$ACC PRESENT(hom, rmask, sums_l, topo_flags, u, v, w) &
-          !$ACC DEFAULT(NONE) IF(enable_openacc)
+          !$ACC PRIVATE(ust2, u2, vst2, v2, w2) DEFAULT(PRESENT) IF(enable_openacc)
           DO  i = nxl, nxr
              DO  j =  nys, nyn
                 DO  k = nzb, nzt+1
@@ -877,11 +849,15 @@
                    ust2 = ( u(k,j,i) - hom(k,1,1,sr) )**2
                    vst2 = ( v(k,j,i) - hom(k,1,2,sr) )**2
 
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,30,tn) = sums_l(k,30,tn) + ust2 * rmask(j,i,sr) * flag
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,31,tn) = sums_l(k,31,tn) + vst2 * rmask(j,i,sr) * flag
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,32,tn) = sums_l(k,32,tn) + w2   * rmask(j,i,sr) * flag
 !
 !--                Perturbation energy
+                   !$ACC ATOMIC UPDATE
                    sums_l(k,34,tn) = sums_l(k,34,tn) +                                             &
                                      0.5_wp * ( ust2 + vst2 + w2 ) * rmask(j,i,sr) * flag
                 ENDDO
@@ -890,16 +866,14 @@
           !$ACC END PARALLEL LOOP
        ENDIF
 
-       !$ACC UPDATE DEVICE(sums_l) IF(enable_openacc)
 !
 !--    Computaion of domain-averaged perturbation energy. Please note, to prevent that perturbation
 !--    energy is larger (even if only slightly) than the total kinetic energy, calculation is based
 !--    on deviations from the horizontal mean, instead of spatial descretization of the advection
 !--    term.
        !$OMP DO
-       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k, flag, w2, ust2, vst2) &
-       !$ACC PRESENT(topo_flags, u, v, w, rmask, hom(:,1,1:2,sr)) &
-       !$ACC PRESENT(sums_l) DEFAULT(NONE) IF(enable_openacc)
+       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(flag, i, j, k, ust2, vst2, w2) &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl, nxr
           DO  j =  nys, nyn
              DO  k = nzb, nzt+1
@@ -910,25 +884,20 @@
                 vst2 = ( v(k,j,i) - hom(k,1,2,sr) )**2
                 w2   = w(k,j,i)**2
 
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzb+5,pr_palm,tn) = sums_l(nzb+5,pr_palm,tn)                                &
                                            + 0.5_wp * ( ust2 + vst2 + w2 ) * rmask(j,i,sr) * flag
 
              ENDDO
           ENDDO
        ENDDO
-       !$ACC UPDATE HOST(sums_l) IF(enable_openacc)
 
 !
 !--    Horizontally averaged profiles of the vertical fluxes
        !$OMP DO
-       !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(i, j, k, m) &
-       !$ACC PRIVATE(flag, ust, vst, pts) &
-       !$ACC PRESENT(kh, km, u, v, w, pt) &
-       !$ACC PRESENT(topo_flags, rmask, ddzu, rho_air_zw, hom(:,1,1:4,sr)) &
-       !$ACC PRESENT(heatflux_output_conversion, momentumflux_output_conversion) &
-       !$ACC PRESENT(surf_def, surf_lsm, surf_top, surf_usm) &
-       !$ACC PRESENT(sums_l) DEFAULT(NONE) IF(enable_openacc)
+       !$ACC PARALLEL LOOP COLLAPSE(2) PRIVATE(flag, i, j, k, m, pts, ust, vst) &
+       !$ACC PRESENT( surf_def, surf_lsm, surf_top, surf_usm) &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl, nxr
           DO  j = nys, nyn
 !
@@ -944,7 +913,7 @@
                        MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 9  ) )
 !
 !--             Momentum flux w"u"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,12,tn) = sums_l(k,12,tn) - 0.25_wp * (                                    &
                                   km(k,j,i) + km(k+1,j,i) + km(k,j,i-1) + km(k+1,j,i-1)            &
                                                               ) * (                                &
@@ -956,7 +925,7 @@
                                             * flag
 !
 !--             Momentum flux w"v"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,14,tn) = sums_l(k,14,tn) - 0.25_wp * (                                    &
                                   km(k,j,i) + km(k+1,j,i) + km(k,j-1,i) + km(k+1,j-1,i)            &
                                                               ) * (                                &
@@ -968,7 +937,7 @@
                                             * flag
 !
 !--             Heat flux w"pt"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,16,tn) = sums_l(k,16,tn)                                                  &
                                          - 0.5_wp * ( kh(k,j,i) + kh(k+1,j,i) )                    &
                                                * ( pt(k+1,j,i) - pt(k,j,i) )                       &
@@ -1039,15 +1008,15 @@
                    IF ( surf_def%upward(m)  .OR.  surf_def%downward(m) )  THEN
                       k = surf_def%k(m) + MERGE( surf_def%koff(m), 0, surf_def%upward(m) )
 
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,12,tn) = sums_l(k,12,tn) +                                          &
                                         momentumflux_output_conversion(k) *                        &
                                         surf_def%usws(m) * rmask(j,i,sr)     ! w"u"
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,14,tn) = sums_l(k,14,tn) +                                          &
                                         momentumflux_output_conversion(k) *                        &
                                         surf_def%vsws(m) * rmask(j,i,sr)     ! w"v"
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,16,tn) = sums_l(k,16,tn) +                                          &
                                         heatflux_output_conversion(k) *                            &
                                         surf_def%shf(m)  * rmask(j,i,sr)     ! w"pt"
@@ -1094,15 +1063,15 @@
                    IF ( surf_lsm%upward(m)  .OR.  surf_lsm%downward(m) )  THEN
                       k = surf_lsm%k(m) + MERGE( surf_lsm%koff(m), 0, surf_lsm%upward(m) )
 
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,12,tn) = sums_l(k,12,tn) +                                          &
                                         momentumflux_output_conversion(k) *                        &
                                         surf_lsm%usws(m) * rmask(j,i,sr)     ! w"u"
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,14,tn) = sums_l(k,14,tn) +                                          &
                                         momentumflux_output_conversion(k) *                        &
                                         surf_lsm%vsws(m) * rmask(j,i,sr)     ! w"v"
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,16,tn) = sums_l(k,16,tn) +                                          &
                                         heatflux_output_conversion(k) *                            &
                                         surf_lsm%shf_agg(m)  * rmask(j,i,sr)     ! w"pt"
@@ -1150,15 +1119,15 @@
                    IF ( surf_usm%upward(m)  .OR.  surf_usm%downward(m) )  THEN
                       k = surf_usm%k(m) + MERGE( surf_usm%koff(m), 0, surf_usm%upward(m) )
 
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,12,tn) = sums_l(k,12,tn) +                                          &
                                         momentumflux_output_conversion(k) *                        &
                                         surf_usm%usws(m) * rmask(j,i,sr)     ! w"u"
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,14,tn) = sums_l(k,14,tn) +                                          &
                                         momentumflux_output_conversion(k) *                        &
                                         surf_usm%vsws(m) * rmask(j,i,sr)     ! w"v"
-                      !$ACC ATOMIC
+                      !$ACC ATOMIC UPDATE
                       sums_l(k,16,tn) = sums_l(k,16,tn) +                                          &
                                         heatflux_output_conversion(k) *                            &
                                         surf_usm%shf(m)  * rmask(j,i,sr)     ! w"pt"
@@ -1303,27 +1272,27 @@
 !--          Subgridscale fluxes at the top surface
              IF ( use_top_fluxes )  THEN
                 m = surf_top%start_index(j,i)
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzt,12,tn) = sums_l(nzt,12,tn) +                                            &
                                     momentumflux_output_conversion(nzt) *                          &
                                     surf_top%usws(m) * rmask(j,i,sr)    ! w"u"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzt+1,12,tn) = sums_l(nzt+1,12,tn) +                                        &
                                       momentumflux_output_conversion(nzt+1) *                      &
                                       surf_top%usws(m) * rmask(j,i,sr)  ! w"u"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzt,14,tn) = sums_l(nzt,14,tn) +                                            &
                                     momentumflux_output_conversion(nzt) *                          &
                                     surf_top%vsws(m) * rmask(j,i,sr)    ! w"v"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzt+1,14,tn) = sums_l(nzt+1,14,tn) +                                        &
                                       momentumflux_output_conversion(nzt+1) *                      &
                                       surf_top%vsws(m) * rmask(j,i,sr)  ! w"v"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzt,16,tn) = sums_l(nzt,16,tn) +                                            &
                                     heatflux_output_conversion(nzt) *                              &
                                     surf_top%shf(m)  * rmask(j,i,sr)    ! w"pt"
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(nzt+1,16,tn) = sums_l(nzt+1,16,tn) +                                        &
                                       heatflux_output_conversion(nzt+1) *                          &
                                       surf_top%shf(m)  * rmask(j,i,sr)  ! w"pt"
@@ -1387,9 +1356,9 @@
                                  pt(k+1,j,i) - hom(k+1,1,4,sr) )
 !
 !--             Higher moments
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,35,tn) = sums_l(k,35,tn) + pts * w(k,j,i)**2 * rmask(j,i,sr) * flag
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,36,tn) = sums_l(k,36,tn) + pts**2 * w(k,j,i) * rmask(j,i,sr) * flag
 
 !
@@ -1504,7 +1473,7 @@
 !
 !--             Energy flux w*e*
 !--             has to be adjusted
-                !$ACC ATOMIC
+                !$ACC ATOMIC UPDATE
                 sums_l(k,37,tn) = sums_l(k,37,tn) + w(k,j,i) * 0.5_wp *                            &
                                                     ( ust**2 + vst**2 + w(k,j,i)**2 )              &
                                                     * rho_air_zw(k)                                &
@@ -1524,11 +1493,8 @@
           !$OMP PARALLEL PRIVATE( i, j, m, tn )
           !$ tn = omp_get_thread_num()
           !$OMP DO
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(surf_lsm, surf_lsm%ns, surf_lsm%upward, surf_lsm%i, surf_lsm%j) &
-          !$ACC COPY(surf_lsm%ghf, surf_lsm%qsws_liq, surf_lsm%qsws_soil, surf_lsm%qsws_veg) &
-          !$ACC COPY(surf_lsm%r_a, surf_lsm%r_s, sums_l, rmask) &
-          !$ACC PRIVATE(i, j) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR PRIVATE(i, j, m, tn) &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  m = 1, surf_lsm%ns
              IF ( surf_lsm%upward(m) )  THEN
                 i = surf_lsm%i(m)
@@ -1555,10 +1521,8 @@
           !$OMP PARALLEL PRIVATE( i, j, k, m, tn )
           !$ tn = omp_get_thread_num()
           !$OMP DO
-          !$ACC PARALLEL LOOP GANG VECTOR DEFAULT(NONE) &
-          !$ACC COPY(surf_lsm, surf_lsm%ns, surf_lsm%upward, surf_lsm%i, surf_lsm%j) &
-          !$ACC COPY(t_soil, t_soil%var_2d, m_soil, m_soil%var_2d, sums_l, rmask) &
-          !$ACC PRIVATE(i, j, k) IF(enable_lsm_openacc)
+          !$ACC PARALLEL LOOP GANG VECTOR PRIVATE(i, j, k, m, tn) &
+          !$ACC DEFAULT(PRESENT) IF(enable_openacc)
           DO  m = 1, surf_lsm%ns
              IF ( surf_lsm%upward(m) )  THEN
                 i = surf_lsm%i(m)
@@ -1597,7 +1561,6 @@
 !--    For speed optimization fluxes which have been computed in part directly inside the WS
 !--    advection routines are treated seperatly.
 !--    Momentum fluxes first:
-
        tn = 0
        !$OMP PARALLEL PRIVATE( i, j, k, tn, flag )
        !$ tn = omp_get_thread_num()
@@ -1989,6 +1952,11 @@
 !--    Collect horizontal average in hom.
 !--    Compute deduced averages (e.g. total heat flux)
        hom(:,1,3,sr)  = sums(:,3)      ! w
+       IF ( sr == 0 )  THEN
+!
+!--       Update required because w-profile on device is used in advec_ws.
+          !$ACC UPDATE DEVICE( hom(:,1,3,0) ) IF(enable_openacc)
+       ENDIF
        hom(:,1,8,sr)  = sums(:,8)      ! e     profiles 5-7 are initial profiles
        hom(:,1,9,sr)  = sums(:,9)      ! km
        hom(:,1,10,sr) = sums(:,10)     ! kh

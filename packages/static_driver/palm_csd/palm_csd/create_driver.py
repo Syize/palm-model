@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Main module of palm_csd to create a PALM static driver.
 
@@ -22,11 +22,13 @@ this module.
 
 import logging
 import math
+from itertools import combinations
 from os import PathLike
 from typing import Dict, List, Optional, Union, cast
 
 import numpy as np
 import numpy.ma as ma
+import pandas as pd
 import yaml
 
 from palm_csd import (
@@ -38,20 +40,29 @@ from palm_csd import (
     tools,
     vegetation,
 )
-from palm_csd.csd_config import (
+from palm_csd.constants import (
+    INPUT_DATA_EXPANDED,
     NBUILDING_SURFACE_LAYER,
     VT_HIGH_VEGETATION,
-    CSDConfig,
-    CSDConfigSettings,
+    VT_NO_PLANTS,
+    ColumnGeneral,
+    IndexBuildingGeneralPars,
+    IndexBuildingSurfaceLevel,
+    IndexBuildingSurfaceType,
     IndexBuildingType,
+    IndexVegetationPars,
     IndexVegetationType,
     IndexWaterPars,
-    defaults,
+    InputData,
+)
+from palm_csd.csd_config import (
+    CSDConfig,
+    CSDConfigInput,
+    CSDConfigSettings,
+    value_defaults,
 )
 from palm_csd.csd_domain import (
     CSDDomain,
-    IndexBuildingSurfaceLevel,
-    IndexBuildingSurfaceType,
 )
 from palm_csd.lcz import LCZTypes
 from palm_csd.statistics import static_driver_statistics
@@ -61,9 +72,10 @@ from palm_csd.tools import (
     check_consistency_4,
     height_to_z_grid,
     interpolate_2d,
+    is_missing,
     ma_isin,
 )
-from palm_csd.vegetation import CanopyGenerator, DomainTree
+from palm_csd.vegetation import DomainTree
 
 # Module logger. In __init__.py, it is ensured that the logger is a StatusLogger. For type checking,
 # do explicit cast.
@@ -102,7 +114,6 @@ def create_driver(
 
     # Read configuration file and set parameters accordingly.
     config = CSDConfig(input_configuration_dict)
-    config.update_defaults()
 
     logger.status("Initializing domains.")
 
@@ -137,16 +148,13 @@ def create_driver(
     for name in config.domain_dict:
         add_domain_and_parents(name, domains)
 
-    # Initialize domain tree's defaults from the tree database.
-    DomainTree.populate_defaults()
+    # The root parent should be the first domain in the dictionary. Just to be sure, apply
+    # find_root.
+    domains_root = next(iter(domains.values())).find_root()
 
-    # Create CanopyGenerator with the LAD method and parameters from the configuration.
-    canopy_generator = CanopyGenerator(
-        method=config.settings.lad_method,
-        alpha_Metal2003=config.settings.lad_alpha,
-        beta_Metal2003=config.settings.lad_beta,
-        z_max_rel_LM2004=config.settings.lad_z_max_rel,
-    )
+    # Check for overlap of domains. This is done recursively for all children of a domain starting
+    # from the root parent.
+    check_overlap(domains_root)
 
     # Initialize LCZ types and update the values from the configuration.
     lcz_types = LCZTypes(config.settings.season, config.lcz.height_geometric_mean)
@@ -170,9 +178,9 @@ def create_driver(
     zt_min = minimum_terrain_height(domains)
 
     # Loop over domains, domains are independent of each other except terrain height. Potentially,
-    # the terrain height of the parent domain is needed. domains is constructed in such a way that
-    # parents are always dealt with before the children.
-    for domain in domains.values():
+    # the terrain height of the parent domain is needed. By traversing the domains tree and starting
+    # from the root parent, it is ensured that parents are always dealt with before the children.
+    for domain in domains_root.traverse():
         if domain.parent is not None:
             log_str_parent = f" WITH PARENT DOMAIN {domain.parent.name}"
         else:
@@ -197,14 +205,12 @@ def create_driver(
         else:  # standard case
             process_coordinates(domain, zt_min)
 
-            process_buildings_bridges(domain)
+            process_buildings_bridges(domain, config.settings)
 
             process_types(domain)
             process_street_type_crossing(domain)
 
-            if domain.config.vegetation_on_roofs:
-                process_vegetation_roof(domain, config.settings)
-            process_resolved_vegetation(domain, config.settings, canopy_generator)
+            process_resolved_vegetation(domain, config.settings)
 
             if (
                 domain.config.water_temperature is not None
@@ -214,6 +220,8 @@ def create_driver(
 
             consistency_check_update_surface_fraction(domain)
             domain.write_global_attributes()
+
+    print_unused_input_files(config.input_dict)
 
     # Calculate statistics from the output netcdf files.
     for domain in domains.values():
@@ -234,6 +242,28 @@ def create_driver(
         )
 
 
+def check_overlap(domain: CSDDomain) -> None:
+    """Check if children of a domain overlap and check recursively their children.
+
+    It is assumed that a child is fully covered by its parent. Then, only children of the same
+    parent could possibly overlap when the parent does not overlap with one of its sibling. This
+    function is called recursively for all children.
+
+    Args:
+        domain: Parent domain to start the check.
+    """
+    children = domain.get_children()
+    for child1, child2 in combinations(children, 2):
+        if child1.overlaps(child2):
+            logger.warning(
+                f"Domains {child1.name} and {child2.name} overlap. "
+                + "Only one-way nesting is allowed."
+            )
+
+    for child in children:
+        check_overlap(child)
+
+
 def minimum_terrain_height(domains: Dict[str, CSDDomain]) -> float:
     """Calculate minimum terrain height of given domains.
 
@@ -247,7 +277,7 @@ def minimum_terrain_height(domains: Dict[str, CSDDomain]) -> float:
 
     zt_min = math.inf
     for domain in domains.values():
-        zt = domain.read_zt()
+        zt = domain.read(InputData.zt)
         zt_min = min(zt_min, min(zt.flatten()))
 
     logger.info(f"Shifting down all domains by minimum terrain height of {zt_min:0.2f} m.")
@@ -293,7 +323,7 @@ def process_coordinates(domain: CSDDomain, zt_min: float) -> None:
         domain.y_global.values = ma.MaskedArray(y_global)
 
         # Coordinates
-        e_UTM, n_UTM, lon, lat = domain.geo_converter.geographic_coordinates()
+        e_utm, n_utm, lon, lat = domain.geo_converter.geographic_coordinates()
 
         # Write CRS
         domain.write_crs_to_file()
@@ -302,41 +332,49 @@ def process_coordinates(domain: CSDDomain, zt_min: float) -> None:
         # Get coordinates near origin
         if domain.x0 is None or domain.y0 is None:
             raise ValueError(f"Domain {domain.name} has no x0 or y0 defined")
-        x_UTM_origin = domain.read_nc_2d(
-            domain.input_config.file_x_UTM,
+
+        x_utm_origin = domain.read_nc_2d(
+            domain.input_config.files["x_utm"][0],
             x0=domain.x0,
             x1=domain.x0 + 1,
             y0=domain.y0,
             y1=domain.y0 + 1,
         )
-        y_UTM_origin = domain.read_nc_2d(
-            domain.input_config.file_y_UTM,
+        domain.input_config.add_used_file(domain.input_config.files["x_utm"][0])
+
+        y_utm_origin = domain.read_nc_2d(
+            domain.input_config.files["y_utm"][0],
             x0=domain.x0,
             x1=domain.x0 + 1,
             y0=domain.y0,
             y1=domain.y0 + 1,
         )
+        domain.input_config.add_used_file(domain.input_config.files["y_utm"][0])
+
         lat_origin = domain.read_nc_2d(
-            domain.input_config.file_lat,
+            domain.input_config.files["lat"][0],
             x0=domain.x0,
             x1=domain.x0 + 1,
             y0=domain.y0,
             y1=domain.y0 + 1,
         )
+        domain.input_config.add_used_file(domain.input_config.files["lat"][0])
+
         lon_origin = domain.read_nc_2d(
-            domain.input_config.file_lon,
+            domain.input_config.files["lon"][0],
             x0=domain.x0,
             x1=domain.x0 + 1,
             y0=domain.y0,
             y1=domain.y0 + 1,
         )
+        domain.input_config.add_used_file(domain.input_config.files["lon"][0])
 
         # Calculate position of origin. Added as global attributes later
-        domain.origin_x = float(x_UTM_origin[0, 0]) - 0.5 * (
-            float(x_UTM_origin[0, 1]) - float(x_UTM_origin[0, 0])
+        domain.origin_x = float(x_utm_origin[0, 0]) - 0.5 * (
+            float(x_utm_origin[0, 1]) - float(x_utm_origin[0, 0])
         )
-        domain.origin_y = float(y_UTM_origin[0, 0]) - 0.5 * (
-            float(y_UTM_origin[1, 0]) - float(y_UTM_origin[0, 0])
+        domain.origin_y = float(y_utm_origin[0, 0]) - 0.5 * (
+            float(y_utm_origin[1, 0]) - float(y_utm_origin[0, 0])
         )
         domain.origin_lon = float(lon_origin[0, 0]) - 0.5 * (
             float(lon_origin[0, 1]) - float(lon_origin[0, 0])
@@ -346,17 +384,17 @@ def process_coordinates(domain: CSDDomain, zt_min: float) -> None:
         )
 
         # Read x and y values
-        domain.x_global.values = domain.read_nc_1d(domain.input_config.file_x_UTM, "x")
+        domain.x_global.values = domain.read_nc_1d(domain.input_config.files["x_utm"][0], "x")
         domain.y_global.values = domain.read_nc_1d(
-            domain.input_config.file_y_UTM, "y", x0=domain.y0, x1=domain.y1
+            domain.input_config.files["y_utm"][0], "y", x0=domain.y0, x1=domain.y1
         )
 
         # Read and write lon, lat and UTM coordinates
-        lat = domain.read_nc_2d(domain.input_config.file_lat)
-        lon = domain.read_nc_2d(domain.input_config.file_lon)
+        lat = domain.read_nc_2d(domain.input_config.files["lat"][0])
+        lon = domain.read_nc_2d(domain.input_config.files["lon"][0])
 
-        e_UTM = domain.read_nc_2d(domain.input_config.file_x_UTM)
-        n_UTM = domain.read_nc_2d(domain.input_config.file_y_UTM)
+        e_utm = domain.read_nc_2d(domain.input_config.files["x_utm"][0])
+        n_utm = domain.read_nc_2d(domain.input_config.files["y_utm"][0])
 
         # Write CRS
         crs = domain.read_nc_crs()
@@ -378,12 +416,12 @@ def process_coordinates(domain: CSDDomain, zt_min: float) -> None:
     domain.lat.to_nc(lat)
     domain.lon.to_nc(lon)
 
-    domain.E_UTM.to_nc(e_UTM)
-    domain.N_UTM.to_nc(n_UTM)
+    domain.E_UTM.to_nc(e_utm)
+    domain.N_UTM.to_nc(n_utm)
 
     # Read and process terrain height (zt). Its values are stored in the domain object to be
     # available for potential child domain.
-    domain.zt.values = domain.read_zt()
+    domain.zt.values = domain.read(InputData.zt)
     domain.zt.values = domain.zt.values - zt_min
     domain.origin_z = float(zt_min)
 
@@ -393,7 +431,7 @@ def process_coordinates(domain: CSDDomain, zt_min: float) -> None:
         if domain.parent is None:
             raise ValueError("Interpolation of terrain height requires a parent domain")
         if domain.parent.x_global.values is None or domain.parent.y_global.values is None:
-            raise ValueError(f"x_UTM or y_UTM of parent {domain.parent.name} not calculated")
+            raise ValueError(f"x_utm or y_utm of parent {domain.parent.name} not calculated")
         if domain.parent.zt.values is None:
             raise ValueError(f"zt of parent {domain.parent.name} not calculated")
 
@@ -466,7 +504,7 @@ def process_coordinates(domain: CSDDomain, zt_min: float) -> None:
     domain.zt.to_nc()
 
 
-def process_buildings_bridges(domain: CSDDomain) -> None:
+def process_buildings_bridges(domain: CSDDomain, settings: CSDConfigSettings) -> None:
     """Process buildings and bridges of a domain.
 
     The building height, id and type is read from the input data and checked for consistency.
@@ -480,6 +518,7 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
 
     Args:
         domain: Domain to process.
+        settings: General settings from the configuration.
 
     Raises:
         ValueError: Building IDs are missing for some building pixels.
@@ -491,9 +530,28 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
     """
     logger.status("Processing buildings and bridges.")
 
-    buildings_2d = domain.read_buildings_2d()
-    building_id = domain.read_building_id()
-    building_type = domain.read_building_type()
+    buildings = domain.read_buildings()
+
+    if buildings is not None:
+        buildings_2d, building_id, building_type = buildings
+    else:
+        buildings_2d = domain.read(InputData.buildings_2d)
+        building_id = domain.read(InputData.building_id)
+        building_type = domain.read(InputData.building_type)
+
+    # Remove buildings in border area if requested and store where buildings were removed.
+    if domain.config.building_free_border_width > 0.0:
+        buildings_2d_original_mask = ma.getmaskarray(buildings_2d).copy()
+        n_border = int(np.ceil(domain.config.building_free_border_width / domain.config.pixel_size))
+        logger.info(
+            f"Applying building free border of {domain.config.building_free_border_width:0.2f} m "
+            + f"({n_border} pixels)."
+        )
+        buildings_2d[:n_border, :] = ma.masked
+        buildings_2d[-n_border:, :] = ma.masked
+        buildings_2d[:, :n_border] = ma.masked
+        buildings_2d[:, -n_border:] = ma.masked
+        domain.buildings_2d_removed = ma.getmaskarray(buildings_2d) != buildings_2d_original_mask
 
     # Check if there is a building_id (no default value applied) for all buildings_2d pixels.
     building_without_id = ma.getmaskarray(building_id)[~ma.getmaskarray(buildings_2d)]
@@ -524,8 +582,12 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
         bridges_2d = ma.masked_all_like(buildings_2d)
         logger.warning("Bridge depth < 1/2 dz. Bridges will not be added.")
     else:
-        bridges_2d = domain.read_bridges_2d()
-        bridges_id = domain.read_bridges_id()
+        bridges = domain.read_bridges()
+        if bridges is not None:
+            bridges_2d, bridges_id = bridges
+        else:
+            bridges_2d = domain.read(InputData.bridges_2d)
+            bridges_id = domain.read(InputData.bridges_id)
 
         # Check if there is a bridges_id (no default value applied) for all bridges_2d pixels.
         bridge_without_id = ma.getmaskarray(bridges_id)[~ma.getmaskarray(bridges_2d)]
@@ -544,7 +606,7 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
             + "They will be treated by PALM as a flat surface.",
         )
 
-        buildings_bridges_overlap = ~buildings_2d.mask & ~bridges_2d.mask
+        buildings_bridges_overlap = ~ma.getmaskarray(buildings_2d) & ~ma.getmaskarray(bridges_2d)
         logger.warning_argwhere(
             "Buildings and bridges are overlapping at",
             buildings_bridges_overlap,
@@ -554,7 +616,7 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
         bridges_id.mask = bridges_2d.mask.copy()
         building_id = ma.where(buildings_2d.mask & ~bridges_2d.mask, bridges_id, building_id)
         building_type = ma.where(
-            buildings_2d.mask & ~bridges_2d.mask, IndexBuildingType.BRIDGES, building_type
+            buildings_2d.mask & ~bridges_2d.mask, IndexBuildingType.bridges, building_type
         )
 
     domain.buildings_2d.to_nc(buildings_2d)
@@ -562,8 +624,8 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
     domain.building_type.to_nc(building_type)
 
     # Create 3d buildings if necessary. Add bridge pixels to building layer.
-    if domain.config.buildings_3d or (bridge_depth_grid > 0 and not bridges_2d.mask.all()):
-        if not domain.config.buildings_3d:
+    if domain.config.generate_buildings_3d or (bridge_depth_grid > 0 and not bridges_2d.mask.all()):
+        if not domain.config.generate_buildings_3d:
             logger.info("Creating 3D buildings due to the presence of bridges.")
 
         # Calculate maximum height of buildings and bridges, 0 if no buildings and bridges present.
@@ -613,81 +675,231 @@ def process_buildings_bridges(domain: CSDDomain) -> None:
         domain.z.values = z
         domain.buildings_3d.to_nc(buildings_3d)
 
-    def add_where_buildings(
-        input: Optional[
-            Union[
-                Dict[int, float],
-                Dict[int, int],
-                Dict[int, List[float]],
-                Dict[int, List[int]],
+    def normalize_building_fractions(fractions: np.ma.MaskedArray) -> None:
+        """Normalize building surface fractions for wall, window and green of each surface level."""
+        for surface_level in ["gfl", "agfl", "roof"]:
+            mask_wall = ma.getmaskarray(fractions)[
+                IndexBuildingSurfaceType[f"wall_{surface_level}"], :, :
             ]
-        ],
-        output_variable: netcdf_data.NCDFVariable,
-    ):
-        """Add input data to output_variable where buildings are present.
+            mask_windows = ma.getmaskarray(fractions)[
+                IndexBuildingSurfaceType[f"window_{surface_level}"], :, :
+            ]
+            mask_green = ma.getmaskarray(fractions)[
+                IndexBuildingSurfaceType[f"green_{surface_level}"], :, :
+            ]
+            n_undefined = mask_wall.astype(int) + mask_windows.astype(int) + mask_green.astype(int)
+            to_zero = (n_undefined == 1) | (n_undefined == 2)
+            # Warn when setting undefined fractions to 0.
+            logger.warning_argwhere(
+                f"Setting undefined {surface_level} building fractions to 0 at",
+                to_zero,
+                "pixels.",
+            )
+            fractions[IndexBuildingSurfaceType[f"wall_{surface_level}"], :, :] = ma.where(
+                to_zero & mask_wall,
+                0.0,
+                fractions[IndexBuildingSurfaceType[f"wall_{surface_level}"], :, :],
+            )
+            fractions[IndexBuildingSurfaceType[f"window_{surface_level}"], :, :] = ma.where(
+                to_zero & mask_windows,
+                0.0,
+                fractions[IndexBuildingSurfaceType[f"window_{surface_level}"], :, :],
+            )
+            fractions[IndexBuildingSurfaceType[f"green_{surface_level}"], :, :] = ma.where(
+                to_zero & mask_green,
+                0.0,
+                fractions[IndexBuildingSurfaceType[f"green_{surface_level}"], :, :],
+            )
 
-        The input data is a dictionary with keys corresponding to the output layer name. The values
-        represent the building surface layers if they are a list. The data is written to the result
-        file.
+            norm = (
+                fractions[IndexBuildingSurfaceType[f"wall_{surface_level}"], :, :]
+                + fractions[IndexBuildingSurfaceType[f"window_{surface_level}"], :, :]
+                + fractions[IndexBuildingSurfaceType[f"green_{surface_level}"], :, :]
+            )
+            # Warn if norm is zero and set to masked.
+            norm_zero = norm == 0.0
+            logger.warning_argwhere(
+                f"Removing {surface_level} building fraction at",
+                norm_zero,
+                "pixels with sum of fractions being zero.",
+            )
+            ma.masked_where(
+                norm_zero,
+                fractions[IndexBuildingSurfaceType[f"wall_{surface_level}"], :, :],
+                copy=False,
+            )
+            ma.masked_where(
+                norm_zero,
+                fractions[IndexBuildingSurfaceType[f"window_{surface_level}"], :, :],
+                copy=False,
+            )
+            ma.masked_where(
+                norm_zero,
+                fractions[IndexBuildingSurfaceType[f"green_{surface_level}"], :, :],
+                copy=False,
+            )
+            ma.masked_where(norm_zero, norm, copy=False)
+
+            # Warn if deviation from 1 is larger than 0.01. Do normalization anyway.
+            to_normalize = ma.abs(norm - 1.0) > 0.01
+            logger.warning_argwhere(
+                f"Normalizing {surface_level} building fractions at",
+                to_normalize,
+                "pixels.",
+            )
+            fractions[IndexBuildingSurfaceType[f"wall_{surface_level}"], :, :] /= norm
+            fractions[IndexBuildingSurfaceType[f"window_{surface_level}"], :, :] /= norm
+            fractions[IndexBuildingSurfaceType[f"green_{surface_level}"], :, :] /= norm
+
+    def add_building_parslike(variable_name: InputData) -> None:
+        """Add global and local input data to building pars like where buildings are present.
+
+        Global and local input data as given by raster and vector input are is written to the result
+        file. Values are only applied to buildings. The variable_name gives the general input group,
+        all corresponding input variables with specific levels and layers are processed.
 
         Args:
-            input: Input data. key: output layer index, value: singe value or building surface
-              layer values.
-            output_variable: Output variable to write the data to.
+            variable_name: Variable group.
 
         Raises:
             ValueError: Length of input data does not match number of building surface layers.
             ValueError: Invalid value for a key in the input data.
             ValueError: Invalid dimension for the output variable.
         """
-        if input is None:
+        # Global input data, which will be applied to all building pixels
+        input_global = getattr(domain.config, variable_name)
+        # Variables to read for local input data
+        input_local_variable = [
+            var for var in domain.input_config.files.keys() if var.startswith(variable_name)
+        ] + [
+            var
+            for var in domain.input_config.columns.values()
+            if isinstance(var, str) and var.startswith(variable_name)
+        ]
+
+        # Output variable and field to fill
+        output_variable = getattr(domain, variable_name)
+        output_field = output_variable.empty_array()
+        if output_field.ndim not in (3, 4):
+            raise ValueError(f"Invalid dimension for {output_variable.name}")
+
+        # First, apply global input data everywhere.
+        if input_global is not None:
+            # with surface layers
+            if output_field.ndim == 4:
+                for key, value in input_global.items():
+                    values: Union[List[float], List[int]]
+                    if isinstance(value, int):
+                        values = [value] * NBUILDING_SURFACE_LAYER
+                    elif isinstance(value, float):
+                        values = [value] * NBUILDING_SURFACE_LAYER
+                    elif isinstance(value, List):
+                        if len(value) != NBUILDING_SURFACE_LAYER:
+                            raise ValueError(
+                                f"Length of input data for {key} does not match "
+                                + f"number of layers ({NBUILDING_SURFACE_LAYER})"
+                            )
+                        values = value
+                    else:
+                        raise ValueError(f"Invalid value for {key}")
+                    for i, v in enumerate(values):
+                        output_field[key, i, :, :] = v
+            # without surface layers
+            else:
+                for key, value in input_global.items():
+                    if not isinstance(value, (int, float)):
+                        raise ValueError(f"Invalid value for {key}")
+                    output_field[key, :, :] = value
+
+        # Second, apply local input data.
+        if variable_name == InputData.building_lai and settings.use_lai_for_roofs:
+            # Use general lai for roofs.
+            lai = domain.read(InputData.lai)
+            output_field[IndexBuildingSurfaceLevel.roof, :, :] = ma.where(
+                ma.getmaskarray(output_field)[IndexBuildingSurfaceLevel.roof, :, :],
+                lai,
+                output_field[IndexBuildingSurfaceLevel.roof, :, :],
+            )
+        for iv in input_local_variable:
+            input_local = domain.read(iv)
+            if input_local.mask.all():
+                continue
+            # Find all variables that input_local corresponds to.
+            rows = INPUT_DATA_EXPANDED[INPUT_DATA_EXPANDED["name"].str.startswith(iv)]
+            if rows.empty:
+                raise ValueError(f"Input variable {iv} not found in expanded variable table")
+            # Apply input_local to all corresponding output variables.
+            for row in rows.itertuples(index=False):
+                if output_field.ndim == 4:
+                    if not isinstance(row.layer, (int, np.integer)):
+                        raise ValueError(f"Layer value for {iv} is not integer-like: {row.layer!r}")
+                    output_field[row.level, row.layer - 1, :, :] = ma.where(
+                        input_local.mask,
+                        output_field[row.level, row.layer - 1, :, :],
+                        input_local,
+                    )
+                else:
+                    output_field[row.level, :, :] = ma.where(
+                        input_local.mask, output_field[row.level, :, :], input_local
+                    )
+
+        if output_field.mask.all():
             return
 
-        output_field = output_variable.empty_array()
-        # with surface layers
+        # Finally, mask output field where no buildings are present and write to file.
         if output_field.ndim == 4:
-            for key, value in input.items():
-                values: Union[List[float], List[int]]
-                if isinstance(value, int):
-                    values = [value] * NBUILDING_SURFACE_LAYER
-                elif isinstance(value, float):
-                    values = [value] * NBUILDING_SURFACE_LAYER
-                elif isinstance(value, List):
-                    if len(value) != NBUILDING_SURFACE_LAYER:
-                        raise ValueError(
-                            f"Length of input data for {key} does not match "
-                            + f"number of layers ({NBUILDING_SURFACE_LAYER})"
-                        )
-                    values = value
-                else:
-                    raise ValueError(f"Invalid value for {key}")
-                for i, v in enumerate(values):
-                    output_field[key, i, :, :] = ma.where(~buildings_2d.mask, v, ma.masked)
-        # without surface layers
-        elif output_field.ndim == 3:
-            for key, value in input.items():
-                if not isinstance(value, (int, float)):
-                    raise ValueError(f"Invalid value for {key}")
-                output_field[key, :, :] = ma.where(~buildings_2d.mask, value, ma.masked)
+            ma.masked_where(
+                np.tile(
+                    ma.getmaskarray(buildings_2d),
+                    (output_field.shape[0], output_field.shape[1], 1, 1),
+                ),
+                output_field,
+                copy=False,
+            )
         else:
-            raise ValueError(f"Invalid dimension for {output_variable.name}")
+            ma.masked_where(
+                np.tile(ma.getmaskarray(buildings_2d), (output_field.shape[0], 1, 1)),
+                output_field,
+                copy=False,
+            )
+            # When one fraction at a surface level is defined, set the missing of that triplet
+            # (wall, window, green) fractions to 0. Normalize all building fractions to 1.
+            if variable_name == InputData.building_fraction:
+                normalize_building_fractions(output_field)
+            # Mask LAI on roofs where green fraction on roofs is masked or zero.
+            if variable_name == InputData.building_lai:
+                fractions = domain.building_fraction.from_nc(allow_nonexistent=True)
+                ma.masked_where(
+                    fractions[IndexBuildingSurfaceType.green_roof, :, :].filled(0.0) == 0.0,
+                    output_field[IndexBuildingSurfaceLevel.roof, :, :],
+                    copy=False,
+                )
+            # Mask green type of roofs where green fraction on roofs is masked or zero.
+            if variable_name == InputData.building_general_pars:
+                fractions = domain.building_fraction.from_nc(allow_nonexistent=True)
+                ma.masked_where(
+                    fractions[IndexBuildingSurfaceType.green_roof, :, :].filled(0.0) == 0.0,
+                    output_field[IndexBuildingGeneralPars.green_type_roof, :, :],
+                    copy=False,
+                )
+
+        if output_field.mask.all():
+            return
 
         output_variable.to_nc(output_field)
 
-    add_where_buildings(domain.config.building_albedo_type, domain.building_albedo_type)
-    add_where_buildings(domain.config.building_emissivity, domain.building_emissivity)
-    add_where_buildings(domain.config.building_fraction, domain.building_fraction)
-    add_where_buildings(domain.config.building_general_pars, domain.building_general_pars)
-    add_where_buildings(domain.config.building_heat_capacity, domain.building_heat_capacity)
-    add_where_buildings(domain.config.building_heat_conductivity, domain.building_heat_conductivity)
-    add_where_buildings(domain.config.building_indoor_pars, domain.building_indoor_pars)
-    add_where_buildings(domain.config.building_lai, domain.building_lai)
-    add_where_buildings(domain.config.building_roughness_length, domain.building_roughness_length)
-    add_where_buildings(
-        domain.config.building_roughness_length_qh, domain.building_roughness_length_qh
-    )
-    add_where_buildings(domain.config.building_thickness, domain.building_thickness)
-    add_where_buildings(domain.config.building_transmissivity, domain.building_transmissivity)
+    add_building_parslike(InputData.building_albedo_type)
+    add_building_parslike(InputData.building_emissivity)
+    add_building_parslike(InputData.building_fraction)
+    add_building_parslike(InputData.building_general_pars)  # building_fraction before
+    add_building_parslike(InputData.building_heat_capacity)
+    add_building_parslike(InputData.building_heat_conductivity)
+    add_building_parslike(InputData.building_indoor_pars)
+    add_building_parslike(InputData.building_lai)  # building_fraction before
+    add_building_parslike(InputData.building_roughness_length)
+    add_building_parslike(InputData.building_roughness_length_qh)
+    add_building_parslike(InputData.building_thickness)
+    add_building_parslike(InputData.building_transmissivity)
 
 
 def process_lcz(
@@ -705,15 +917,15 @@ def process_lcz(
         domain: Domain to process.
         lcz_types: LCZ types.
     """
-    lcz_type = domain.read_lcz(lcz_types)
+    lcz_type = domain.read(InputData.lcz, lcz_types=lcz_types)
     # LAI data input
-    lai = domain.read_lai()
+    lai = domain.read(InputData.lai)
     # LAI from LCZ table
     lai_lcz = lcz_types.lai_from_lcz_map(lcz_type)
     # Use LAI from LCZ table if LAI data is missing
     lai = ma.where(lai.mask, lai_lcz, lai)
 
-    soil_type = domain.read_soil_type()
+    soil_type = domain.read(InputData.soil_type)
 
     water_type = lcz_types.water_type_from_lcz_map(lcz_type)
     vegetation_type = lcz_types.vegetation_type_from_lcz_map(lcz_type)
@@ -721,9 +933,8 @@ def process_lcz(
 
     lai.mask = ma.mask_or(vegetation_type.mask, lai.mask)
 
-    domain.nvegetation_pars.values = ma.arange(0, 12)
-    vegetation_pars = ma.masked_all((domain.nvegetation_pars.size, domain.y.size, domain.x.size))
-    vegetation_pars[1, :, :] = lai
+    vegetation_pars = domain.vegetation_pars.empty_array()
+    vegetation_pars[IndexVegetationPars.lai, :, :] = lai
 
     # Create surface_fraction array.
     domain.nsurface_fraction.values = ma.arange(0, 3)
@@ -784,51 +995,44 @@ def process_types(domain: CSDDomain) -> None:
     """
     logger.status("Processing surface types.")
 
-    vegetation_type = domain.read_vegetation_type()
-    pavement_type = domain.read_pavement_type()
-    water_type = domain.read_water_type()
-    soil_type = domain.read_soil_type()
+    vegetation_type = domain.read(InputData.vegetation_type)
+    pavement_type = domain.read(InputData.pavement_type)
+    water_type = domain.read(InputData.water_type)
+    soil_type = domain.read(InputData.soil_type)
     # Use buildings_2d because it does not include bridges unlike building type
     building_height = domain.buildings_2d.from_nc()
 
     # Make arrays consistent
-    # #1 Set vegetation type to masked for pixel where a pavement type is set
+    # Set vegetation type to masked for pixel where a pavement type is set.
     vegetation_type.mask = ma.mask_or(vegetation_type.mask, ~pavement_type.mask)
 
-    # #2 Set vegetation type to masked for pixel where a building type is set
+    # Set vegetation type to masked for pixel where a building type is set or originally buildings
+    # set.
     vegetation_type.mask = ma.mask_or(vegetation_type.mask, ~building_height.mask)
+    if domain.buildings_2d_removed is not None:
+        vegetation_type.mask = ma.mask_or(vegetation_type.mask, domain.buildings_2d_removed)
 
-    # #3 Set vegetation type to masked for pixel where a water type is set
+    # Set vegetation type to masked for pixel where a water type is set.
     vegetation_type.mask = ma.mask_or(vegetation_type.mask, ~water_type.mask)
 
-    # #4 Remove pavement for pixels with buildings
+    # Remove pavement for pixels with buildings.
     pavement_type.mask = ma.mask_or(pavement_type.mask, ~building_height.mask)
 
-    # #5 Remove pavement for pixels with water.
+    # Set pavement where buildings were removed in border area.
+    if domain.buildings_2d_removed is not None:
+        pavement_type = ma.where(
+            domain.buildings_2d_removed,
+            domain.config.building_free_border_pavement_type,
+            pavement_type,
+        )
+
+    # Remove pavement for pixels with water.
     pavement_type.mask = ma.mask_or(pavement_type.mask, ~water_type.mask)
 
-    # #6 Remove water for pixels with buildings
+    # Remove water for pixels with buildings and originally buildings.
     water_type.mask = ma.mask_or(water_type.mask, ~building_height.mask)
-
-    # Correct vegetation_type when a vegetation height is available and is indicative of low
-    # vegetation
-    vegetation_height = domain.read_vegetation_height()
-
-    # Correct vegetation_type depending on vegetation_height.
-    # ma.where gives ma.masked when its first argument is ma.masked. We don't want this for
-    # vegetation_height here so do an extra check and use .data.
-    vegetation_type = ma.where(
-        (~vegetation_height.mask)
-        & (vegetation_height.data == 0.0)
-        & ma_isin(vegetation_type, VT_HIGH_VEGETATION),
-        3,
-        vegetation_type,
-    )
-    ma.masked_where(
-        (vegetation_height == 0.0) & ma_isin(vegetation_type, VT_HIGH_VEGETATION),
-        vegetation_height,
-        copy=False,
-    )
+    if domain.buildings_2d_removed is not None:
+        water_type.mask = ma.mask_or(water_type.mask, domain.buildings_2d_removed)
 
     # Check for consistency and fill empty fields with default vegetation type.
     # number of not masked types per pixel
@@ -860,16 +1064,16 @@ def process_types(domain: CSDDomain) -> None:
                 "No surface types defined for some pixels. "
                 + "Enable replace_invalid_input_values for automatic replacement.",
             )
-        if defaults["vegetation_type"].default is None:
+        if value_defaults["vegetation_type"].default is None:
             raise ValueError("No default vegetation type defined.")
         logger.warning(
-            f"Setting default vegetation_type {defaults['vegetation_type'].default} "
+            f"Setting default vegetation_type {value_defaults['vegetation_type'].default} "
             + f"for {np.sum(n_type_undefined)} pixels without surface type."
         )
         logger.debug_indent("Coordinates of undefined surface types:")
         logger.debug_indent(", ".join(map(str, type_undefined)))
         vegetation_type = ma.where(
-            n_type_undefined, defaults["vegetation_type"].default, vegetation_type
+            n_type_undefined, value_defaults["vegetation_type"].default, vegetation_type
         )
 
     # Remove soil_type for pixels without vegetation_type and pavement_type.
@@ -901,78 +1105,19 @@ def process_street_type_crossing(domain: CSDDomain) -> None:
     """
     logger.status("Processing street types and street crossings.")
 
-    street_type = domain.read_street_type()
+    street_type = domain.read(InputData.street_type)
     pavement_type = domain.pavement_type.from_nc()
     street_type.mask = ma.mask_or(pavement_type.mask, street_type.mask)
 
     domain.street_type.to_nc(street_type)
 
-    street_crossings = domain.read_street_crossings()
+    street_crossings = domain.read(InputData.street_crossings)
     domain.street_crossing.to_nc(street_crossings)
-
-
-def process_vegetation_roof(domain: CSDDomain, settings: CSDConfigSettings) -> None:
-    """Process vegetation on roofs of a given domain.
-
-    Read vegetation on roofs and make fields consistent with building fraction and LAI. All data is
-    written to the result file.
-
-    Args:
-        domain: Domain to process.
-        settings: General settings.
-    """
-    logger.status("Processing vegetation on roofs.")
-
-    green_roofs = domain.read_vegetation_on_roofs()
-    buildings_2d = domain.buildings_2d.from_nc()
-
-    # Adjust building fraction possibly defined above.
-    building_fraction = domain.building_fraction.from_nc(allow_nonexistent=True)
-    building_lai = domain.building_lai.from_nc(allow_nonexistent=True)
-
-    # Assign green fraction on roofs.
-    building_fraction[IndexBuildingSurfaceType.GREEN_ROOF, :, :] = ma.where(
-        (~buildings_2d.mask) & ~green_roofs.mask & (green_roofs.data != 0.0),
-        1.0,
-        building_fraction[IndexBuildingSurfaceType.GREEN_ROOF, :, :],
-    )
-
-    # Set wall fraction to 0 where green fraction defined.
-    building_fraction[IndexBuildingSurfaceType.WALL_ROOF, :, :] = ma.where(
-        ~(building_fraction.mask[IndexBuildingSurfaceType.GREEN_ROOF, :, :]),
-        0.0,
-        building_fraction[IndexBuildingSurfaceType.WALL_ROOF, :, :],
-    )
-
-    # Set window fraction to 0 where green fraction defined.
-    building_fraction[IndexBuildingSurfaceType.WINDOW_ROOF, :, :] = ma.where(
-        ~(building_fraction.mask[IndexBuildingSurfaceType.GREEN_ROOF, :, :]),
-        0.0,
-        building_fraction[IndexBuildingSurfaceType.WINDOW_ROOF, :, :],
-    )
-
-    # Assign leaf area index for vegetation on roofs.
-    building_lai[IndexBuildingSurfaceLevel.ROOF, :, :] = ma.where(
-        (~(building_fraction.mask[IndexBuildingSurfaceType.GREEN_ROOF, :, :]))
-        & (green_roofs >= 0.5),
-        settings.lai_roof_intensive,
-        building_lai[IndexBuildingSurfaceLevel.ROOF, :, :],
-    )
-    building_lai[IndexBuildingSurfaceLevel.ROOF, :, :] = ma.where(
-        (~(building_fraction.mask[IndexBuildingSurfaceType.GREEN_ROOF, :, :]))
-        & (green_roofs < 0.5),
-        settings.lai_roof_extensive,
-        building_lai[IndexBuildingSurfaceLevel.ROOF, :, :],
-    )
-
-    domain.building_fraction.to_nc(building_fraction)
-    domain.building_lai.to_nc(building_lai)
 
 
 def process_resolved_vegetation(
     domain: CSDDomain,
     settings: CSDConfigSettings,
-    canopy_generator: CanopyGenerator,
 ) -> None:
     """Process resolved vegetation of a given domain.
 
@@ -984,55 +1129,100 @@ def process_resolved_vegetation(
         settings: General settings.
         canopy_generator: Canopy generator to generate LAD and BAD fields.
     """
-    if domain.config.street_trees:
-        process_single_trees(domain, settings, canopy_generator)
+    if domain.config.generate_single_trees:
+        process_single_trees(domain, settings)
     if domain.config.generate_vegetation_patches:
-        process_vegetation_patches(domain, settings, canopy_generator)
+        process_vegetation_patches(domain, settings)
 
-    lai = domain.read_lai()
+    lai = domain.read(InputData.lai)
+    vegetation_height = domain.read(InputData.vegetation_height)
     vegetation_type = domain.vegetation_type.from_nc()
 
-    # Remove high vegetation wherever it is replaced by a leaf area density. This should effectively
-    # remove all high vegetation pixels.
-    if domain.lad.values is not None:
-        vegetation_type = ma.where(
-            ~ma.getmaskarray(domain.lad.values)[0, :, :] & ~vegetation_type.mask,
-            settings.vegetation_type_below_trees,
-            vegetation_type,
-        )
-
-    # If desired, remove all high vegetation.
-    if not domain.config.allow_high_vegetation:
-        vegetation_type = ma.where(
-            ~vegetation_type.mask & ma_isin(vegetation_type, VT_HIGH_VEGETATION),
-            3,
-            vegetation_type,
-        )
-
-    if domain.lad.values is not None:
-        # Set default low LAI for pixels with an LAD (short grass below trees).
-        lai_low = ma.where(
-            ma.getmaskarray(domain.lad.values)[0, :, :], lai, settings.lai_low_vegetation_default
-        )
-    else:
-        lai_low = lai
-
-    # Fill low vegetation pixels without LAI set or with LAI = 0 with default value.
-    lai_low = ma.where(
-        lai_low.mask | (~lai_low.mask & (lai_low.data == 0.0)),
-        settings.lai_low_vegetation_default,
-        lai_low,
+    # Replace high vegetation types that have LAD/BAD above it by user specified vegetation type.
+    vegetation_type = ma.where(
+        domain.is_resolved_vegetation2d() & ma_isin(vegetation_type, VT_HIGH_VEGETATION),
+        settings.vegetation_type_below_trees,
+        vegetation_type,
     )
 
-    # Remove lai for pixels that have no vegetation_type.
+    # Treat remaining high vegetation pixels.
+    if domain.config.replace_high_vegetation_types:
+        # Replace all remaining high vegetation pixels by short grass. High vegetation pixels could
+        # still remain when generate_vegetation_patches=False or for pixels with low patch height,
+        # which is not considered when creating vegetation patch LAD.
+        high_vegetation_to_short_grass = ma_isin(vegetation_type, VT_HIGH_VEGETATION)
+        if domain.config.generate_vegetation_patches:
+            logger.warning_argwhere(
+                "After processing vegetation patches,",
+                high_vegetation_to_short_grass,
+                "high vegetation pixels left. Replacing with short grass.",
+            )
+        else:
+            logger.warning_argwhere(
+                "Replacing",
+                high_vegetation_to_short_grass,
+                "pixels by short grass.\n"
+                + "Consider generate_vegetation_patches: True or "
+                + "replace_high_vegetation_types: False.",
+            )
+    else:
+        # Remove vegetation_type when vegetation height indicates low vegetation
+        high_vegetation_to_short_grass = (
+            vegetation_height < settings.height_high_vegetation_lower_threshold
+        ).filled(False) & ma_isin(vegetation_type, VT_HIGH_VEGETATION)
+        logger.warning_argwhere(
+            "Replacing",
+            high_vegetation_to_short_grass,
+            "high vegetation pixels with a vegetation height "
+            + f"smaller than {settings.height_high_vegetation_lower_threshold}m by short grass.",
+        )
+    vegetation_type = ma.where(
+        high_vegetation_to_short_grass,
+        IndexVegetationType.short_grass,
+        vegetation_type,
+    )
+
+    # Derive LAI used by LSM. This includes only low vegetation when replace_high_vegetation_types,
+    # both low and high vegetation if not. LSM LAI has vegetation type specific defaults so we do
+    # not have to define a value here.
+    # Set default LAI for pixels with resolved vegetation.
+    if settings.lai_low_vegetation_default is None:
+        lai_lsm = ma.where(domain.is_resolved_vegetation2d(), ma.masked, lai)
+    else:
+        lai_lsm = ma.where(
+            domain.is_resolved_vegetation2d(), settings.lai_low_vegetation_default, lai
+        )
+
+    # Fill remaining high vegetation pixels without LAI or with LAI = 0 with default value for high
+    # vegetation.
+    if settings.lai_high_vegetation_default is not None:
+        lai_lsm = ma.where(
+            (lai_lsm.mask | (lai_lsm == 0.0).filled(False))
+            & ~domain.is_resolved_vegetation2d()
+            & ma_isin(vegetation_type, VT_HIGH_VEGETATION),
+            settings.lai_high_vegetation_default,
+            lai_lsm,
+        )
+
+    # Fill remaining (low vegetation) pixels without LAI or with LAI = 0 with default value for low
+    # vegetation.
+    if settings.lai_low_vegetation_default is not None:
+        lai_lsm = ma.where(
+            lai_lsm.mask
+            | (lai_lsm == 0.0).filled(False) & ~ma_isin(vegetation_type, VT_HIGH_VEGETATION),
+            settings.lai_low_vegetation_default,
+            lai_lsm,
+        )
+
+    # Remove lai for pixels that have no vegetation_type or no plants in general.
     ma.masked_where(
-        vegetation_type.mask | (vegetation_type == IndexVegetationType.BARE_SOIL),
-        lai_low,
+        vegetation_type.mask | ma_isin(vegetation_type, VT_NO_PLANTS).filled(False),
+        lai_lsm,
         copy=False,
     )
 
     vegetation_pars = domain.vegetation_pars.empty_array()
-    vegetation_pars[1, :, :] = lai_low
+    vegetation_pars[IndexVegetationPars.lai, :, :] = lai_lsm
 
     domain.vegetation_pars.to_nc(vegetation_pars)
     domain.vegetation_type.to_nc(vegetation_type)
@@ -1053,7 +1243,6 @@ def process_resolved_vegetation(
 def process_single_trees(
     domain: CSDDomain,
     settings: CSDConfigSettings,
-    canopy_generator: CanopyGenerator,
 ) -> None:
     """Process single trees of a given domain.
 
@@ -1069,54 +1258,123 @@ def process_single_trees(
     """
     logger.status("Processing single trees.")
 
-    lai = domain.read_lai()
+    # Domain-wide fields for if respective tree value is not defined
+    lai = domain.read(InputData.lai)
+    vegetation_height = domain.read(InputData.vegetation_height)
 
-    # Read all tree parameters from file. They are defined at the centre of the tree.
-    # Data correction and modification is done in generate_tree below
-    tree_height_centre = domain.read_tree_height()
-    tree_crown_diameter_centre = domain.read_tree_crown_diameter()
-    tree_trunk_diameter_centre = domain.read_tree_trunk_diameter()
-    tree_type_centre = domain.read_tree_type()
-
-    # Centre of a tree?
-    tree_pixels = np.where(
-        ~ma.getmaskarray(tree_height_centre)
-        | ~ma.getmaskarray(tree_type_centre)
-        | ~ma.getmaskarray(tree_crown_diameter_centre)
-        | ~ma.getmaskarray(tree_trunk_diameter_centre),
-        True,
-        False,
-    )
-    number_of_trees = np.sum(tree_pixels)
-
-    if number_of_trees == 0:
-        logger.info("No street trees found.")
-        return
-
-    # Create a DomainTree for each single tree
-    logger.info(f"Found {number_of_trees} trees.")
     trees: List[DomainTree] = []
-    # counter for tree IDs and adjusted trees
-    DomainTree.reset_counter()
-    for i in range(0, len(domain.x)):
-        for j in range(0, len(domain.y)):
-            if tree_pixels[j, i]:
-                tree = DomainTree.generate_tree(
-                    i=i,
-                    j=j,
-                    type=tree_type_centre[j, i],
-                    shape=ma.masked,
-                    height=tree_height_centre[j, i],
-                    lai=lai[j, i],
-                    crown_diameter=tree_crown_diameter_centre[j, i],
-                    trunk_diameter=tree_trunk_diameter_centre[j, i],
-                    config=domain.config,
-                    settings=settings,
-                )
-                if tree is not None:
-                    trees.append(tree)
 
-    DomainTree.check_counter(domain.config, settings)
+    # Tree data from shape file
+    tree_points = domain.read_trees()
+    if tree_points is not None:
+        # Use shape data.
+        number_of_trees = len(tree_points)
+        if number_of_trees == 0:
+            logger.info("No single trees found.")
+            return
+        logger.info(f"Found {number_of_trees} trees.")
+
+        # Create a DomainTree for each single tree
+        for tree_point in tree_points.itertuples(index=False):
+            # Use vegetation_height if tree height is not defined. vegetation_height does not define
+            # a single tree.
+            tree_height = getattr(tree_point, InputData.tree_height)
+            if settings.use_vegetation_height_for_trees and pd.isna(tree_height):
+                tree_height = vegetation_height[
+                    getattr(tree_point, ColumnGeneral.y_index),
+                    getattr(tree_point, ColumnGeneral.x_index),
+                ]
+
+            # Use LAI if tree lai is not defined. lai does not define a single tree.
+            tree_lai = getattr(tree_point, InputData.tree_lai)
+            if settings.use_lai_for_trees and pd.isna(tree_lai):
+                tree_lai = lai[
+                    getattr(tree_point, ColumnGeneral.y_index),
+                    getattr(tree_point, ColumnGeneral.x_index),
+                ]
+                # If value is missing in the input LAI field, estimate tree_lai depending on
+                # tree_height. Use lai_per_vegetation_height * tree_height if
+                # estimate_lai_from_height, otherwise use the corresponding
+                # lai_low/high_vegetation_default.
+                if is_missing(tree_lai) and not is_missing(tree_height):
+                    if domain.config.estimate_lai_from_vegetation_height:
+                        tree_lai = settings.lai_per_vegetation_height * tree_height
+                    else:
+                        if tree_height < settings.height_high_vegetation_lower_threshold:
+                            if settings.lai_low_vegetation_default is not None:
+                                tree_lai = settings.lai_low_vegetation_default
+                        else:
+                            if settings.lai_high_vegetation_default is not None:
+                                tree_lai = settings.lai_high_vegetation_default
+
+            tree = domain.canopy_generator.generate_tree(
+                i=getattr(tree_point, ColumnGeneral.x_index),
+                j=getattr(tree_point, ColumnGeneral.y_index),
+                type=getattr(tree_point, InputData.tree_type),
+                shape=getattr(tree_point, InputData.tree_shape),
+                height=tree_height,
+                lai=tree_lai,
+                crown_diameter=getattr(tree_point, InputData.tree_crown_diameter),
+                trunk_diameter=getattr(tree_point, InputData.tree_trunk_diameter),
+            )
+            if tree is not None:
+                trees.append(tree)
+    else:
+        # Use raster data.
+        # Read all tree parameters from file. They are defined at the centre of the tree.
+        # Data correction and modification is done in generate_tree below.
+        tree_crown_diameter_centre = domain.read(InputData.tree_crown_diameter)
+        tree_height_centre = domain.read(InputData.tree_height)
+        tree_lai_centre = domain.read(InputData.tree_lai)
+        tree_shape_centre = domain.read(InputData.tree_shape)
+        tree_trunk_diameter_centre = domain.read(InputData.tree_trunk_diameter)
+        tree_type_centre = domain.read(InputData.tree_type)
+
+        # Centre of a tree?
+        tree_pixels = np.where(
+            ~ma.getmaskarray(tree_crown_diameter_centre)
+            | ~ma.getmaskarray(tree_height_centre)
+            | ~ma.getmaskarray(tree_lai_centre)
+            | ~ma.getmaskarray(tree_shape_centre)
+            | ~ma.getmaskarray(tree_trunk_diameter_centre)
+            | ~ma.getmaskarray(tree_type_centre),
+            True,
+            False,
+        )
+
+        number_of_trees = np.sum(tree_pixels)
+        if number_of_trees == 0:
+            logger.info("No single trees found.")
+            return
+        logger.info(f"Found {number_of_trees} trees.")
+
+        # Create a DomainTree for each single tree
+        for j, i in np.argwhere(tree_pixels):
+            # Use vegetation_height if tree_height_centre is not defined. vegetation_height does not
+            # define a single tree.
+            tree_height = tree_height_centre[j, i]
+            if settings.use_vegetation_height_for_trees and ma.is_masked(tree_height):
+                tree_height = vegetation_height[j, i]
+
+            # Use LAI if tree_lai_centre is not defined. lai does not define a single tree.
+            tree_lai = tree_lai_centre[j, i]
+            if settings.use_lai_for_trees and ma.is_masked(tree_lai):
+                tree_lai = lai[j, i]
+
+            tree = domain.canopy_generator.generate_tree(
+                i=i,
+                j=j,
+                type=tree_type_centre[j, i],
+                shape=tree_shape_centre[j, i],
+                height=tree_height,
+                lai=tree_lai,
+                crown_diameter=tree_crown_diameter_centre[j, i],
+                trunk_diameter=tree_trunk_diameter_centre[j, i],
+            )
+            if tree is not None:
+                trees.append(tree)
+
+    domain.canopy_generator.check_tree_counters()
 
     if not trees:
         logger.warning("No valid trees left.")
@@ -1141,13 +1399,12 @@ def process_single_trees(
     domain.tree_type.values = domain.tree_type.empty_array()
 
     for tree in trees:
-        canopy_generator.add_tree_to_3d_fields(
+        domain.canopy_generator.add_tree_to_3d_fields(
             tree,
             domain.lad.values,
             domain.bad.values,
             domain.tree_id.values,
             domain.tree_type.values,
-            domain.config,
         )
 
     # Remove LAD volumes that are inside buildings
@@ -1166,13 +1423,22 @@ def process_single_trees(
 def process_vegetation_patches(
     domain: CSDDomain,
     settings: CSDConfigSettings,
-    canopy_generator: CanopyGenerator,
 ) -> None:
     """Process vegetation patches of a given domain.
 
-    Read patch type, height and LAI and identify vegetation patches. Calculate LAD fields and add to
-    the existing global LAD field or create new global LAD and BAD fields. Keep the global LAD and
-    BAD fields in memory for further processing.
+    Read patch type, vegetation height (interpreted as patch height), vegetation type and LAI.
+    Vegetation patches are identified by three criteria:
+
+    1. patch height >= height_rel_resolved_vegetation_lower_threshold * dz
+    2. if replace_high_vegetation_types, high vegetation vegetation type with either undefined
+      patch height or patch height >= height_rel_resolved_vegetation_lower_threshold * dz
+    3. defined patch type with either undefined patch height or
+      patch height >= height_rel_resolved_vegetation_lower_threshold * dz
+
+    If overhanging_trees is False, all identified patch pixels without vegetation type are
+    disregarded. Pixels with already defined LAD or BAD values are ignored. For the found vegetation
+    patch pixels, calculate LAD fields and add to the existing global LAD field or create new global
+    LAD and BAD fields. Keep the global LAD and BAD fields in memory for further processing.
 
     Args:
         domain: Domain to process.
@@ -1181,155 +1447,212 @@ def process_vegetation_patches(
     """
     logger.status("Processing vegetation patches.")
 
-    patch_height = domain.read_patch_height()
-
+    # Load vegetation patch related data.
+    patch_height = domain.read(InputData.vegetation_height)
     vegetation_type = domain.vegetation_type.from_nc()
-    lai = domain.read_lai()
-    patch_type_2d = domain.read_patch_type()
+    lai = domain.read(InputData.lai)
+    patch_type = domain.read(InputData.patch_type)
 
-    # patch_type_2d: use high vegetation vegetation_type if patch_type is missing
-    # Note: vegetation_type corrected above.
-    patch_type_2d = ma.where(
-        patch_type_2d.mask & ma_isin(vegetation_type, VT_HIGH_VEGETATION),
+    # Identify vegetation patches.
+
+    # Option 1: patch_height >= height_rel_resolved_vegetation_lower_threshold * dz.
+    # In order to produce a warning message about the ignored pixels with patch height <
+    # height_rel_resolved_vegetation_lower_threshold * dz, find all pixels with patch height first
+    # and compare with the filtered pixels.
+    patch_prelim = ~ma.getmaskarray(patch_height)
+    patch = (
+        patch_height >= settings.height_rel_resolved_vegetation_lower_threshold * domain.config.dz
+    ).filled(False)
+    # Low height pixels with patch height < height_rel_resolved_vegetation_lower_threshold * dz
+    low_height = patch_prelim & ~patch
+    logger.warning_argwhere(
+        "Found",
+        low_height,
+        "pixels with patch height < "
+        + f"{settings.height_rel_resolved_vegetation_lower_threshold} dz.\n"
+        + "They are not treated as vegetation patches.",
+    )
+    # Remember when pixels are removed from the vegetation patches
+    filtered = low_height.any()
+
+    # Option 2: high vegetation vegetation type with either undefined patch height or patch_height
+    # >= height_rel_resolved_vegetation_lower_threshold * dz.
+    # In order to produce a warning message about the ignored pixels with patch height <
+    # height_rel_resolved_vegetation_lower_threshold * dz, find all pixels with high vegetation
+    # first and compare with the filtered pixels.
+    if domain.config.replace_high_vegetation_types:
+        high_vegetation_prelim = ma_isin(vegetation_type, VT_HIGH_VEGETATION).filled(False)
+        high_vegetation = high_vegetation_prelim & ~low_height
+        logger.warning_argwhere(
+            "Of the the pixels with patch height < "
+            + f"{settings.height_rel_resolved_vegetation_lower_threshold} * dz,",
+            high_vegetation_prelim & ~high_vegetation,
+            "pixels are of a high vegetation type.\n"
+            + "They are not treated as vegetation patches.",
+        )
+        # Add high vegetation pixels.
+        patch = patch | high_vegetation
+
+    # Option 3: defined patch type with either undefined patch height or patch height >=
+    # RESOLVED_VEGETATION_HEIGHT_MIN_REL * dz.
+    # In order to produce a warning message about the ignored pixels with patch height <
+    # RESOLVED_VEGETATION_HEIGHT_MIN_REL dz, find all pixels with patch type first and compare with
+    # the filtered pixels.
+    type_defined_prelim = ~ma.getmaskarray(patch_type)
+    type_defined = type_defined_prelim & ~low_height
+    logger.warning_argwhere(
+        "Of the the pixels with patch height < "
+        + f"{settings.height_rel_resolved_vegetation_lower_threshold} * dz,",
+        type_defined_prelim & ~type_defined,
+        "pixels have a defined patch type.\n" + "They are not treated as vegetation patches.",
+    )
+    # Add defined patch type pixels.
+    patch = patch | type_defined
+
+    # If overhanging trees are not allowed, remove pixels with undefined vegetation type.
+    if not domain.config.overhanging_trees:
+        vegetation_type_defined = ~ma.getmaskarray(vegetation_type)
+        logger.warning_argwhere(
+            f"Of the {'remaining ' if filtered else ''}identified vegetation patch pixels,",
+            patch & ~vegetation_type_defined,
+            "have undefined vegetation type.\n"
+            + "They are not treated as vegetation patches "
+            + "due to overhanging_trees: False.",
+        )
+        patch = patch & vegetation_type_defined
+        # Remember when pixels are removed from the vegetation patches
+        filtered = filtered or (patch & ~vegetation_type_defined).any()
+
+    # Remove pixels with already set trees.
+    single_trees = domain.is_resolved_vegetation2d()
+    logger.warning_argwhere(
+        f"Of the {'remaining ' if filtered else ''}identified vegetation patch pixels,",
+        patch & single_trees,
+        "are already covered by single tree pixels.\n"
+        + "They are not treated as vegetation patches.",
+    )
+    patch = patch & ~single_trees
+    # Remember when pixels are removed from the vegetation patches
+    filtered = filtered or (patch & single_trees).any()
+
+    # Check if any vegetation patches are left.
+    if not patch.any():
+        logger.info("No vegetation patches found.")
+        return
+
+    # Define missing patch type, patch height and LAI after vegetation patch identification.
+
+    # For missing patch type, use vegetation type in case of high vegetation vegetation type. Use
+    # negative value to differentiate from tree type values. This gives at least some information on
+    # the patch type.
+    patch_type = ma.where(
+        patch_type.mask & ma_isin(vegetation_type, VT_HIGH_VEGETATION).filled(False),
         -vegetation_type,
-        patch_type_2d,
+        patch_type,
     )
-    # patch_type_2d: use default value for the rest of the pixels.
-    patch_type_2d = ma.where(patch_type_2d.mask, defaults["patch_type"].default, patch_type_2d)
+    # For still missing patch type, set default value.
+    patch_type = ma.where(patch_type.mask, value_defaults["patch_type"].default, patch_type)
 
-    # Initialize lai_high with lai or default value for high vegetation, but masked.
-    lai_high: ma.MaskedArray = ma.MaskedArray(
-        np.where(lai.mask, settings.lai_high_vegetation_default, lai), mask=True
-    )
+    # Set missing patch heights to default.
+    patch_height = ma.where(patch_height.mask, settings.patch_height_default, patch_height)
 
-    # Unmask all high vegetation pixels.
-    lai_high.mask = np.where(
-        ma_isin(vegetation_type, VT_HIGH_VEGETATION)
-        & (patch_height.mask | (patch_height.data >= domain.config.dz)),
-        False,
-        lai_high.mask,
-    )
-
-    # Mask all pixels where street trees were already set.
-    if domain.lad.values is not None:
-        lai_high.mask = np.where(
-            ma.getmaskarray(domain.lad.values)[0, :, :],
-            lai_high.mask,
-            True,
-        )
-
-    # Unmask all pixels where short grass is defined, but where a patch_height >= dz is found, as
-    # high vegetation (often the case in backyards).
-    lai_high.mask = np.where(
-        ~patch_height.mask
-        & (patch_height.data >= domain.config.dz)
-        & ~vegetation_type.mask
-        & (vegetation_type.data == 3),
-        False,
-        lai_high.mask,
-    )
-
-    # If overhanging trees are allowed, unmask pixels with patch_height > dz that are not included
-    # in vegetation_type.
-    if domain.config.overhanging_trees:
-        lai_high.mask = np.where(
-            ~patch_height.mask & (patch_height.data >= domain.config.dz),
-            False,
-            lai_high.mask,
-        )
-
-    # Define a patch height wherever it is missing.
-    patch_height_high = ma.where(patch_height.mask, settings.patch_height_default, patch_height)
-
-    # Remove pixels where street trees were already set.
-    if domain.lad.values is not None:
-        ma.masked_where(~ma.getmaskarray(domain.lad.values)[0, :, :], patch_height_high, copy=False)
-
-    # Remove patch heights that have no lai_high value.
-    ma.masked_where(lai_high.mask, patch_height_high, copy=False)
-
-    # For missing LAI values, set either the high vegetation default or the low vegetation default.
-    lai_high = ma.where(
-        lai_high.mask & ~patch_height.mask & (patch_height.data > 2.0),
-        settings.lai_high_vegetation_default,
-        lai_high,
-    )
-    lai_high = ma.where(
-        lai_high.mask & ~patch_height.mask & (patch_height.data <= 2.0),
-        settings.lai_low_vegetation_default,
-        lai_high,
-    )
-
-    if ma.max(patch_height_high) >= (2.0 * domain.config.dz):
-        # Result fields for vegetation patches
-        lad_patch, patch_id, patch_types = canopy_generator.process_patch(
-            domain.config.dz,
-            patch_height_high,
-            patch_type_2d,
-            lai_high,
-        )
-
-        # Update global resolved vegetation fields. Check if resolved vegetation is already present.
-        # If so, merge current and former data.
-        if (
-            domain.zlad.values is not None
-            and domain.tree_id.values is not None
-            and domain.tree_type.values is not None
-            and domain.lad.values is not None
-            and domain.bad.values is not None
-        ):
-            # Need to merge data.
-            # Check zlad size and adjust data if necessary.
-            nz_diff = lad_patch.shape[0] - domain.zlad.values.size
-            if nz_diff < 0:
-                # If former resolved vegetation fields are larger than current ones, extend current
-                # ones.
-                fillup = ma.masked_all((-nz_diff, domain.y.size, domain.x.size))
-                lad_patch = ma.concatenate((lad_patch, fillup), axis=0)
-                patch_id = ma.concatenate((patch_id, fillup), axis=0)
-                patch_types = ma.concatenate((patch_types, fillup), axis=0)
-            elif nz_diff > 0:
-                # If current resolved vegetation fields are larger than former ones, extend former
-                # ones.
-                zlad = ma.arange(lad_patch.shape[0]) * domain.config.dz
-                zlad[1:] = zlad[1:] - 0.5 * domain.config.dz
-                domain.zlad.values = zlad
-
-                fillup = ma.masked_all((nz_diff, domain.y.size, domain.x.size))
-                domain.lad.values = ma.MaskedArray(
-                    ma.concatenate((domain.lad.values, fillup), axis=0)
-                )
-                domain.bad.values = ma.MaskedArray(
-                    ma.concatenate((domain.bad.values, fillup), axis=0)
-                )
-                domain.tree_id.values = ma.MaskedArray(
-                    ma.concatenate((domain.tree_id.values, fillup), axis=0)
-                )
-                domain.tree_type.values = ma.MaskedArray(
-                    ma.concatenate((domain.tree_type.values, fillup), axis=0)
-                )
-
-            # Add current fields to former fields.
-            # Use negative patch_id to distinguish from tree_id.
-            domain.tree_id.values = ma.where(
-                domain.lad.values.mask, -1.0 * patch_id, domain.tree_id.values
+    # For missing LAI, use lai_per_vegetation_height * patch_height or, if defined, default values
+    # for low and high vegetation.
+    if domain.config.estimate_lai_from_vegetation_height:
+        lai = ma.where(lai.mask, settings.lai_per_vegetation_height * patch_height, lai)
+    else:
+        if settings.lai_low_vegetation_default is not None:
+            lai = ma.where(
+                lai.mask
+                & (patch_height < settings.height_high_vegetation_lower_threshold).filled(False),
+                settings.lai_low_vegetation_default,
+                lai,
             )
-            domain.tree_type.values = ma.where(
-                domain.lad.values.mask, patch_types, domain.tree_type.values
+        if settings.lai_high_vegetation_default is not None:
+            lai = ma.where(
+                lai.mask
+                & (patch_height >= settings.height_high_vegetation_lower_threshold).filled(False),
+                settings.lai_high_vegetation_default,
+                lai,
             )
-            domain.lad.values = ma.where(domain.lad.values.mask, lad_patch, domain.lad.values)
-        else:
-            # Create global resolved vegetation fields.
 
+    patch_no_lai = patch & lai.mask
+    logger.warning_argwhere(
+        f"Of the {'remaining ' if filtered else ''}identified vegetation patch pixels,",
+        patch_no_lai,
+        "have no LAI values, neither from lai input nor derived from vegetation_height.\n"
+        + "They are not treated as vegetation patches. Alternatively, define "
+        + "lai_low_vegetation_default and/or lai_high_vegetation_default.",
+    )
+    patch = patch & ~patch_no_lai
+    # Remember when pixels are removed from the vegetation patches.
+    filtered = filtered or (patch & single_trees).any()
+
+    # Only keep pixels with vegetation patches.
+    ma.masked_where(~patch, patch_type, copy=False)
+    ma.masked_where(~patch, patch_height, copy=False)
+    ma.masked_where(~patch, lai, copy=False)
+
+    # Calculate result fields for vegetation patches.
+    lad_patch, patch_id, patch_type_3d = domain.canopy_generator.process_patch(
+        patch_height,
+        patch_type,
+        lai,
+    )
+
+    # Update global resolved vegetation fields. Check if resolved vegetation is already present.
+    # If so, merge current and former data.
+    if (
+        domain.zlad.values is not None
+        and domain.tree_id.values is not None
+        and domain.tree_type.values is not None
+        and domain.lad.values is not None
+        and domain.bad.values is not None
+    ):
+        # Need to merge data.
+        # Check zlad size and adjust data if necessary.
+        nz_diff = lad_patch.shape[0] - domain.zlad.values.size
+        if nz_diff < 0:
+            # If former resolved vegetation fields are larger than current ones, extend current
+            # ones.
+            fillup = ma.masked_all((-nz_diff, domain.y.size, domain.x.size))
+            lad_patch = ma.concatenate((lad_patch, fillup), axis=0)
+            patch_id = ma.concatenate((patch_id, fillup), axis=0)
+            patch_type_3d = ma.concatenate((patch_type_3d, fillup), axis=0)
+        elif nz_diff > 0:
+            # If current resolved vegetation fields are larger than former ones, extend former
+            # ones.
             zlad = ma.arange(lad_patch.shape[0]) * domain.config.dz
             zlad[1:] = zlad[1:] - 0.5 * domain.config.dz
             domain.zlad.values = zlad
 
-            # Use negative patch_id to distinguish from tree_id.
-            domain.tree_id.values = -1.0 * patch_id
-            domain.tree_type.values = patch_types
-            domain.lad.values = lad_patch
-            domain.bad.values = ma.masked_all_like(lad_patch)
+            fillup = ma.masked_all((nz_diff, domain.y.size, domain.x.size))
+            domain.lad.values = ma.MaskedArray(ma.concatenate((domain.lad.values, fillup), axis=0))
+            domain.bad.values = ma.MaskedArray(ma.concatenate((domain.bad.values, fillup), axis=0))
+            domain.tree_id.values = ma.MaskedArray(
+                ma.concatenate((domain.tree_id.values, fillup), axis=0)
+            )
+            domain.tree_type.values = ma.MaskedArray(
+                ma.concatenate((domain.tree_type.values, fillup), axis=0)
+            )
+
+        # Add current fields to former fields.
+        # Use negative patch_id to distinguish from tree_id.
+        domain.tree_id.values = ma.where(~lad_patch.mask, -1.0 * patch_id, domain.tree_id.values)
+        domain.tree_type.values = ma.where(~lad_patch.mask, patch_type_3d, domain.tree_type.values)
+        domain.lad.values = ma.where(~lad_patch.mask, lad_patch, domain.lad.values)
+    else:
+        # Create global resolved vegetation fields.
+
+        zlad = ma.arange(lad_patch.shape[0]) * domain.config.dz
+        zlad[1:] = zlad[1:] - 0.5 * domain.config.dz
+        domain.zlad.values = zlad
+
+        # Use negative patch_id to distinguish from tree_id.
+        domain.tree_id.values = -1.0 * patch_id
+        domain.tree_type.values = patch_type_3d
+        domain.lad.values = lad_patch
+        domain.bad.values = ma.masked_all_like(lad_patch)
 
 
 def process_water_temperature(domain: CSDDomain) -> None:
@@ -1353,22 +1676,22 @@ def process_water_temperature(domain: CSDDomain) -> None:
             water_type_index,
             water_temperature_from_config,
         ) in domain.config.water_temperature.items():
-            water_pars[IndexWaterPars.WATER_TEMPERATURE, :, :] = ma.where(
+            water_pars[IndexWaterPars.water_temperature, :, :] = ma.where(
                 water_type == water_type_index,
                 water_temperature_from_config,
-                water_pars[IndexWaterPars.WATER_TEMPERATURE, :, :],
+                water_pars[IndexWaterPars.water_temperature, :, :],
             )
 
     # Set water temperature based on input file.
-    if domain.input_config.file_water_temperature is not None:
-        water_temperature_from_file = domain.read_water_temperature()
+    water_temperature_from_file = domain.read(InputData.water_temperature)
+    if not water_temperature_from_file.mask.all():
         water_temperature_from_file.mask = ma.mask_or(
             water_temperature_from_file.mask, water_type.mask
         )
-        water_pars[IndexWaterPars.WATER_TEMPERATURE, :, :] = ma.where(
+        water_pars[IndexWaterPars.water_temperature, :, :] = ma.where(
             ~water_temperature_from_file.mask,
             water_temperature_from_file,
-            water_pars[IndexWaterPars.WATER_TEMPERATURE, :, :],
+            water_pars[IndexWaterPars.water_temperature, :, :],
         )
 
     domain.water_pars.to_nc(water_pars)
@@ -1399,3 +1722,21 @@ def consistency_check_update_surface_fraction(domain: CSDDomain) -> None:
     surface_fraction[1, :, :] = ma.where(pavement_type.mask, 0.0, 1.0)
     surface_fraction[2, :, :] = ma.where(water_type.mask, 0.0, 1.0)
     domain.surface_fraction.to_nc(surface_fraction)
+
+
+def print_unused_input_files(inputs: Dict[str, CSDConfigInput]) -> None:
+    """Print unread files.
+
+    Args:
+        inputs: Input files.
+    """
+    for name, input in inputs.items():
+        unused = input.unused_file()
+        unused_len = len(unused)
+        if unused_len > 0:
+            unused_items = "\n".join(f"  {item[0]}: {item[1]}" for item in unused)
+            logger.warning(
+                f"In input_{name}, the following "
+                + f"{'input was' if unused_len == 1 else 'inputs were'} not used:\n"
+                + unused_items
+            )

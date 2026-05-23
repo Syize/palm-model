@@ -980,7 +980,7 @@
     IF ( bc_cs_l == 'undefined' )  THEN
        IF ( bc_lr == 'cyclic' )  THEN
           bc_cs_l = 'cyclic'
-       ELSEIF ( bc_lr == 'dirichlet/radiation' )  THEN
+       ELSEIF ( bc_lr == 'dirichlet/radiation'  .OR.  bc_lr == 'nested' )  THEN
           bc_cs_l = 'dirichlet'
        ELSEIF ( bc_lr == 'radiation/dirichlet' )  THEN
           bc_cs_l = 'neumann'
@@ -991,7 +991,7 @@
           bc_cs_r = 'cyclic'
        ELSEIF ( bc_lr == 'dirichlet/radiation' )  THEN
           bc_cs_r = 'neumann'
-       ELSEIF ( bc_lr == 'radiation/dirichlet' )  THEN
+       ELSEIF ( bc_lr == 'radiation/dirichlet'  .OR.  bc_lr == 'nested' )  THEN
           bc_cs_r = 'dirichlet'
        ENDIF
     ENDIF
@@ -1008,7 +1008,7 @@
     IF ( bc_cs_n == 'undefined' )  THEN
        IF ( bc_ns == 'cyclic' )  THEN
           bc_cs_n = 'cyclic'
-       ELSEIF ( bc_ns == 'dirichlet/radiation' )  THEN
+       ELSEIF ( bc_ns == 'dirichlet/radiation'  .OR.  bc_ns == 'nested' )  THEN
           bc_cs_n = 'dirichlet'
        ELSEIF ( bc_ns == 'radiation/dirichlet' )  THEN
           bc_cs_n = 'neumann'
@@ -1019,7 +1019,7 @@
           bc_cs_s = 'cyclic'
        ELSEIF ( bc_ns == 'dirichlet/radiation' )  THEN
           bc_cs_s = 'neumann'
-       ELSEIF ( bc_ns == 'radiation/dirichlet' )  THEN
+       ELSEIF ( bc_ns == 'radiation/dirichlet'  .OR.  bc_ns == 'nested' )  THEN
           bc_cs_s = 'dirichlet'
        ENDIF
     ENDIF
@@ -3743,38 +3743,37 @@
     REAL(wp) ::  dt_chem      !< length of chem time step
     REAL(wp) ::  dt_dh        !< dt_chem/dh
     REAL(wp) ::  inv_dh       !< inverse of vertical grid size
-    REAL(wp) ::  lai          !< leaf area index at current surface element
     REAL(wp) ::  qv_tmp       !< surface mixing ratio at current surface element
-    REAL(wp) ::  r_aero_surf  !< aerodynamic resistance (s/m) at current surface element
     REAL(wp) ::  rb           !< quasi-laminar boundary layer resistance (s/m)
     REAL(wp) ::  rc_tot       !< total canopy resistance (s/m)
     REAL(wp) ::  rh_surf      !< relative humidity at current surface element
     REAL(wp) ::  rs           !< Sedimentaion resistance (s/m)
+    REAL(wp) ::  r_aero_surf  !< aerodynamic resistance (s/m) at current surface element
     REAL(wp) ::  slinnfac     !<
     REAL(wp) ::  solar_rad    !< solar radiation, direct and diffuse, at current surface element
     REAL(wp) ::  temp_tmp     !< temperatur at i,j,k
     REAL(wp) ::  ts           !< surface temperatur in degrees celsius
     REAL(wp) ::  ustar_surf   !< ustar at current surface element
     REAL(wp) ::  vd_lu        !< deposition velocity (m/s)
-    REAL(wp) ::  visc         !< Viscosity
-    REAL(wp) ::  vs           !< Sedimentation velocity
+    REAL(wp) ::  visc         !< viscosity
+    REAL(wp) ::  vs           !< sedimentation velocity
     REAL(wp) ::  z0h_surf     !< roughness length for heat at current surface element
 
     REAL(wp), DIMENSION(nspec) ::  ccomp_tot  !< total compensation point (ug/m3), for now kept to zero for all species!
 
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  dens_v         !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  inv_dh_v       !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  lai_v          !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  rb_v           !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  rc_tot_v       !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  rh_surf_v      !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  r_aero_surf_v  !<
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  dens_v         !< density at layer k
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  inv_dh_v       !< inverse of vertical grid size
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  lai_v          !< leaf area index at current surface element
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  rb_v           !< quasi-laminar boundary layer resistance (s/m)
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  rc_tot_v       !< total canopy resistance (s/m)
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  rh_surf_v      !< relative humidity at current surface element
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  r_aero_surf_v  !< aerodynamic resistance (s/m) at current surface element
     REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  sai_v          !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  solar_rad_v    !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  temp_tmp_v     !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  ts_v           !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  ustar_surf_v   !<
-    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  visc_v         !<
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  solar_rad_v    !< solar radiation, direct and diffuse, at current surface element
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  temp_tmp_v     !< temperatur at i,j,k
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  ts_v           !< surface temperatur in degrees celsius
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  ustar_surf_v   !< ustar at current surface element
+    REAL(wp), DIMENSION(nys:nyn,nxl:nxr) ::  visc_v         !< viscosity
 
     REAL(wp), DIMENSION(nys:nyn,nxl:nxr,nspec) ::  bud_lud_v  !< budget for USM windows at current surface element
     REAL(wp), DIMENSION(nys:nyn,nxl:nxr,nspec) ::  bud_lug_v  !< budget for USM green surfaces at current surface element
@@ -3840,7 +3839,7 @@
              solar_rad_v(j,i) = solar_rad
 
              lai_v(j,i) = surf_lsm%lai(m)
-             sai_v(j,i) = lai + 1
+             sai_v(j,i) = lai_v(j,i) + 1
              sai_present(j,i) = .TRUE.
 !
 !--          For small grid spacing neglect R_a.
@@ -4553,7 +4552,7 @@
              solar_rad   = surf_usm%rad_sw_dir(m) + surf_usm%rad_sw_dif(m)
              solar_rad_v(j,i) = solar_rad
              lai_v(j,i) = surf_usm%lai(m)
-             sai_v(j,i) = lai + 1
+             sai_v(j,i) = lai_v(j,i) + 1
              sai_present(j,i) = .TRUE.
 
 !--          For small grid spacing neglect r_a.

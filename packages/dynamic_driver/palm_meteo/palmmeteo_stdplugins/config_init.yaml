@@ -1,0 +1,657 @@
+# Copyright 2018-2024 Institute of Computer Science of the Czech Academy of
+# Sciences, Prague, Czech Republic. Authors: Pavel Krc, Martin Bures, Jaroslav
+# Resler.
+#
+# This file is part of PALM-METEO.
+#
+# PALM-METEO is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# PALM-METEO is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# PALM-METEO. If not, see <https://www.gnu.org/licenses/>.
+
+
+# This file is part of program code. It stores inital values for configuration
+# of variables that are used by various plugins internally. It is not intended
+# to be used as a user configuration file or a template thereof.
+
+# All paths are either absolute or relative to paths.base. They may contain
+# references to entries in path_strings
+paths:
+    wrf:
+        file_mask:      'WRF/wrfout_*.e000'
+        rad_file_mask:  'WRF/auxhist6_*'
+
+    camx:
+        file_mask:      'CAMX/CAMx.*.nc'
+
+    icon:
+        file_mask:      'ICON/i?ff[0-9]_*.nc*'
+        static_data:    ~
+
+    aladin:
+        output:         'ALADIN/aladin_import.nc'
+        grib_file_mask: 'ALADIN/ALADIN_GRIBS/**/*.grb'
+        soil_depth:     'ALADIN/aladin_soil_depth.grb'
+
+    cams:
+        file:           'CAMS'
+
+wrf:
+    # Compose continuous timeseries for the simululation using one or more
+    # forecast/assimilation cycles from the set of input files
+    assim_cycles:
+        # Interval between assimilation cycles to be used (a larger time
+        # interval can be specified in order to use every nth cycle).
+        #cycles_used: 3 h    # time interval
+        #cycles_used: single # use one specified cycle
+        cycles_used: all    # default: use all files, assume they are continuous
+
+        # Datetime for the reference cycle from which the selected cycle
+        # intervals are counted, or the selected cycle if cycles_used=single.
+        # Default: 00:00 UTC from the first day of simulation.
+        reference_cycle:
+
+        # Earliest horizon (time since cycle time) to be used in the
+        # simulation. If set to higher than 0, the 0th file of each cycle must
+        # still be available to load the level heights (HHL).
+        earliest_horizon: 0 h
+
+    # Method of stretching or squeezing of the intermediate-height levels
+    # before vertical interpolation in order to match the target
+    # (high-resolution) terrain, while limiting the propagation of
+    # surface-reltaed effects to higher levels. (Do not confuse with PALM's
+    # vertically stretched grid as in dz_stretch_level and dz_stretch_factor.)
+    # May be one of:
+    # universal:    A universal method where levels above
+    #               vinterp:transition_level are kept unmodified while the
+    #               levels below are stretched/squeezed gradually.
+    # hybrid:       Use the WRF hybrid vertical coordinate system from the
+    #               WRFOUT input files to stretch the levels. WARNING: the WRF
+    #               model must be configured to using hybrid levels, not sigma
+    #               leves, there is no check for this!
+    # sigma:        Use the WRF sigma levels system from the WRFOUT input
+    #               files to stretch the levels. WARNING: the WRF model must be
+    #               configured to using sigma levels, not hybrid leves, there
+    #               is no check for this!
+    vertical_adaptation: universal
+
+    radiation_smoothing_distance: 10000.0
+
+    dimensions:
+        Time:               time
+        west_east:          x_meteo
+        west_east_stag:     xu_meteo
+        south_north:        y_meteo
+        south_north_stag:   yv_meteo
+        bottom_top:         z_meteo
+        bottom_top_stag:    zw_meteo
+        soil_layers_stag:   zsoil_meteo
+
+    # horizontally interpolated variables (apart from U+V)
+    hinterp_vars: [PH, PHB, HGT, T, W, TSLB, SMOIS, MU, MUB, P, PB, PSFC]
+
+    # variables that compose specific humidity as a sum
+    spechum_vars: [QVAPOR, QCLOUD, QRAIN, QICE, QSNOW, QGRAUP]
+
+    # 1-d variables, direct copy
+    vars_1d: [P_TOP, C3F, C4F, C3H, C4H, ZNW, ZNU]
+
+    rad_vars:
+        sw_tot_h: SWDOWN #may be also SWDNB
+        sw_dif_h: SWDDIF
+        lw_tot_h: GLW #may be also LWDNB
+
+# The CAMx configuration uses Python formulae, so it is obviously vulnerable to
+# malicious configuration files. We assume that the users know what they are
+# doing and they do not run arbitrary code from the internet.
+camx:
+    # True: model grid is Lambert Conformal Conic from the coupled WRF model.
+    # This uses bilinear inteprolation based on WRF-specific ellipsoid. False
+    # (default): use universal triangular interpolation.
+    uses_wrf_lambert_grid: false
+
+    # Python-code checks on input file variables and attributes. May also be
+    # extended by individual output variables.
+    validations: []
+
+    # A list of variables loaded for processing. May also be extended by
+    # individual output variables.
+    loaded_vars: []
+
+    # An optional preprocessing Python code on loaded variables, as triggered
+    # by individual output variables.
+    preprocessors:
+        PM25: 'PM25 = PSO4+PNO3+PNH4+POA+PEC+FPRM+SOA1+SOA2+SOA3+SOA4+SOPA+SOPB'
+
+    # Output variable definitions with units and Python formulae on loaded
+    # variables, which may optionally trigger specific preprocessors and/or
+    # validations.
+    output_var_defs:
+        __user_expandable__: true
+
+        'NO': #NO without quotes means False in yaml!
+            loaded_vars: ['NO']
+            validations:
+                - '_units.NO == "ppmv"'
+        NO2:
+            loaded_vars: [NO2]
+            validations:
+                - '_units.NO2 == "ppmv"'
+        NO3:
+            loaded_vars: [NO3]
+            validations:
+                - '_units.NO3 == "ppmv"'
+        N2O5:
+            loaded_vars: [N2O5]
+            validations:
+                - '_units.N2O5 == "ppmv"'
+        NOX:
+            formula: 'NO+NO2+N03+N2O5'
+            unit: 'ppm'
+            loaded_vars: ['NO', 'NO2', 'NO3', 'N2O5']
+            validations:
+                - '_units.NO == "ppmv"'
+                - '_units.NO2 == "ppmv"'
+                - '_units.NO3 == "ppmv"'
+                - '_units.N2O5 == "ppmv"'
+        O3:
+            loaded_vars: [O3]
+            validations:
+                - '_units.O3 == "ppmv"'
+        PM10:
+            formula: '(CPRM+PM25)*1e-9'
+            flags: [non_gasphase]
+            unit: 'kg/m3'
+            loaded_vars: [PSO4, PNO3, PNH4, POA, PEC, FPRM, SOA1, SOA2, SOA3,
+                SOA4, SOPA, SOPB, CPRM]
+            validations:
+                - '_units.PSO4 == "micrograms m-3"'
+                - '_units.PNO3 == "micrograms m-3"'
+                - '_units.PNH4 == "micrograms m-3"'
+                - '_units.POA == "micrograms m-3"'
+                - '_units.PEC == "micrograms m-3"'
+                - '_units.FPRM == "micrograms m-3"'
+                - '_units.SOA1 == "micrograms m-3"'
+                - '_units.SOA2 == "micrograms m-3"'
+                - '_units.SOA3 == "micrograms m-3"'
+                - '_units.SOA4 == "micrograms m-3"'
+                - '_units.SOPA == "micrograms m-3"'
+                - '_units.SOPB == "micrograms m-3"'
+                - '_units.CPRM == "micrograms m-3"'
+            preprocessors: [PM25]
+        PM25:
+            formula: 'PM25*1e-9'
+            flags: [non_gasphase]
+            unit: 'kg/m3'
+            loaded_vars: [PSO4, PNO3, PNH4, POA, PEC, FPRM, SOA1, SOA2, SOA3,
+                SOA4, SOPA, SOPB]
+            validations:
+                - '_units.PSO4 == "micrograms m-3"'
+                - '_units.PNO3 == "micrograms m-3"'
+                - '_units.PNH4 == "micrograms m-3"'
+                - '_units.POA == "micrograms m-3"'
+                - '_units.PEC == "micrograms m-3"'
+                - '_units.FPRM == "micrograms m-3"'
+                - '_units.SOA1 == "micrograms m-3"'
+                - '_units.SOA2 == "micrograms m-3"'
+                - '_units.SOA3 == "micrograms m-3"'
+                - '_units.SOA4 == "micrograms m-3"'
+                - '_units.SOPA == "micrograms m-3"'
+                - '_units.SOPB == "micrograms m-3"'
+            preprocessors: [PM25]
+        HONO:
+            loaded_vars: [ HONO ]
+            validations:
+                - '_units.HONO == "ppmv"'
+        HNO3:
+            loaded_vars: [ HNO3 ]
+            validations:
+                - '_units.HNO3 == "ppmv"'
+        PNA:
+            loaded_vars: [ PNA ]
+            validations:
+                - '_units.PNA == "ppmv"'
+        O1D:
+            molar_mass: 16.0 #g/mol
+            loaded_vars: [ O1D ]
+            validations:
+                - '_units.O1D == "micrograms m-3"'
+        O:
+            molar_mass: 16.0 #g/mol
+            loaded_vars: [ O ]
+            validations:
+                - '_units.O == "micrograms m-3"'
+        OH:
+            molar_mass: 17.0 #g/mol
+            loaded_vars: [ OH ]
+            validations:
+                - '_units.OH == "micrograms m-3"'
+        HO:
+            molar_mass: 17.01 #g/mol
+            loaded_vars: [ HO ]
+            validations:
+                - '_units.HO == "micrograms m-3"'
+        HO2:
+            molar_mass: 33.01 #g/mol
+            loaded_vars: [ HO2 ]
+            validations:
+                - '_units.HO2 == "micrograms m-3"'
+        H2O2:
+            loaded_vars: [ H2O2 ]
+            validations:
+                - '_units.H2O2 == "ppmv"'
+        # MB
+        HCHO:
+            loaded_vars: [ FORM ]
+            validations:
+                - '_units.FORM == "ppmv"'
+            
+        ALD2:
+            loaded_vars: [ ALDX ]
+            validations:
+                - '_units.ALDX == "ppmv"'
+        C2O3:
+            molar_mass: 65.03 #g/mol
+            loaded_vars: [ C2O3 ]
+            validations:
+                - '_units.C2O3 == "micrograms m-3"'
+    
+        PAN:
+            loaded_vars: [ PAN ]
+            validations:
+                - '_units.PAN == "ppmv"'
+        PAR:
+            loaded_vars: [ PAR ]
+            validations:
+                - '_units.PAR == "ppmv"'
+         
+         # MB
+#        ROR:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ ROR ]
+#            validations:
+#                - '_units.ROR == "micrograms m-3"'
+        
+        OLE:
+            loaded_vars: [ OLE ]
+            validations:
+                - '_units.OLE == "ppmv"'
+            
+        ETH:
+            loaded_vars: [ ETH ]
+            validations:
+                - '_units.ETH == "ppmv"'
+            
+        TOL:
+            loaded_vars: [ TOL ]
+            validations:
+                - '_units.TOL == "ppmv"'
+            
+        CRES:
+            loaded_vars: [ CRES ]
+            validations:
+                - '_units.CRES == "ppmv"'
+            
+        'XYL':
+            loaded_vars: [ XYL ]
+            validations:
+                - '_units.PAN == "ppmv"'
+            
+        MGLY:
+            loaded_vars: [ MGLY ]
+            validations:
+                - '_units.MGLY == "ppmv"'
+            
+        ISOP:
+            loaded_vars: [ ISOP ]
+            validations:
+                - '_units.ISOP == "ppmv"'
+            
+         # MB
+#        XO2:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ XO2 ]
+#            validations:
+#                - '_units.XO2 == "micrograms m-3"'
+#
+#        XO2N:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ XO2N ]
+#            validations:
+#                - '_units.XO2N == "micrograms m-3"'
+        
+        CO:
+            loaded_vars: [ CO ]
+            validations:
+                - '_units.CO == "ppmv"'
+            
+        XOPN:
+            loaded_vars: [ XOPN ]
+            validations:
+                - '_units.XOPN == "ppmv"'
+            
+        PH2O:
+            molar_mass: 18.02 #g/mol
+            loaded_vars: [ PH2O ]
+            validations:
+                - '_units.PH2O == "micrograms m-3"'
+            
+        PSO4:
+            molar_mass: 96.06 #g/mol
+            loaded_vars: [ PSO4 ]
+            validations:
+                - '_units.PSO4 == "micrograms m-3"'
+            
+        PNO3:
+            molar_mass: 62.0 #g/mol
+            loaded_vars: [ PNO3 ]
+            validations:
+                - '_units.PNO3 == "micrograms m-3"'
+            
+        PNH4:
+            molar_mass: 18.04 #g/mol
+            loaded_vars: [ PNH4 ]
+            validations:
+                - '_units.PNH4 == "micrograms m-3"'
+            
+        'NA':
+            molar_mass: 79.01 #g/mol
+            loaded_vars: [ 'NA' ]
+            validations:
+                - '_units.NA == "micrograms m-3"'
+#        PCL:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ PCL ]
+#            validations:
+#                - '_units.PCL == "micrograms m-3"'
+#        PEC:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ PEC ]
+#            validations:
+#                - '_units.PEC == "micrograms m-3"'
+#        FPRM:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ FPRM ]
+#            validations:
+#                - '_units.FPRM == "micrograms m-3"'
+#        FCRS:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ FCRS ]
+#            validations:
+#                - '_units.FCRS == "micrograms m-3"'
+#        CPRM:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ CPRM ]
+#            validations:
+#                - '_units.CPRM == "micrograms m-3"'
+#        CCRS:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ CCRS ]
+#            validations:
+#                - '_units.CCRS == "micrograms m-3"'
+#        POA:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ POA ]
+#            validations:
+#                - '_units.POA == "micrograms m-3"'
+#        SOA1:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ SOA1 ]
+#            validations:
+#                - '_units.SOA1 == "micrograms m-3"'
+#        SOA2:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ SOA2 ]
+#            validations:
+#                - '_units.SOA2 == "micrograms m-3"'
+#        SOPA:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ SOPA ]
+#            validations:
+#                - '_units.SOPA == "micrograms m-3"'
+#        SOA3:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ SOA3 ]
+#            validations:
+#                - '_units.SOA3 == "micrograms m-3"'
+#        SOA4:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ SOA4 ]
+#            validations:
+#                - '_units.SOA4 == "micrograms m-3"'
+#        SOPB:
+#            molar_mass: 46.01 #g/mol
+#            loaded_vars: [ SOPB ]
+#            validations:
+#                - '_units.SOPB == "micrograms m-3"'
+    # missing
+    #    H2O
+
+synthetic:
+    prof_vars:
+        u:
+            # The list of vertical profiles of the given quantity, either one
+            # profile for values constant in time or more as timesteps within
+            # timeseries
+            profiles: ~
+
+            # List of heights of the vertical profile points (m above origin_z)
+            heights: ~
+
+            # If specified, allows arbitrary permutation or repetition of
+            # timesteps from "profiles" (using order numbers starting from 0).
+            # If unspecified, the profiles are taken sequentially, starting
+            # over from the first one if there is less of them than "times".
+            timeseries: ~
+
+            # Time points for the timeseries. This may be omitted if there is
+            # exactly one profile (constant in time).
+            times: ~
+
+        v: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+        w: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+        pt: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+        qv: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+        soil_t: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+        soil_m: {profiles: ~, heights: ~, timeseries: ~, times: ~}
+
+    p_surf: ~ #pressure at origin_z (default: calculate from p_sl)
+    p_sl: 100000. #sea level pressure for p_surf calculation
+
+srid_palm: 32633
+srid_wgs84: 4326
+aladin:
+    load_gribs: true
+    vertical_adaptation: universal
+
+    radiation_smoothing_distance: 10000.0
+
+    soil_depth_default: 0.40
+    soil_avg_point: [ 14.418540, 50.073658 ]
+
+    dimensions:
+        time: time
+        x: x_meteo
+        xs: xu_meteo
+        y: y_meteo
+        ys: yv_meteo
+        z: z_meteo
+        zs: zw_meteo
+        soil_layers_stag: zsoil_meteo
+    
+    # horizontally interpolated variables (apart from U+V)
+    hinterp_vars: [ W, T, PH, P, TSLB, SMOIS, SMOIS1 ]
+    
+    # variables that compose specific humidity as a sum
+    spechum_vars: [ Q ]
+    
+    # FIXME: how to deal with pressure on the ground: level 0
+    
+    # 1-d variables, direct copy
+    vars_1d: [ ]
+
+icon:
+    # Compose continuous timeseries for the simululation using one or more
+    # forecast/assimilation cycles from the set of input files
+    assim_cycles:
+        # Interval between assimilation cycles to be used (a larger time
+        # interval can be specified in order to use every nth cycle).
+        cycles_used: 3 h    # default: time interval
+        #cycles_used: single # use one specified cycle
+
+        # Datetime for the reference cycle from which the selected cycle
+        # intervals are counted, or the selected cycle if cycles_used=single.
+        # Default: 00:00 UTC from the first day of simulation.
+        reference_cycle:
+
+        # Earliest horizon (time since cycle time) to be used in the
+        # simulation. If set to higher than 0, the 0th file of each cycle must
+        # still be available to load the level heights (HHL).
+        earliest_horizon: 0 h
+
+    # The disaggregated values (radiation) represent centres of intervals
+    # between timesteps, therefore to cover the full duration of the
+    # simulation, one more time interval before and after the simulation are
+    # required. Enable this to allow skipping them using extrapolation.
+    allow_skip_first_disaggr: true
+    allow_skip_last_disaggr: true
+
+    # Distance [km] for selecting nearby grid points usable for interpolation.
+    # Recommended value: original grid resolution × 3
+    point_selection_buffer: 20.0
+
+    radiation_smoothing_distance: 30.0 #km
+
+    vars_2d: [PS]
+    vars_3d: [P, T, U, V, QV]
+    vars_3dw: [W] #HHL is special
+    vars_soil: [T_SO, QSOIL]
+
+cams:
+    validations: [ ]
+    
+    loaded_vars: [ ]
+    
+    preprocessors:
+    
+    output_var_defs:
+        __user_expandable__: true
+
+        'NO': #NO without quotes means False in yaml!
+            molar_mass: 30.01 #g/mol
+            loaded_vars: [no_conc]
+            validations:
+                - '_units.no_conc == "µg/m3"'
+        NO2:
+            molar_mass: 46.01 #g/mol
+            loaded_vars: [no2_conc]
+            validations:
+                - '_units.no2_conc == "µg/m3"'
+        # NOX: #currently unsupported - needs conversion to ppmv _before_ summing 
+        #     formula: 'no_conc+no2_conc'
+        #     unit: 'µg/m3'
+        #     loaded_vars: [no_conc, no2_conc]
+        #     validations:
+        #         - '_units.no_conc == "µg/m3"'
+        #         - '_units.no2_conc == "µg/m3"'
+        O3:
+            molar_mass: 48.00 #g/mol
+            loaded_vars: [o3_conc]
+            validations:
+                - '_units.o3_conc == "µg/m3"'
+        PM10:
+            flags: [non_gasphase]
+            loaded_vars: [pm10_conc]
+            validations:
+                - '_units.pm10_conc == "µg/m3"'
+        PM25:
+            flags: [non_gasphase]
+            loaded_vars: [pm2p5_conc]
+            validations:
+                - '_units.pm2p5_conc == "µg/m3"'
+
+winddamp:
+    # Distance in number of grid cells from the wall which have some wind
+    # damping. Cells further from the wall will have no damping.
+    damping_dist: 2
+
+    # Distance in number of grid cells from the wall which are damped to zero.
+    # The next cells further from the wall have a damping factor which
+    # increases linearly to 1.
+    num_zeroed: 1
+
+    # Method of staggering the damping factor for the U, V and W wind
+    # components by taking adjacent cells in the respective dimension.
+    stagger_method: average #default
+    #stagger_method: minimum
+
+
+# Configuration items for selected tasks
+task_config:
+    wrf:
+        # Configuration items to be set (if unset by user)
+        set:
+
+        # Configuration items to be extended (added) to existing lists (or new
+        # lists are created).
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.wrf.WRFPlugin
+    aladin:
+        set:
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.aladin.AladinPlugin
+
+    wrf_rad:
+        set:
+            radiation:
+                enabled: true
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.wrf.WRFRadPlugin
+
+    aladin_rad:
+        set:
+            radiation:
+                enabled: true
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.aladin.AladinRadPlugin
+
+    camx:
+        set:
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.camx.CAMxPlugin
+
+    synthetic:
+        set:
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.synthetic.SyntheticPlugin
+                
+    cams:
+        set:
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.cams.CAMSPlugin
+
+    icon:
+        set:
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.icon.IconPlugin
+
+    winddamp:
+        set:
+        extend:
+            plugins:
+                - palmmeteo_stdplugins.winddamp.WindDampPlugin

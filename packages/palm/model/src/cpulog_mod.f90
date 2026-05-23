@@ -427,14 +427,14 @@
                              npey, threads_per_task, nx+1, ny+1, nz, nr_timesteps_this_run,        &
                              average_cputime
 
-          WRITE ( 18, 110 )
 #else
           WRITE ( 18, 100 )  TRIM( run_description_header ), numprocs * threads_per_task, 1, 1,    &
                              threads_per_task, nx+1, ny+1, nz, nr_timesteps_this_run,              &
                              average_cputime
 
-          WRITE ( 18, 110 )
 #endif
+          IF ( wp == sp )  WRITE ( 18, 106 )
+          WRITE ( 18, 110 )
           DO
              ii = MAXLOC( sum )
              i = ii(1)
@@ -535,6 +535,7 @@
    103 FORMAT (/'Barriers are set in front of collective operations')
    104 FORMAT (/'No barriers are set in front of collective operations')
    105 FORMAT (/A)
+   106 FORMAT ('running with 32-bit single precision')
    107 FORMAT (/'Restart file size:   ',F12.1,' MByte'/                                            &
                &'I/O transfer speed:  ',F12.1,' MByte / sec')
    108 FORMAT (/'3d-netCDF file size: ',F12.1,' MByte (uncompressed!)'/                            &

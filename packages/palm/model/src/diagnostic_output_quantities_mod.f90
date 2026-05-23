@@ -93,6 +93,11 @@
                restart_string,                                                                     &
                varnamelength
 
+#if defined( _OPENACC )
+    USE control_parameters,                                                                        &
+        ONLY:  enable_openacc
+#endif
+
     USE exchange_horiz_mod,                                                                        &
         ONLY:  exchange_horiz_2d
 
@@ -361,14 +366,20 @@
           CASE ( 'div_new' )
              IF ( .NOT. ALLOCATED( div_new_av ) )  THEN
                 ALLOCATE( div_new_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
+                !$ACC ENTER DATA COPYIN(div_new_av) IF(enable_openacc)
              ENDIF
+             !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
              div_new_av = 0.0_wp
+             !$ACC END KERNELS
 
           CASE ( 'div_old' )
              IF ( .NOT. ALLOCATED( div_old_av ) )  THEN
                 ALLOCATE( div_old_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
+                !$ACC ENTER DATA COPYIN(div_old_av) IF(enable_openacc)
              ENDIF
+             !$ACC KERNELS DEFAULT(PRESENT) IF(enable_openacc)
              div_old_av = 0.0_wp
+             !$ACC END KERNELS
 
           CASE ( 'kfd*' )
              IF ( .NOT. ALLOCATED( kfd_av ) )  THEN
@@ -598,6 +609,8 @@
 
           CASE ( 'div_new' )
              IF ( ALLOCATED( div_new_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxl, nxr
                    DO  j = nys, nyn
                       DO  k = nzb+1, nzt
@@ -609,6 +622,8 @@
 
           CASE ( 'div_old' )
              IF ( ALLOCATED( div_old_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxl, nxr
                    DO  j = nys, nyn
                       DO  k = nzb+1, nzt
@@ -973,6 +988,8 @@
 
           CASE ( 'div_new' )
              IF ( ALLOCATED( div_new_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxl, nxr
                    DO  j = nys, nyn
                       DO  k = nzb+1, nzt
@@ -984,6 +1001,8 @@
 
           CASE ( 'div_old' )
              IF ( ALLOCATED( div_old_av ) )  THEN
+                !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+                !$ACC DEFAULT(PRESENT) IF(enable_openacc)
                 DO  i = nxl, nxr
                    DO  j = nys, nyn
                       DO  k = nzb+1, nzt
@@ -1855,6 +1874,7 @@
               IF ( .NOT. ALLOCATED( div_new_av ) )  THEN
                  ALLOCATE( div_new_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                  div_new_av = 0.0_wp
+                 !$ACC ENTER DATA COPYIN(div_new_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
               ENDIF
               to_be_resorted => div_new_av
            ENDIF
@@ -1869,6 +1889,7 @@
               IF ( .NOT. ALLOCATED( div_old_av ) )  THEN
                  ALLOCATE( div_old_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                  div_old_av = 0.0_wp
+                 !$ACC ENTER DATA COPYIN(div_old_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
               ENDIF
               to_be_resorted => div_old_av
            ENDIF
@@ -2532,6 +2553,8 @@
     END SELECT
 
     IF ( found  .AND.  .NOT. resorted )  THEN
+       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl, nxr
           DO  j = nys, nyn
              DO  k = nzb_do, nzt_do
@@ -2586,6 +2609,7 @@
              IF ( .NOT. ALLOCATED( div_new_av ) )  THEN
                 ALLOCATE( div_new_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 div_new_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(div_new_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
              ENDIF
              to_be_resorted => div_new_av
           ENDIF
@@ -2598,6 +2622,7 @@
              IF ( .NOT. ALLOCATED( div_old_av ) )  THEN
                 ALLOCATE( div_old_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 div_old_av = 0.0_wp
+                !$ACC ENTER DATA COPYIN(div_old_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg)) IF(enable_openacc)
              ENDIF
              to_be_resorted => div_old_av
           ENDIF
@@ -2825,6 +2850,8 @@
     END SELECT
 
     IF ( found  .AND.  .NOT. resorted )  THEN
+       !$ACC PARALLEL LOOP COLLAPSE(3) PRIVATE(i, j, k) &
+       !$ACC DEFAULT(PRESENT) IF(enable_openacc)
        DO  i = nxl, nxr
           DO  j = nys, nyn
              DO  k = nzb_do, nzt_do
@@ -3133,12 +3160,14 @@
              IF ( .NOT. ALLOCATED( div_new ) )  THEN
                 ALLOCATE( div_new(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 div_new = 0.0_wp
+                !$ACC ENTER DATA COPYIN(div_new) IF(enable_openacc)
              ENDIF
 
           CASE ( 'div_old' )
              IF ( .NOT. ALLOCATED( div_old ) )  THEN
                 ALLOCATE( div_old(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
                 div_old = 0.0_wp
+                !$ACC ENTER DATA COPYIN(div_old) IF(enable_openacc)
              ENDIF
 !
 !--       Allocate array for 'katabatic flow depth'.
@@ -4412,7 +4441,7 @@
 !
 !--       Check where shear-productions is dropped to 1/e times its maximum. Further,
 !--       the katabatic flow cannot be as height as the topography itself.
-          IF ( ( shear_production(k) / shear_production(k_max) ) > 0.36_wp  .AND.                  &
+          IF ( ( shear_production(k) / ( shear_production(k_max) + 1E-10_wp ) ) > 0.36_wp  .AND.   &
                ( zu(k) - zw(topo_top_ind(j,i,0)) ) <= zu(nzb_max) )                                &
           THEN
              k_detect = k
@@ -4697,7 +4726,7 @@
           j = surf%j(m)
           k = surf%k(m)
 !
-!--       If 10-m level is below the first grid level, the lowest level is applied as 10-m wind    
+!--       If 10-m level is below the first grid level, the lowest level is applied as 10-m wind
 !--       direction.
           IF ( surf%z_mo(m) > 10.0_wp )  THEN
              u_10m(j,i) = 0.5_wp * ( u(k,j,i) + u(k,j,i+1) )

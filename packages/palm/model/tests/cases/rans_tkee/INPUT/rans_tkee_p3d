@@ -8,6 +8,7 @@
          dz_stretch_level = 2000.0, 
 
          psolver = 'multigrid',
+         masking_method = .F.,
          cycle_mg = 'w',
          mg_cycles = 2,
          mg_switch_to_pe0_level=-1,

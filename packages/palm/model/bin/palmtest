@@ -729,7 +729,6 @@ class PALMBuild:
         self.requires_mpi = False
         self.requires_netcdf = False
         self.requires_fftw = False
-        self.requires_rrtmg = False
         self.requires_tenstream = False
         self.attempted_non_debug = False
         self.attempted_debug = False
@@ -771,8 +770,6 @@ class PALMBuild:
                     self.requires_netcdf = True
                 if 'include.fftw}}' in include:
                     self.requires_fftw = True
-                if 'include.rrtmg}}' in include:
-                    self.requires_rrtmg = True
                 if 'include.tenstream}}' in include:
                     self.requires_tenstream = True
         else:
@@ -784,8 +781,6 @@ class PALMBuild:
                     self.requires_netcdf = True
                 if 'lib.fftw}}' in lib:
                     self.requires_fftw = True
-                if 'lib.rrtmg}}' in lib:
-                    self.requires_rrtmg = True
                 if 'lib.tenstream}}' in lib:
                     self.requires_tenstream = True
         else:
@@ -796,8 +791,6 @@ class PALMBuild:
             library_names.append('netcdf')
         if self.requires_fftw:
             library_names.append('fftw')
-        if self.requires_rrtmg:
-            library_names.append('rrtmg')
         if self.requires_tenstream:
             library_names.append('tenstream')
 
@@ -815,6 +808,15 @@ class PALMBuild:
 
         if not 'debug' in self.compiler['c_options']:
             return True, colored('[missing \"debug\" keyword in compiler.c_options]', 'red')
+
+        if not 'rrtmg_options' in self.compiler:
+            return True, colored('[missing \"rrtmg_options\" keyword in compiler]', 'red')
+
+        if not 'default' in self.compiler['rrtmg_options']:
+            return True, colored('[missing \"default\" keyword in compiler.rrtmg_options]', 'red')
+
+        if not 'debug' in self.compiler['rrtmg_options']:
+            return True, colored('[missing \"debug\" keyword in compiler.rrtmg_options]', 'red')
 
         if not 'options' in self.compiler:
             return True, colored('[missing \"options\" keyword in compiler]', 'red')
@@ -855,7 +857,9 @@ class PALMBuild:
         template = template.replace('@PALM_CORES@', str(multiprocessing.cpu_count()))
         template = template.replace('@PALM_C_COMPILER_OPTIONS@', '{{palmtest.compiler.c_options}} ')
         template = template.replace('@PALM_COMPILER_OPTIONS@', '{{palmtest.compiler.options}} ' + ' '.join(self.compiler['includes']))
+        template = template.replace('@RRTMG_COMPILER_OPTIONS@', '{{palmtest.compiler.rrtmg_options}} ' + ' '.join(self.compiler['includes']))
         template = template.replace('@PALM_LINKER_OPTIONS@', ' '.join(self.linker['options']))
+        template = template.replace('@RRTMG_LINKER_OPTIONS@', ' '.join(self.linker['options']))
         template = template.replace('@PALM_SOURCE_PATH@', Environment.src_dir)
 
         if 'environments' in palmtest_config:
@@ -917,6 +921,10 @@ class PALMBuild:
                 ' '.join(self.compiler['c_options']['default']),
             )
             template_default = template_default.replace(
+                '{{palmtest.compiler.rrtmg_options}}',
+                ' '.join(self.compiler['rrtmg_options']['default']),
+            )
+            template_default = template_default.replace(
                 '{{palmtest.compiler.options}}',
                 ' '.join(self.compiler['options']['default']),
             )
@@ -926,6 +934,10 @@ class PALMBuild:
             template_debug = template.replace(
                 '{{palmtest.compiler.c_options}}',
                 ' '.join(self.compiler['c_options']['debug']),
+            )
+            template_debug = template_debug.replace(
+                '{{palmtest.compiler.rrtmg_options}}',
+                ' '.join(self.compiler['rrtmg_options']['debug']),
             )
             template_debug = template_debug.replace(
                 '{{palmtest.compiler.options}}',
@@ -1120,9 +1132,9 @@ class PALMTest:
                 h = dict()
                 h['Content-Type'] = 'application/json'
                 h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-                h['Authorization'] = f'basic cGFsbXRlc3RfdjI1LjA0OkJSQStIUzRrUWlCc0xucERIWEpO'
+                h['Authorization'] = f'basic cGFsbXRlc3RfdjI1LjEwLXJjLjE6R1RJRUxnNC9RUkkxSVZ0bFcwWllTQndyZlFNPQ=='
                 q = '''query palmtest($current: String!) { check_version(input: {current: $current}) { show message } }'''
-                v = {'current': 'v25.04'}
+                v = {'current': 'v25.10-rc.1'}
                 c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
                 c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
                 r = c.getresponse()

@@ -11,8 +11,8 @@
 # You should have received a copy of the GNU General Public License along with
 # PALM. If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 1997-2024  Leibniz Universitaet Hannover
-# Copyright 2022-2024  Technische Universitaet Berlin
+# Copyright 1997-2025  Leibniz Universitaet Hannover
+# Copyright 2022-2025  Technische Universitaet Berlin
 
 """Visualize the height-dependence of the Leaf Area Density (LAD) for different formulations."""
 
@@ -29,6 +29,7 @@ from palm_csd.vegetation import CanopyGenerator  # noqa: E402
 
 # input values, most of them are not important for the plot
 dz = 0.2
+pixel_size = 1.0
 patch_height = ma.ones((1, 1)) * 20.0
 patch_lai = ma.ones((1, 1)) * 8.0
 
@@ -52,9 +53,13 @@ lad_Metal2002 = xr.DataArray(
 for alpha in lad_Metal2002.alpha.values:
     for beta in lad_Metal2002.beta.values:
         canopy_generator = CanopyGenerator(
-            method="Metal2003", alpha_Metal2003=alpha, beta_Metal2003=beta
+            method="Metal2003",
+            alpha_Metal2003=alpha,
+            beta_Metal2003=beta,
+            dz=dz,
+            pixel_size=pixel_size,
         )
-        lad_tmp, *_ = canopy_generator.process_patch(dz, patch_height, patch_type, patch_lai)
+        lad_tmp, *_ = canopy_generator.process_patch(patch_height, patch_type, patch_lai)
 
         lad_Metal2002.loc[dict(alpha=alpha, beta=beta)] = (
             lad_tmp[1:, 0, 0] * patch_height[0, 0] / patch_lai[0, 0]
@@ -72,8 +77,13 @@ lad_LM2004 = xr.DataArray(
 
 # prepare data for different alpha and beta values
 for z_max_rel in lad_LM2004.z_max_rel.values:
-    canopy_generator = CanopyGenerator(method="LM2004", z_max_rel_LM2004=z_max_rel)
-    lad_tmp, *_ = canopy_generator.process_patch(dz, patch_height, patch_type, patch_lai)
+    canopy_generator = CanopyGenerator(
+        method="LM2004",
+        z_max_rel_LM2004=z_max_rel,
+        dz=dz,
+        pixel_size=pixel_size,
+    )
+    lad_tmp, *_ = canopy_generator.process_patch(patch_height, patch_type, patch_lai)
 
     lad_LM2004.loc[dict(z_max_rel=z_max_rel)] = (
         lad_tmp[1:, 0, 0] * patch_height[0, 0] / patch_lai[0, 0]
