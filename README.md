@@ -1,5 +1,15 @@
 # PALM Model System
 
+**!!! Unofficial Repository !!!**
+
+This repository is cloned from [Official PALM Repository](https://gitlab.palm-model.org/releases/palm_model_system), with some patches which make it possible to install PALM on Arch Linux.
+
+New version of PALM will be merged into the [main](https://github.com/Syize/palm-model) branch, which will be **forcibly** updated after rebase.
+
+Below is the original README.
+
+---
+
 This is a collection of software packages that contain PALM and numerous additional tools that support PALM and extend its functionality. PALM is an advanced and modern meteorological model system for atmospheric and oceanic boundary-layer flows. It has been developed as a turbulence-resolving large-eddy simulation (LES) model that is especially designed for performing on massively parallel computer architectures.
 
 The following [packages](packages) are included (in alphabetical order):
