@@ -343,7 +343,7 @@
      REAL(wp) ::  e_imp                 !< imposed evaporation per leaf area and time (kg/m2/s)
      REAL(wp) ::  e_imp_pot             !< imposed evaporation per leaf area and time for full soil moisture (kg/m2/s)
      REAL(wp) ::  evaporation_rate      !< evaporation per grid volume and time (kg/m3/s)
-     REAL(wp) ::  evaporation_rate_pot  !< evaporation per grid volume and time for full soil moisture (kg/m3/s)     
+     REAL(wp) ::  evaporation_rate_pot  !< evaporation per grid volume and time for full soil moisture (kg/m3/s)
      REAL(wp) ::  f1                    !< radiation dependent factor of stomatal conductivity
      REAL(wp) ::  f2                    !< temperature dependent factor of stomatal conductivity
      REAL(wp) ::  f3                    !< water pressure deficit dependent factor of stomatal conductivity
@@ -428,7 +428,7 @@
 !--  Daudet et al. (1999) eq. 3 multiplied by leaf area density
 !--  (evaporation rate is limited to non-negative values)
      evaporation_rate = MAX( d_fact * e_eq + ( 1.0_wp - d_fact ) * e_imp, 0.0_wp ) * lad_s(kk,j,i)
-     evaporation_rate_pot =                                                                        & 
+     evaporation_rate_pot =                                                                        &
         MAX( d_fact_max_water * e_eq + ( 1.0_wp - d_fact_max_water ) * e_imp_pot, 0.0_wp ) *       &
         lad_s(kk,j,i)
 !
@@ -857,7 +857,7 @@
                      ENDDO
                   ENDDO
                ENDIF
-  
+
 
        END SELECT
 
@@ -2243,7 +2243,7 @@
           pcm_transpiration_vol_pot_av = tmp_3d(nzb:pch_index,:,:)
           DEALLOCATE( tmp_3d )
        ENDIF
-       
+
     END SUBROUTINE pcm_rrd_local_mpi
 
 
@@ -2609,8 +2609,8 @@
                                                          ( 0.5_wp * ( v(k,j,i) +                   &
                                                                       v(k,j+1,i) )                 &
                                                          )**2 +                                    &
-                                                         ( 0.5_wp * ( w(k,j,i) +                   &
-                                                                      w(k+1,j,i) )                 &
+                                                         ( 0.5_wp * ( w(k-1,j,i) +                 &
+                                                                      w(k,j,i) )                   &
                                                          )**2                                      &
                                                        ) *                                         &
                                                    e(k,j,i)
@@ -2994,8 +2994,8 @@
                                                    ( 0.5_wp * ( v(k,j,i) +                         &
                                                                 v(k,j+1,i) )                       &
                                                    )**2 +                                          &
-                                                   ( 0.5_wp * ( w(k,j,i) +                         &
-                                                                w(k+1,j,i) )                       &
+                                                   ( 0.5_wp * ( w(k-1,j,i) +                       &
+                                                                w(k,j,i) )                         &
                                                    )**2                                            &
                                                  ) *                                               &
                                              e(k,j,i)

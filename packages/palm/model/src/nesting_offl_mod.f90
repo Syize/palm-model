@@ -90,6 +90,7 @@
                rayleigh_damping_height,                                                            &
                salsa,                                                                              &
                spinup_time,                                                                        &
+               syn_turb_gen,                                                                       &
                time_since_reference_point,                                                         &
                volume_flow
 
@@ -2586,11 +2587,12 @@
 !> Performs consistency checks
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE nesting_offl_check_parameters
+
 !
 !-- Check if offline nesting is applied in nested child domain.
     IF ( nesting_offline  .AND.  child_domain )  THEN
-       message_string = 'offline nesting is only applicable in root model'
-       CALL message( 'offline_nesting_check_parameters', 'OLN0001', 1, 2, 0, 6, 0 )
+       message_string = 'mesoscale nesting is only applicable in root model'
+       CALL message( 'offline_nesting_check_parameters', 'MSN0001', 1, 2, 0, 6, 0 )
     ENDIF
 !
 !-- Mesoscale nesting requires initializtion of velocity, potential temperature and humidity from
@@ -2598,9 +2600,16 @@
 !-- data might create large disturbances that can lead to velocity blow-ups.
     IF ( TRIM( initializing_actions ) /= 'read_restart_data' )  THEN
        IF ( nesting_offline  .AND.  INDEX( initializing_actions, 'read_from_file' ) == 0 )  THEN
-          message_string = 'offline nesting requires initializing_actions = "read_from_file"'
-          CALL message( 'offline_nesting_check_parameters', 'OLN0002', 1, 2, 0, 6, 0 )
+          message_string = 'mesoscale nesting requires initializing_actions = "read_from_file"'
+          CALL message( 'offline_nesting_check_parameters', 'MSN0002', 1, 2, 0, 6, 0 )
        ENDIF
+    ENDIF
+!
+!-- Mesoscale nesting requires some kind of turbulence generation at the boundary. At the moment
+!-- only the synthetic turbulence generator after Xie and Castro (2008) is available.
+    IF ( nesting_offline  .AND.  .NOT.  syn_turb_gen )  THEN
+       message_string = 'mesoscale nesting requires synthetic turbulence generator'
+       CALL message( 'offline_nesting_check_parameters', 'MSN0006', 1, 2, 0, 6, 0 )
     ENDIF
 
  END SUBROUTINE nesting_offl_check_parameters
@@ -2829,7 +2838,7 @@
               nest_offl%lod_top_pt,   nest_offl%lod_top_qv,   nest_offl%lod_top_u,                 &
               nest_offl%lod_top_v,    nest_offl%lod_top_w ) )  THEN
        message_string = 'mixture of different LOD for the provided boundary data is not possible'
-       CALL message( 'nesting_offl_init', 'OLN0003', 1, 2, 0, 6, 0 )
+       CALL message( 'nesting_offl_init', 'MSN0003', 1, 2, 0, 6, 0 )
     ENDIF
 !
 !-- As all LODs are the same, store it.
@@ -2995,7 +3004,7 @@
     IF ( .NOT. input_pids_dynamic )  THEN
        message_string = 'nesting_offline = .TRUE. requires dynamic input file'  //                 &
                          TRIM( input_file_dynamic ) // TRIM( coupling_char )
-       CALL message( 'nesting_offl_init', 'OLN0004', 1, 2, 0, 6, 0 )
+       CALL message( 'nesting_offl_init', 'MSN0004', 1, 2, 0, 6, 0 )
     ENDIF
 !
 !-- Read COSMO data at lateral and top boundaries
@@ -3007,7 +3016,7 @@
     IF ( end_time - spinup_time > nest_offl%time(nest_offl%nt-1) )  THEN
        message_string = 'end_time of the simulation exceeds the ' //                               &
                         'time dimension in the dynamic input file'
-       CALL message( 'nesting_offl_init', 'OLN0005', 1, 2, 0, 6, 0 )
+       CALL message( 'nesting_offl_init', 'MSN0005', 1, 2, 0, 6, 0 )
     ENDIF
 !
 !-- Set indicies for boundary grid points

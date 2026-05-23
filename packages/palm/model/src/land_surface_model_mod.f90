@@ -200,14 +200,14 @@
 
 !
 !-- LSM model constants
-    REAL(wp), PARAMETER ::  b_ch           = 6.04_wp   ! Clapp & Hornberger exponent
-    REAL(wp), PARAMETER ::  lambda_h_dry   = 0.19_wp   ! heat conductivity for dry soil (W/m/K)
-    REAL(wp), PARAMETER ::  lambda_h_sm    = 3.44_wp   ! heat conductivity of the soil matrix (W/m/K)
-    REAL(wp), PARAMETER ::  lambda_h_water = 0.57_wp   ! heat conductivity of water (W/m/K)
-    REAL(wp), PARAMETER ::  m_max_depth    = 0.0002_wp ! Maximum capacity of the water reservoir on a flat surface (leaf/bare soil) (m)
-    REAL(wp), PARAMETER ::  psi_sat        = -0.388_wp ! soil matrix potential at saturation
-    REAL(wp), PARAMETER ::  rho_c_soil     = 2.19E6_wp ! volumetric heat capacity of soil (J/m3/K)
-    REAL(wp), PARAMETER ::  rho_c_water    = 4.20E6_wp  ! volumetric heat capacity of water (J/m3/K)
+    REAL(wp), PARAMETER ::  b_ch           = 6.04_wp   !< Clapp & Hornberger exponent
+    REAL(wp), PARAMETER ::  lambda_h_dry   = 0.19_wp   !< heat conductivity for dry soil (W/m/K)
+    REAL(wp), PARAMETER ::  lambda_h_sm    = 3.44_wp   !< heat conductivity of the soil matrix (W/m/K)
+    REAL(wp), PARAMETER ::  lambda_h_water = 0.57_wp   !< heat conductivity of water (W/m/K)
+    REAL(wp), PARAMETER ::  m_max_depth    = 0.0002_wp !< Maximum capacity of the water reservoir on a flat surface (leaf/bare soil) (m)
+    REAL(wp), PARAMETER ::  psi_sat        = -0.388_wp !< soil matrix potential at saturation
+    REAL(wp), PARAMETER ::  rho_c_soil     = 2.19E6_wp !< volumetric heat capacity of soil (J/m3/K)
+    REAL(wp), PARAMETER ::  rho_c_water    = 4.20E6_wp !< volumetric heat capacity of water (J/m3/K)
 
 
     REAL(wp), DIMENSION(0:7), PARAMETER  :: dz_soil_default =                                      & !< default soil layer configuration

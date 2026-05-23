@@ -190,7 +190,7 @@
     ENDIF
 
 !
-!-- Set the switch that tells if data of the toal domain is gathered on the PE
+!-- Set the switch that tells if data of the total domain is gathered on the PE.
     IF ( PRESENT( mg_switch_to_pe0 ) )  THEN
        switch_to_pe0 = mg_switch_to_pe0
     ELSE
@@ -1123,7 +1123,7 @@
 !> @todo Missing subroutine description.
 !--------------------------------------------------------------------------------------------------!
  SUBROUTINE exchange_horiz_int( ar, nys_l, nyn_l, nxl_l, nxr_l, nzt_l, nbgp_local, type_xz_in,     &
-                                type_yz_in, alternative_communicator )
+                                type_yz_in, alternative_communicator, mg_switch_to_pe0 )
 
     USE control_parameters,                                                                        &
         ONLY:  bc_lr_cyc,                                                                          &
@@ -1154,6 +1154,18 @@
     INTEGER(iwp), DIMENSION(nzb:nzt_l+1,nys_l-nbgp_local:nyn_l+nbgp_local,                         &
                             nxl_l-nbgp_local:nxr_l+nbgp_local) ::  ar  !< treated array
 
+    LOGICAL, OPTIONAL, INTENT(IN) ::  mg_switch_to_pe0
+
+    LOGICAL ::  switch_to_pe0  !< local switch telling if total domain is gathered on one PE
+
+
+!
+!-- Set the switch that tells if data of the total domain is gathered on the PE.
+    IF ( PRESENT( mg_switch_to_pe0 ) )  THEN
+       switch_to_pe0 = mg_switch_to_pe0
+    ELSE
+       switch_to_pe0 = .FALSE.
+    ENDIF
 
 !
 !-- Set MPI datatype depending on the requested task.
@@ -1197,7 +1209,7 @@
 
 
 #if defined( __parallel )
-    IF ( npex == 1 )  THEN
+    IF ( npex == 1  .OR.  switch_to_pe0 )  THEN
 !
 !--    One-dimensional decomposition along y, boundary values can be exchanged within the PE memory.
        IF ( PRESENT( alternative_communicator ) )  THEN
@@ -1225,7 +1237,7 @@
     ENDIF
 
 
-    IF ( npey == 1 )  THEN
+    IF ( npey == 1  .OR.  switch_to_pe0 )  THEN
 !
 !--    One-dimensional decomposition along x, boundary values can be exchanged within the PE memory.
        IF ( PRESENT( alternative_communicator ) )  THEN

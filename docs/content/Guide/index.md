@@ -22,5 +22,4 @@ bar at the top of the page to move through the documentation in order.
 ## Currently available pages
 
 - [LES Model](LES_Model/index.md)
-- [Tools](Tools/index.md)
 - [Tutorials](Tutorials/index.md)

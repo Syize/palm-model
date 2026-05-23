@@ -3820,8 +3820,11 @@
                    ENDIF
 
 !
-!--                Interpolate the TKE gradient along z
-                   IF ( zv(n) < 0.5_wp * dz(1) )  THEN
+!--                Interpolate the TKE gradient along z (zw(0) required for ocean mode, where it
+!--                is non zero).
+!--                ATTENTION: Using dz(1) is not correct for ocean mode in case of non-equidistant
+!--                           vertical grid spacing.
+                   IF ( ( zv(n) - zw(0) ) < 0.5_wp * dz(1) )  THEN
                       de_dz_int(n) = 0.0_wp
                    ELSE
                       de_dz_int_l = ( ( gg - aa ) * de_dz(k,j,i)   +                               &
@@ -3892,11 +3895,13 @@
                 kw = kp - 1
 
                 IF ( k == 0 )  THEN
-                   aa  = hom(k+1,1,30,0)  * ( zv(n) / &
+!
+!--                zw(0) required for ocean mode, where it is non zero.
+                   aa  = hom(k+1,1,30,0)  * ( ( zv(n) - zw(0) ) /                                  &
                                             ( 0.5_wp * ( zu(k+1) - zu(k) ) ) )
-                   bb  = hom(k+1,1,31,0)  * ( zv(n) / &
+                   bb  = hom(k+1,1,31,0)  * ( ( zv(n) - zw(0) ) /                                  &
                                             ( 0.5_wp * ( zu(k+1) - zu(k) ) ) )
-                   cc  = hom(kw+1,1,32,0) * ( zv(n) / &
+                   cc  = hom(kw+1,1,32,0) * ( ( zv(n) - zw(0) ) /                                  &
                                             ( 1.0_wp * ( zw(kw+1) - zw(kw) ) ) )
                 ELSE
                    aa  = hom(k,1,30,0) + ( hom(k+1,1,30,0) - hom(k,1,30,0) ) *                     &
@@ -4098,19 +4103,21 @@
              kw = kp - 1
 
              IF ( k == 0 )  THEN
-                aa  = hom(k+1,1,30,0)  * ( zv(n) / &
+!
+!--             zw(0) required for ocean mode, where it is non zero.
+                aa  = hom(k+1,1,30,0)  * ( ( zv(n) - zw(0) ) /                                     &
                                          ( 0.5_wp * ( zu(k+1) - zu(k) ) ) )
-                bb  = hom(k+1,1,31,0)  * ( zv(n) / &
+                bb  = hom(k+1,1,31,0)  * ( ( zv(n) - zw(0) ) /                                     &
                                          ( 0.5_wp * ( zu(k+1) - zu(k) ) ) )
-                cc  = hom(kw+1,1,32,0) * ( zv(n) / &
+                cc  = hom(kw+1,1,32,0) * ( ( zv(n) - zw(0) ) /                                     &
                                          ( 1.0_wp * ( zw(kw+1) - zw(kw) ) ) )
              ELSE
-                aa  = hom(k,1,30,0) + ( hom(k+1,1,30,0) - hom(k,1,30,0) ) *                        &
-                           ( ( zv(n) - zu(k) ) / ( zu(k+1) - zu(k) ) )
-                bb  = hom(k,1,31,0) + ( hom(k+1,1,31,0) - hom(k,1,31,0) ) *                        &
-                           ( ( zv(n) - zu(k) ) / ( zu(k+1) - zu(k) ) )
+                aa  = hom(k,1,30,0)  + ( hom(k+1,1,30,0) - hom(k,1,30,0) ) *                       &
+                                       ( ( zv(n) - zu(k) ) / ( zu(k+1) - zu(k) ) )
+                bb  = hom(k,1,31,0)  + ( hom(k+1,1,31,0) - hom(k,1,31,0) ) *                       &
+                                       ( ( zv(n) - zu(k) ) / ( zu(k+1) - zu(k) ) )
                 cc  = hom(kw,1,32,0) + ( hom(kw+1,1,32,0)-hom(kw,1,32,0) ) *                       &
-                           ( ( zv(n) - zw(kw) ) / ( zw(kw+1)-zw(kw) ) )
+                                       ( ( zv(n) - zw(kw) ) / ( zw(kw+1)-zw(kw) ) )
              ENDIF
 
 

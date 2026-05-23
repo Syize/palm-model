@@ -37,7 +37,7 @@ import os
 import shutil
 
 global version
-version = "PALM 25.10-rc.1"
+version = "PALM 25.10"
 global update_frequency
 update_frequency = 5*60000
 

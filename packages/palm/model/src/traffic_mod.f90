@@ -1622,8 +1622,8 @@
     ENDIF
 !
 !-- Find the new timestamp position and index (require ordered timestamp in nc file).
-    WRITE( message_string, *) 'Reading new timestep from traffic intput data:', trm_ts_index, trm_next_ts
-    CALL location_message(message_string, 'start' )
+    WRITE( message_string, '("Reading traffic timestep:", I3, ", ", A)' ) trm_ts_index, TRIM( trm_next_ts )
+    CALL location_message( message_string, 'start' )
     found = .FALSE.
     DO l = trm_ts_index + 1, nts
        IF ( trm_ts(l) > timestamp )  THEN
@@ -1680,9 +1680,8 @@
 
     DEALLOCATE(real2dbuf)
 
-    WRITE( message_string, *) 'Reading new timestep from traffic intput data:',                    &
-                              trm_ts_index, trm_next_ts
-    CALL location_message(message_string, 'finished' )
+    WRITE( message_string, '("Reading traffic timestep:", I3, ", ", A)' ) trm_ts_index, TRIM( trm_next_ts )
+    CALL location_message( message_string, 'finished' )
 
 #endif
 

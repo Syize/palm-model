@@ -977,7 +977,7 @@ dz_stretch_level_start:
           [dz](#initialization_parameters--dz)(k-1) = [dz](#initialization_parameters--dz)(k) * dz_stretch_factor_array.
 
        For each [dz_stretch_level_start](#initialization_parameters--dz_stretch_level_start) a corresponding [dz_stretch_level_end](#initialization_parameters--dz_stretch_level_end) **and** a [dz](#initialization_parameters--dz) must be defined, except for the last level. Here, it is possible to omit the value for [dz_stretch_level_end](#initialization_parameters--dz_stretch_level_end) to consider 'endless' stretching until the value of [dz_max](#initialization_parameters--dz_max) is reached. In that case the stretching factor can not be calculated and is set to the value of [dz_stretch_factor](#initialization_parameters--dz_stretch_factor).
-       
+
        **Example:**
 
           `dz = 10.0, 50.0, 100.0,`<br>
@@ -985,9 +985,9 @@ dz_stretch_level_start:
           `dz_stretch_level_end   = 1000.0, 3000.0,`<br>
 
        Here the vertical grid spacing starts with 10.0 m at the surface up to 800.0 m, then stretches to 50.0 m between 800.0 m and 1000.0 m. Up to a height of 1500.0 m it is constant again (50.0 m), and between 1500.0 m and 3000.0 m it is stretched to 100.0 m. Above 3000.0 m it has a constant value of 100.0 m.
-       
+
        Note that if the number of vertical grid points given via [nz](#initialization_parameters--dz_max) is not sufficiently large, the grid stretching mechanism may stop at a height smaller than the last value that is given by [dz_stretch_level_end](#initialization_parameters--dz_stretch_level_end).
-       
+
        **Hint:** <br>
        `dz_stretch_factor_array` is an array defined in the code which stores the different stretching factors that correspond to the defined stretching regions. The factors are calculated internally except for the case when the old stretching with [dz_stretch_factor](#initialization_parameters--dz_stretch_factor), [dz_stretch_level](#initialization_parameters--dz_stretch_level), and [dz_max](#initialization_parameters--dz_max) is used.
 
@@ -1082,14 +1082,13 @@ fft_method:
          To use this method requires setting of the cpp-preprocessor switch `-D__fftw` in the `%cpp_options` line of the [configuration file](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/palm_config), and to give the paths to the respective fftw include file and library via the `%compiler_options` and `%linker_options` line, respectively. In case the PALM installer has detected an existing FFTW library on your computer system, it automatically adds the required settings to the configuration file.
 
          **Note:** <br>
-         The FFTW manual says:
-
+         The FFTW manual says: <br>
          *FFTW is best at handling sizes of the form $2^a 3^b 5^c 7^d 11^e 13^f$ , where $e + f$ is either 0 or 1, and the other exponents are arbitrary. Other sizes are computed by means of a slow, general-purpose algorithm (which nevertheless retains O(n log n) performance even for prime sizes.*
 
          In case of cyclic horizontal boundary conditions (see [bc_lr](#initialization_parameters--bc_lr), [bc_ns](#initialization_parameters--bc_ns)) please check the size of [nx](#initialization_parameters--nx)+1 and [ny](#initialization_parameters--ny)+1, respectively. For non-cyclic horizontal boundary conditions [nx](#initialization_parameters--nx),[ny](#initialization_parameters--ny) should match the above conditions.
     - value: 'system-specific'
       description: |
-         For running the code on NVidia GPUs, a CUDA-FFT is available, which requires setting of preprocessor switch `-D__cuda_fft` in the `%cpp_options` line of the [configuration file](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/palm_config). Be aware that running the code on GPUs is a test feature, and that only the dynamic core of the model is able to run on this architecture. Contact the PALM developers for more information.
+         For running the code on NVidia GPUs, a CUDA-FFT is available, which requires setting of preprocessor switch `-D__cuda_fft` in the `%cpp_options` line of the [configuration file](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/palm_config). If `-D__cuda_fft` is set and PALM is running on GPU, [fft_method](#initialization_parameters--fft_method) = *'system-specific'* will be set automatically (which overwrites any other setting in the namelist file). Be aware that running the code on GPUs is a test feature. See also the [GPU mode usage guide](../../../Guide/LES_Model/GPU_mode_usage).
 
 
 flux_input_mode:
@@ -1429,7 +1428,7 @@ max_mg_grid_levels:
     short: Maximum number of grid levels allowed for the multigrid Poisson solver.
     long: |
       This parameter can be used to restrict the number of grid levels to be used in the multigrid-solver (see [psolver](#initialization_parameters--psolver) = *'poismg'* or *'poismg_noopt'*). By default, the solver automatically calculates and sets the number of possible grid levels. The more levels used, the better the reduction of divergence on the largest spatial scales.
-      
+
       There are special cases where the local reduction of divergence can be improved by using less grid levels than possible, because on coarser grid levels building / topography structures may disappear and this may increase the divergence of the velocity field in such areas (which in turn may e.g. effect the scalar conservation). In such cases, explicit setting of [max_mg_grid_levels](#initialization_parameters--max_mg_grid_levels) to a smaller value than automatically calculated may improve the velocity divergence and e.g. the scalar conservation. A test simulation may has to be carried out to determine the number of grid levels that is automatically calculated. [max_mg_grid_levels](#initialization_parameters--max_mg_grid_levels) must be smaller or equal than this value. Be aware, that reducing the number of possible grid levels will worsen the reduction of divergence on the largest spatial scales.
 
 mg_cycles:
@@ -1502,7 +1501,7 @@ momentum_advec:
     - value: 'pw-scheme'
       description: |
         The 2^nd^ order scheme of Piacsek and Williams (1970, J. Comp. Phys., 6, 392-405) with central differences in the form C3 is used. The drop-off in the energy spectrum is not as strong as for [momentun_advec](#initialization_parameters--momentum_advec) = *'ws-scheme'*, but the dispersion error is much stronger. In the vicinity of strong gradients, the scheme of Piacsek and Williams tends to produce so-called $2\Delta$ wiggles, which are well visible in results, e.g. at building corners, but also at non-cyclic lateral boundaries if Dirichlet boundary conditions are used.
-        
+
         **Note:** The Piacsek and Williams scheme should only be used for test purposes, e.g. in order to compare results with those from other advection schemes. It is not recommended to be used for regular runs.
 
     - value: 'up-scheme'
@@ -1590,7 +1589,7 @@ ngsrb_initial:
     short: Number of Gauss-Seidel iterations to be carried out on each grid level of the multigrid Poisson solver during initial time steps.
     long: |
       The number of initial time steps for that [ngsrb_initial](#initialization_parameters--ngsrb_initial) is used is defined via [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps).
-      
+
       [ngsrb_initial](#initialization_parameters--ngsrb_initial) is only applied at the beginning of initial runs.
 
 
@@ -1641,7 +1640,7 @@ nudging:
 
       With [nudging](#initialization_parameters--nudging) = *.T.*, additional tendencies are calculated for the prognostic variables `u`, `v`, `lpt`, and `q`. It requires setting of [humidity](#initialization_parameters--humidity) = *.T.* as well as  [large_scale_forcing](#initialization_parameters--large_scale forcing) = *.T.*. So far, it is not implemented for the ocean mode and non-cyclic lateral boundary conditions. An example can be found [here](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/examples/lsf).
 
-      Additionally, for [nudging](#initialization_parameters--nudging) = *.T.* the input file [NUDGING_DATA](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#NUDGING_DATA) has to be provided. This file contains profile information at several time steps about the relaxation time scale $\tau$ and the prognostic quantities `u`, `v`, `w`, `lpt`, `q` which must be provided by a larger scale model or by measurements. If quantities in [NUDGING_DATA](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#NUDGING_DATA) are set to *-999999.9* for all heights and all time levels, no nudging is applied to them. 
+      Additionally, for [nudging](#initialization_parameters--nudging) = *.T.* the input file [NUDGING_DATA](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#NUDGING_DATA) has to be provided. This file contains profile information at several time steps about the relaxation time scale $\tau$ and the prognostic quantities `u`, `v`, `w`, `lpt`, `q` which must be provided by a larger scale model or by measurements. If quantities in [NUDGING_DATA](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles#NUDGING_DATA) are set to *-999999.9* for all heights and all time levels, no nudging is applied to them.
 
 
 nx:
@@ -1719,7 +1718,7 @@ origin_date_time:
     short: Date and time at model start.
     long: |
       Time is given as local time, and the last three characters define the distance (in hours) between local time and UTC, e.g. *'14:30:00 +02'* means that the local time is 2 hours ahead of UTC (which is then *'12:30:00'*). The given local time is internally converted to UTC. In output files, time is always given in UTC. The correct local solar position is calculated from UTC, [latitude](#initialization_parameters--latitude) and [longitude](#initialization_parameters--longitude).
-      
+
       Time may also be given in UTC directly.
 
       **Examples:** <br>
@@ -1741,8 +1740,8 @@ outflow_damping_factor:
     long: |
       If a non-zero value is assigned to [outflow_damping_factor](#initializing_parameters--outflow_damping_factor), a Rayleigh-damping is applied to all velocity components and the potential temperature near the outflow boundary in case that non-cyclic lateral boundary conditions ([bc_lr](#initialization_parameters--bc_lr) = 'dirichlet/radiation', [bc_lr](#initialization_parameters--bc_lr) = 'radiation/dirichlet', [bc_ns](#initialization_parameters--bc_ns) = 'dirichlet/radiation', or [bc_ns](#initialization_parameters--bc_ns) = 'radiation/dirichlet') are used.
 
-      The method removes possible spurious jets that are directed into the domain, which may be produced by the radiation boundary condition if a wall normal velocity component at the outflow plane is directed into the domain. This may happen due to turbulent fluctuations or due to recirculations behind buildings/topography near the outflow. With this method the turbulent fluctuations or local recirculations will vanish so that no negative wall normal velocities can occur. 
-      
+      The method removes possible spurious jets that are directed into the domain, which may be produced by the radiation boundary condition if a wall normal velocity component at the outflow plane is directed into the domain. This may happen due to turbulent fluctuations or due to recirculations behind buildings/topography near the outflow. With this method the turbulent fluctuations or local recirculations will vanish so that no negative wall normal velocities can occur.
+
       The method can also be used to damp gravity waves at the outflow. For effective gravity wave damping refer to the recommendations in [Khan (2025)](https://doi.org/10.5194/wes-10-1167-2025).
 
       The [outflow_damping_factor](#initializing_parameters--outflow_damping_factor) must be larger than zero. Large values (close to 1.0) may cause numerical instabilities.
@@ -1823,7 +1822,7 @@ psolver:
 
         Runtime-parameters [npex](#runtime_parameters--npex) and [npey](#runtime_parameters--npey) are not allowed to be set.
 
-        The total number of cores (given via `palmrun`-option `-X` must be a multiple of the number of cores used per node (given via `palmrun`-option `-T`, and `-T` must be a multiple of 4. Be aware that if `-X` is not a multiple if `-T`, the setting of `-T` is usually ignored by the batch system, and replaced by a value of which a multiple just approximates the total number of cores, which is then usually not a multiple of 4.
+        The total number of cores (given via `palmrun`-option `-X` must be a multiple of the number of cores used per node (given via `palmrun`-option `-T`, and `-T` must be a multiple of 4. Be aware that if `-X` is not a multiple of `-T`, the setting of `-T` is usually ignored by the batch system, and replaced by a value of which a multiple just approximates the total number of cores, which is then usually not a multiple of 4.
 
         This solver may not work for extreme ratios of [nx](#initialization_parameters--nx) / [ny](#initialization_parameters--ny).
 
@@ -2121,7 +2120,7 @@ rayleigh_damping_factor:
       This method effectively damps gravity waves, caused by boundary layer convection or by topography, which may spread out vertically in the inversion layer and which are reflected at the top (ocean: bottom) boundary.
 
       The Rayleigh damping factor must be larger than zero. Large values (close to 1.0) may cause numerical instabilities. For effective gravity wave damping refer to the recommendations in [Khan (2025)](https://doi.org/10.5194/wes-10-1167-2025).
-      
+
       Rayleigh damping is not allowed if the geostrohic wind controller is enabled (see [geostrophic_wind_controller](#flow_control_parameters--geostrophic_wind_controller)).
 
 
@@ -2184,7 +2183,7 @@ residual_limit:
       The residual is defined as the square root of the sum (over all grid points) of the squared values (L2 norm) of the difference between the left and right hand side of the Poisson equation using the final pressure solution, devided by the number of grid points. This is a parameter to steer the accuracy of the multigrid scheme (see [psolver](#initialization_parameters--psolver) = *'multigrid'* or *'multigrid_noopt'*). The divergence of the 3D velocity field will be reduced iteratively as long as the calculated residual is greater than [residual_limit](#initialization_parameters--residual_limit). If this threshold is not reached after a maximum number of 1000 iterative cycles, PALM aborts with a corresponding error message. This threshold is not taken into account during initial time steps set via [ngsrb_initial_timesteps](#initialization_parameters--ngsrb_initial_timesteps). During these intial time steps, a maximum of 100 cycles is performed (or less, if the threshold has been reached before), and the simulation is continued afterwards.
 
       With the given default value the multigrid solver usually reduces the divergence of the velocity field by about 4 orders of magnitude at least (but this may depend on other model settings, e.g. the grid spacing). Test runs may be required to find an appropriate limit which reduces the divergence by the desired order of magnitude. To decrease the divergence by one more order of magnitude requires to decrease [residual_limit](#initialization_parameters--residual_limit) by one order of magnitude.
-      
+
       **Important:** <br>
       To activate usage of this parameter additionally requires to set [mg_cycles](#initialization_parameters--mg_cycles) = *-1*.
 
@@ -2245,16 +2244,16 @@ rotation_angle:
     short: Angle by which the model's North direction is rotated clockwise.
     long: |
       The model's North direction is always assumed to be oriented along the y-direction of the numerical grid. In addition, it is assumed by default that this direction aligns with the geographic North direction. This way, the horizontal wind components `u` and `v` give the wind from geographic West and North, respectively. Be aware, that in meteorological models positive values mean that the wind is coming from west/north.
-      
+
       With a [rotation_angle](#initialization_parameters--rotation_angle) /= *0.0* the model's North direction (i.e. the direction of the model's y-axis) deviates from the geographic North direction. This impacts the solar radiation (e.g. direction of shadows) and the respective components of the Coriolis force. This feature might become useful when simulating domains given in a static driver, which have been rotated (i.e. where the y-axis is not aligend with geographic North) in order to better match the rectangular numerical grid. Furthermore, this feature is also useful for parameter studies where the effects of wind from different directions shall be studied in a series of runs.
-      
+
       A [rotation_angle](#initialization_parameters--rotation_angle) /= *0.0* affects the geostrophic wind components [ug_surface](#initialization_parameters--ug_surface) and [vg_surface](#initialization_parameters--vg_surface). For example, a change of the geostrophic wind from west to north can be realized via changing ([ug_surface](#initialization_parameters--ug_surface) = *1.0*, [vg_surface](#initialization_parameters--vg_surface) = *0.0*) to ([ug_surface](#initialization_parameters--ug_surface) = *0.0*, [vg_surface](#initialization_parameters--vg_surface) = *1.0*) or via setting [rotation_angle](#initialization_parameters--rotation_angle) = *90.0*.
-      
+
       If a [static driver](https://palm.muk.uni-hannover.de/trac/wiki/doc/app/iofiles/pids/static) is used, [rotation_angle](#initialization_parameters--rotation_angle) will be overwritten by  the value of [rotation_angle](../IO-Files/Drivers/static/#static--global_attribute--rotation_angle) as given in the static driver.
 
       In case that the xy-area given by a static driver is not oriented along geographic north (i.e. the y-axis is not aligned with geographic north), [rotation_angle](#initialization_parameters--rotation_angle) must be given to align the y-axis along geographic North. In such a case, the correct geo-referenced coordinates of each model grid point are calculated from the [rotation_angle](#initialization_parameters--rotation_angle) and the position of the southern-leftmost grid point of the domain, which coordinate is given via static driver variables [origin_x](../IO-Files/Drivers/static/#static--global_attribute--origin_x) and [origin_y](../IO-Files/Drivers/static/#static--global_attribute--origin_y). Correct coordinates are required if virtual measurements shall be carried out, where the sensor positions are given in geo-referenced coordinates, or if non-stationary emissions are imposed.
 
-      
+
 roughness_length:
   category: Boundary Conditions
   type: R
@@ -2268,7 +2267,7 @@ roughness_length:
 
       The roughness length for scalars can be assigned a value different from the one for momentum (see [z0h_factor](#initialization_parameters--z0h_factor)).
 
-      This parameter is effective only in case that a constant flux layer is switched on at the bottom boundary (see [constant_flux_layer](#initialization_parameters--constant_flux_layer)).
+      This parameter is effective only in case that a constant flux layer is switched on at the bottom boundary (see [constant_flux_layer](#initialization_parameters--constant_flux_layer)), and the land surface or the urban surface model is not used.
 
 
 s_surface:
@@ -2382,7 +2381,7 @@ spinup_time:
       Currently, this mechanism is implemented for the land surface and the urban surface model. In the spinup phase, these models predict the skin and soil/wall temperatures. All window temperatures (surface and deeper layers) are not calculated during spinup. For using the spinup mechanism it is required to have a radiation model activated. Forcing is achieved by radiation and optionally a varying near-surface air temperature (steered via [spinup_pt_mean](#initialization_parameters--spinup_pt_mean), [spinup_pt_amplitude](#initialization_parameters--spinup_pt_amplitude), and the incoming solar radiation. After completion of the spinup, the atmospheric code is switched on and runs coupled to the surface models. On the timeline, the spinup phase has negative times counting towards 0 s, which is when the atmosphere is activated.
 
       Note that the near-surface temperatures are reset after the spinup to their initial values prescribed by the user. The spinup output can be steered via the additional parameters [dt_run_control_spinup](#runtime_parameters--dt_run_control_spinup) and [data_output_during_spinup](#initialization_parameters--data_output_during_spinup).
-      
+
       Note that it is not allowed to set [spinup_time](#initialization_parameters--spinup_time) for childs that have been activated in a restart run for the first time.
 
 

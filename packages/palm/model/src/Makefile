@@ -901,6 +901,7 @@ module_interface.o: \
 	dust_emission_and_transport_mod.o \
 	dynamics_mod.o \
 	fastv8_coupler_mod.o \
+	flow_control_mod.o \
 	gust_mod.o \
 	indoor_model_mod.o \
 	lagrangian_particle_model_mod.o \

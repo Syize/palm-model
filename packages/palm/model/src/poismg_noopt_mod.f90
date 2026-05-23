@@ -378,7 +378,7 @@
 !
 !-- Ghost point exchange. Neumann conditions for non-cyclic horizontal boundaries are implicitly
 !-- treated via the flags array.
-    CALL exchange_horiz( r, 1, grid_level = grid_level )
+    CALL exchange_horiz( r, 1, grid_level = grid_level, mg_switch_to_pe0 = mg_switch_to_pe0 )
 
 !
 !-- Dirichlet boundary conditions at bottom and top of the domain. Neumann BCs are implicitly

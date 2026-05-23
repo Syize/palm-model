@@ -186,7 +186,7 @@
        ENDIF
 
 #if defined( __cuda_fft )
-       fft_method = 'system-specific'
+       IF ( enable_openacc )  fft_method = 'system-specific'
 #endif
 
 !

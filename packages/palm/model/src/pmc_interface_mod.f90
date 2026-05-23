@@ -1393,10 +1393,10 @@
 !--             Index i of parent array. Please note that in this context the addressing starts
 !--             with 1. In PALM, 2d and 3d are allocated with boundaries, therefore the indexing
 !--             has to be adjusted with + 1 + nbgp.
-                index_list(1,ilist) = ip - ( pex * nrx ) + 1 + nbgp
+                index_list(1,ilist) = ip - nxl_pe(pex) + 1 + nbgp
 !
 !--             Index j of parent array.
-                index_list(2,ilist) = jp - ( pey * nry ) + 1 + nbgp
+                index_list(2,ilist) = jp - nys_pe(pey) + 1 + nbgp
 !
 !--             Index i of child's parent-grid array (e.g. uc).
                 index_list(3,ilist) = ip - childs_parent_grid_bounds_all(1,n) + 1
@@ -3410,8 +3410,8 @@
     tag_nr = tag_nr + 1
 !
 !-- SGS-TKE.
-    IF ( ( rans_mode_parent  .AND.         rans_mode )  .OR.                                       &
-         ( .NOT. rans_mode_parent  .AND.  .NOT.  rans_mode  .AND.                                  &
+    IF ( (       rans_mode_parent  .AND.        rans_mode )  .OR.                                  &
+         ( .NOT. rans_mode_parent  .AND.  .NOT. rans_mode  .AND.                                   &
            .NOT. constant_diffusion ) )  THEN
        CALL pmci_compute_average( e, m, 0, nz_child, mean_profile, 's' )
        IF ( myid == 0 )  THEN
@@ -3675,8 +3675,8 @@
           w = 0.0_wp
 !
 !--       SGS-TKE.
-          IF ( (    rans_mode_parent  .AND.         rans_mode )  .OR.                              &
-               ( .NOT. rans_mode_parent  .AND.  .NOT.  rans_mode  .AND.                            &
+          IF ( (       rans_mode_parent  .AND.        rans_mode )  .OR.                            &
+               ( .NOT. rans_mode_parent  .AND.  .NOT. rans_mode  .AND.                             &
                  .NOT. constant_diffusion ) )                                                      &
           THEN
              CALL pmci_interp_1d( e, e_p_init, kcto, kflo, kfuo )
@@ -4173,8 +4173,8 @@
     ENDIF
 !
 !-- SGS-TKE.
-    IF ( ( rans_mode_parent  .AND.         rans_mode )  .OR.                                    &
-         ( .NOT. rans_mode_parent  .AND.  .NOT.  rans_mode  .AND.                               &
+    IF ( (       rans_mode_parent  .AND.        rans_mode )  .OR.                                  &
+         ( .NOT. rans_mode_parent  .AND.  .NOT. rans_mode  .AND.                                   &
            .NOT. constant_diffusion ) )  THEN
        ALLOCATE( e_p_init(0:pg%nz+1) )
        IF ( myid == 0 )  THEN
@@ -4350,9 +4350,12 @@
     INTEGER ::  ierr              !<  MPI error code
     INTEGER ::  n_dust_bins_root  !< root value of variable
 
-    LOGICAL ::  det_enabled_root                     !< root value of variable
-    LOGICAL ::  homogenize_surface_temperature_root  !< root value of variable
-    LOGICAL ::  salinity_root                        !< root value of variable
+    LOGICAL ::  det_enabled_root                     !< root value of variable det_enabled
+    LOGICAL ::  homogenize_surface_temperature_root  !< root value of variable homogenize_surface_temperature
+    LOGICAL ::  humidity_root                        !< root value of variable humidity
+    LOGICAL ::  neutral_root                         !< root value of variable neutral
+    LOGICAL ::  passive_scalar_root                  !< root value of variable passive_scalar
+    LOGICAL ::  salinity_root                        !< root value of variable salinity
 
     REAL(wp) ::  det_start_time_root       !< root value of variable
     REAL(wp) ::  dt_coupling_root          !< root value of variable
@@ -4505,6 +4508,42 @@
                            '. &child value is set to root value'
           CALL message( 'pmci_check_setting_mismatches', 'PMC0021', 0, 1, 0, 6, 0 )
           salinity = salinity_root
+       ENDIF
+    ENDIF
+!
+!-- The parameter neutral must be set the same in all models.
+    IF ( root_model )  neutral_root = neutral
+    CALL MPI_BCAST( neutral_root, 1, MPI_LOGICAL, 0, comm_world_nesting, ierr )
+
+    IF ( .NOT. root_model )  THEN
+       IF ( neutral .NEQV. neutral_root )  THEN
+          message_string = 'mismatch between root model and child settings: & ' //                 &
+                           'neutral must be set the same for all models.'
+          CALL message( 'pmci_check_setting_mismatches', 'PMC0043', 1, 2, 0, 6, 0 )
+       ENDIF
+    ENDIF
+!
+!-- The parameter humidity must be set the same in all models.
+    IF ( root_model )  humidity_root = humidity
+    CALL MPI_BCAST( humidity_root, 1, MPI_LOGICAL, 0, comm_world_nesting, ierr )
+
+    IF ( .NOT. root_model )  THEN
+       IF ( humidity .NEQV. humidity_root )  THEN
+          message_string = 'mismatch between root model and child settings: & ' //                 &
+                           'humidity must be set the same for all models.'
+          CALL message( 'pmci_check_setting_mismatches', 'PMC0043', 1, 2, 0, 6, 0 )
+       ENDIF
+    ENDIF
+!
+!-- The parameter passive_scalar must be set the same in all models.
+    IF ( root_model )  passive_scalar_root = passive_scalar
+    CALL MPI_BCAST( passive_scalar_root, 1, MPI_LOGICAL, 0, comm_world_nesting, ierr )
+
+    IF ( .NOT. root_model )  THEN
+       IF ( passive_scalar .NEQV. passive_scalar_root )  THEN
+          message_string = 'mismatch between root model and child settings: & ' //                 &
+                           'passive_scalar must be set the same for all models.'
+          CALL message( 'pmci_check_setting_mismatches', 'PMC0043', 1, 2, 0, 6, 0 )
        ENDIF
     ENDIF
 

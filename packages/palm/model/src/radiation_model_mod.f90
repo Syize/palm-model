@@ -14180,15 +14180,9 @@
              ENDIF
           ENDDO
 !
-!--       Wait for all pending local requests to complete
+!--       Wait for all pending local requests to complete.
 !--       TODO: Wait selectively for each column later when needed
-#if defined( __nec )
-!
-!--       Workaround for NEC Aurora (will be resolved with a new MPI release later in 2025).
-          CALL MPI_WIN_FLUSH_ALL( win_lad, ierr )
-#else
           CALL MPI_WIN_FLUSH_LOCAL_ALL( win_lad, ierr )
-#endif
           IF ( ierr /= 0  .AND.  debug_output )  THEN
              WRITE( debug_string, * ) 'Error MPI_WIN_FLUSH_LOCAL_ALL2:', ierr, win_lad
              CALL debug_message( debug_string, 'info' )
@@ -14211,14 +14205,8 @@
 
 #if defined( __parallel )
 !
-!-- Wait for all gridsurf requests to complete
-#if defined( __nec )
-!
-!-- Workaround for NEC Aurora (will be resolved with a new MPI release later in 2025).
-    CALL MPI_WIN_FLUSH_ALL( win_gridsurf, ierr )
-#else
+!-- Wait for all gridsurf requests to complete.
     CALL MPI_WIN_FLUSH_LOCAL_ALL( win_gridsurf, ierr )
-#endif
     IF ( ierr /= 0  .AND.  debug_output )  THEN
        WRITE( debug_string, * ) 'Error MPI_WIN_FLUSH_LOCAL_ALL3:', ierr, win_gridsurf
        CALL debug_message( debug_string, 'info' )

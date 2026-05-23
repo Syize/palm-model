@@ -24,7 +24,7 @@ compiler:
     default:
       - "-cpp"
       - "-w"
-      - "-fast"
+      - "-O3"
       - "-Mfree"
       - "-Mfprelaxed"
     debug:

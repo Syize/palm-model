@@ -125,7 +125,7 @@
 
     LOGICAL     ::  file_exists                      !< flag checking if a file exists
     LOGICAL     ::  found                            !< flag, true if output variable is already marked for averaging
-    
+
     LOGICAL     ::  found_err                        !< global flag, true if error is found on one core
     LOGICAL     ::  found_err_l = .FALSE.            !< local flag, true if error is found on one core
 
@@ -2616,7 +2616,7 @@
     ENDIF
 
 !
-!-- In case of an existing outflow damping layer, check whether bc_lr or bc_ns are non-cyclic and 
+!-- In case of an existing outflow damping layer, check whether bc_lr or bc_ns are non-cyclic and
 !-- whether topography height is zero at all inflow and outflow boundary points.
     IF ( outflow_damping_factor > 0.0_wp )  THEN
        IF ( bc_lr == 'dirichlet/radiation'  .OR.  bc_lr == 'radiation/dirichlet' )  THEN
@@ -2653,7 +2653,7 @@
           ENDIF
       ELSE
          message_string = 'given lateral boundary condition(s) not allowed for outflow damping'
-         CALL message( 'check_parameters', 'PAC0352', 1, 2, 0, 6, 0 ) 
+         CALL message( 'check_parameters', 'PAC0352', 1, 2, 0, 6, 0 )
        ENDIF
     ENDIF
 
@@ -2946,7 +2946,8 @@
 
 !
 !-- Check roughness length, which has to be smaller than dz/2
-    IF ( ( constant_flux_layer .OR. INDEX( initializing_actions, 'set_1d-model_profiles' ) /= 0 )  &
+    IF ( ( constant_flux_layer  .OR.  INDEX( initializing_actions, 'set_1d-model_profiles' ) /= 0 )&
+         .AND.  .NOT. ( land_surface  .OR.  urban_surface )                                        &
          .AND.  roughness_length >= 0.5 * dz(1) )  THEN
        message_string = 'roughness_length must be smaller than dz/2'
        CALL message( 'check_parameters', 'PAC0173', 1, 2, 0, 6, 0 )

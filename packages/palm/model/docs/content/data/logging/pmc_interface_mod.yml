@@ -139,6 +139,7 @@ PMC0020:
     pointer for array "..." can't be associated for ... domain
   description: |
     Internal error, related to the PALM model coupler, which is responsible for data exchange in nested runs. In case that the default code in `pmc_interface_mod.f90` has not been modified, contact the PALM developers, e.g. via the trouble-ticket system.
+    One possible reason of this error message are mismatches in parameter settings between the nested domains. Therefore, please also see [PMC0043](#pmc_interface_mod--PMC0043).
 
 PMC0021:
   loglevel: WARNING
@@ -293,4 +294,11 @@ PMC0042:
     child buffer too small ...
   description: |
     Internal error within the PALM model coupler. Please contact the PALM developers, e.g. via the trouble-ticket system.
+
+PMC0043:
+  loglevel: ERROR
+  message: |
+    mismatch between root model and child settings: ...(root) = ... ...(child) = ...
+  description: |
+    The displayed parameter has been assigned different values for the root domain and a child domain (the id of the child domain is listed in the first line of the message), but it must have the same value for all domains.
 

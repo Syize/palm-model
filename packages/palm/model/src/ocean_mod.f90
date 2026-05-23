@@ -631,7 +631,9 @@
  SUBROUTINE ocean_check_parameters
 
     USE control_parameters,                                                                        &
-        ONLY:  coupling_char,                                                                      &
+        ONLY:  bc_lr_cyc,                                                                          &
+               bc_ns_cyc,                                                                          &
+               coupling_char,                                                                      &
                cyclic_fill_initialization,                                                         &
                message_string,                                                                     &
                nested_run,                                                                         &
@@ -742,6 +744,11 @@
           message_string = 'wrong settings for stokes_wavelength and/or stokes_waveheight'
           CALL message( 'ocean_check_parameters', 'OCM0009', 1, 2, 0, 6, 0 )
        ENDIF
+    ENDIF
+
+    IF ( .NOT. bc_lr_cyc  .OR.  .NOT. bc_ns_cyc )  THEN
+       message_string = 'non-cyclic boundary conditions are not allowed in ocean mode'
+       CALL message( 'ocean_check_parameters', 'OCM0014', 1, 2, 0, 6, 0 )
     ENDIF
 
  END SUBROUTINE ocean_check_parameters

@@ -3,7 +3,7 @@ OCM0001:
   message: |
     ocean mode does not allow vertically shifted childs
   description: |
-    Nesting in ocean mode (see [ocean parameters namelist](../Namelists/#ocean-parameters)) always requires the child top to match the sea surface. The last entry in [domain_layouts](../Namelists/#nesting_parameters--domain_layouts) must be set to *0.0* for all childs.  
+    Nesting in ocean mode (see [ocean parameters namelist](../Namelists/#ocean-parameters)) always requires the child top to match the sea surface. The last entry in [domain_layouts](../Namelists/#nesting_parameters--domain_layouts) must be set to *0.0* for all childs.
 
 OCM0002:
   loglevel: ERROR
@@ -87,4 +87,11 @@ OMC0013:
     RANS turbulence parameterization not adapted for ocean mode
   description: |
     Be aware, that the RANS turbulence closures (see [turbulence_closure](../Namelists/#initialization_parameters--turbulence_closure)) are not adapted to be used in ocean mode. For example, they use the empirical Blackadar mixing length that has been designed to be used for the atmosphere. Manual code adjustments will probably be required in order to safely use the RANS closures in ocean mode. Carefully check the model results!
+
+OMC0014:
+  loglevel: WARNING
+  message: |
+    non-cyclic boundary conditions are not allowed in ocean mode
+  description: |
+    The ocean mode requires [bc_lr](../Namelists/#initialization_parameters--bc_lr) = *'cyclic'* and [bc_ns](../Namelists/#initialization_parameters--bc_ns) = *'cyclic'*.
 

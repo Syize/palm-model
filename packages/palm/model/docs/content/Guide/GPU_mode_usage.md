@@ -32,7 +32,7 @@ These settings are for NVidia GPUs. The netCDF settings in the compiler- and lin
 
 Some specific settings for namelist parameters are required / recommended.
 
-- For [psolver](../../../Reference/LES_Model/Namelists/#initialization_parameters--psolver)=  *'poisfft'*, only the Temperton-FFT method and the FFTW are available. Set [fft_method](../../../Reference/LES_Model/Namelists/#initialization_parameters--fft_method) = *'temperton-algorithm'* or [fft_method](../../../Reference/LES_Model/Namelists/#initialization_parameters--fft_method) = *'system-specific'*. The latter setting invokes the CUDA FFTW library available on the GPU. It usually should show a much better performance than the Temperton-FFT. Be aware that CPP options `-D__cuda_fft` has to be set in the configuration file.
+- For [psolver](../../../Reference/LES_Model/Namelists/#initialization_parameters--psolver)=  *'poisfft'*, only the Temperton-FFT method and the FFTW are available. For the Temperton-FFT method set [fft_method](../../../Reference/LES_Model/Namelists/#initialization_parameters--fft_method) = *'temperton-algorithm'*. For choosing the FFTW, the CUDA FFT library available on the GPU device requires the CPP option `-D__cuda_fft` to be set in the `%cpp_options` line of the configuration file. If `-D__cuda_fft` is set and PALM is running on GPU, [fft_method](../../../Reference/LES_Model/Namelists/#initialization_parameters--fft_method) = *'system-specific'* will be set automatically (which overwrites any other setting in the namelist file). The CUDA FFT (FFTW) shows a much better performance than the Temperton-FFT.
 - To speed up the MPI communication when using multiple GPUs, set runtime parameter [use_contiguous_buffer](../../../Reference/LES_Model/Namelists/#runtime_parameters--use_contiguous_buffer) = *.TRUE.*. This usually improves the performance of ghost point exchange significantly.
 
 
@@ -58,7 +58,7 @@ So far, no special focus has been given on performance optimization of the GPU m
 The GPU mode has the following restrictions:
 
 - Beside the PALM core (dynamics and thermodynamics, except cloud physics) and the land surface model (LSM) no other modules have been ported, and there are no current plans for further porting.
-- Both the direct Poisson-solver as well as the multigrid solver are available.
+- Both the direct Poisson-solver as well as the multigrid solver are available. Solvers correctly work only with [reference_state](../../../Reference/LES_Model/Namelists/#initialization_parameters--reference_state) = *'initial_profile'*.
 - Even when using just the PALM core, several settings may not work appropriately. Always compare GPU results with results from control runs carried out on CPUs (an easy way to run a setup purely on the CPU side is to set runtime parameter [enable_openacc](../../../Reference/LES_Model/Namelists/#runtime_parameters--enable_openacc) = *.FALSE.*.). Small differences in the run-control (`_rc`) output may always appear due to different round-off errors on the GPU. Because of the non-linear turbulence interactions, instantaneous flow fields may completely differ after some time, but averaged quantities should not be affected (provided that the averaging interval is long enough). 
 - Some standard output quantities may not be available or the netCDF output files may contain wrong values. Please check any output carefully.
 

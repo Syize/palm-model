@@ -528,7 +528,7 @@
 !
 !-- Ghost point exchange. Neumann conditions for non-cyclic horizontal boundaries are implicitly
 !-- treated via the flags array.
-    CALL exchange_horiz( r, 1, grid_level = grid_level )
+    CALL exchange_horiz( r, 1, grid_level = grid_level, mg_switch_to_pe0 = mg_switch_to_pe0 )
 
 !
 !-- Dirichlet boundary conditions at bottom and top of the domain. Neumann BCs are implicitly
@@ -2566,7 +2566,7 @@
     type_yz_int(0) = stored_value
 
 !
-!-- Definition of MPI-datatyoe using 1 ghost layer only.
+!-- Definition of MPI-datatype using 1 ghost layer only.
     nxl_l = nxl; nxr_l = nxr; nys_l = nys; nyn_l = nyn; nzb_l = nzb; nzt_l = nzt
 
     DO  i = maximum_grid_level, 1 , -1
@@ -2782,7 +2782,7 @@
 !--    Exchange ghost points on respective multigrid level.
 #if defined( __parallel )
        CALL exchange_horiz_int( topo_tmp, nys_l, nyn_l, nxl_l, nxr_l, nzt_l, 1, type_xz_int(l),    &
-                                type_yz_int(l) )
+                                type_yz_int(l), mg_switch_to_pe0 = mg_switch_to_pe0 )
 #else
        CALL exchange_horiz_int( topo_tmp, nys_l, nyn_l, nxl_l, nxr_l, nzt_l, 1 )
 #endif
@@ -2861,7 +2861,7 @@
 
 #if defined( __parallel )
        CALL exchange_horiz_int( gl(l)%flags, nys_l, nyn_l, nxl_l, nxr_l, nzt_l, 1, type_xz_int(l), &
-                                type_yz_int(l) )
+                                type_yz_int(l), mg_switch_to_pe0 = mg_switch_to_pe0 )
 #else
        CALL exchange_horiz_int( gl(l)%flags, nys_l, nyn_l, nxl_l, nxr_l, nzt_l, 1 )
 #endif
@@ -3528,6 +3528,9 @@
        ENDDO
 
     ENDDO
+
+    !$ACC ENTER DATA COPYIN(ileft, jsouth, kbottom) IF(enable_openacc)
+
 !
 !-- Exchange the send indices with the respective neighbours, where they are the receive indices.
 #if defined( __parallel )

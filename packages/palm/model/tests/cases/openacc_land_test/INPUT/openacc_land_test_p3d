@@ -52,8 +52,6 @@
 !------------------------------------------------------------------------------
     humidity                   = .TRUE.,  ! use prognostic equation for humidity
 
-    reference_state            = 'horizontal_average', ! set reference state for
-                                                       ! buoyancy term
     loop_optimization          = 'vector',
 !
 !-- numerics
