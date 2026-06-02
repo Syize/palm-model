@@ -99,7 +99,7 @@
                       TRIM( routine_name ) // '":'
 
     information_string_1 = 'Further information can be found at'
-    information_string_2 = 'https://docs.palm-model.com/25.10/Reference/LES_Model/Logging/#' //    &
+    information_string_2 = 'https://docs.palm-model.com/25.10.1/Reference/LES_Model/Logging/#' //    &
                            TRIM( logging_id )
 
 

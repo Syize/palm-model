@@ -1768,6 +1768,100 @@
 !-- Partition and dissolutional growth by gaseous HNO3 and NH3
     IF ( index_no > 0  .AND.  index_nh > 0  .AND.  index_so4 > 0 )  lspartition = .TRUE.
 
+!
+!-- Set Dirichlet conditions explicitly.
+    IF ( bc_dirichlet_aer_l )  THEN
+       DO  ig = 1, ngases_salsa
+          DO  j = nysg, nyng
+             salsa_gas(ig)%conc(:,j,nxl-1) = salsa_gas(ig)%init
+             salsa_gas(ig)%conc_p(:,j,nxl-1) = salsa_gas(ig)%init
+          ENDDO
+       ENDDO
+
+       DO  ib = 1, nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_number(ib)%conc(:,j,nxl-1) = aerosol_number(ib)%init
+             aerosol_number(ib)%conc_p(:,j,nxl-1) = aerosol_number(ib)%init
+          ENDDO
+       ENDDO
+
+       DO  ic = 1, ncomponents_mass*nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_mass(ic)%conc(:,j,nxl-1) = aerosol_mass(ic)%init
+             aerosol_mass(ic)%conc_p(:,j,nxl-1) = aerosol_mass(ic)%init
+          ENDDO
+       ENDDO
+    ENDIF
+
+    IF ( bc_dirichlet_aer_r )  THEN
+       DO  ig = 1, ngases_salsa
+          DO  j = nysg, nyng
+             salsa_gas(ig)%conc(:,j,nxr+1) = salsa_gas(ig)%init
+             salsa_gas(ig)%conc_p(:,j,nxr+1) = salsa_gas(ig)%init
+          ENDDO
+       ENDDO
+
+       DO  ib = 1, nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_number(ib)%conc(:,j,nxr+1) = aerosol_number(ib)%init
+             aerosol_number(ib)%conc_p(:,j,nxr+1) = aerosol_number(ib)%init
+          ENDDO
+       ENDDO
+
+       DO  ic = 1, ncomponents_mass*nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_mass(ic)%conc(:,j,nxr+1) = aerosol_mass(ic)%init
+             aerosol_mass(ic)%conc_p(:,j,nxr+1) = aerosol_mass(ic)%init
+          ENDDO
+       ENDDO
+    ENDIF
+
+    IF ( bc_dirichlet_aer_n )  THEN
+       DO  ig = 1, ngases_salsa
+          DO  i = nxlg, nxrg
+             salsa_gas(ig)%conc(:,nyn+1,i) = salsa_gas(ig)%init
+             salsa_gas(ig)%conc_p(:,nyn+1,i) = salsa_gas(ig)%init
+          ENDDO
+       ENDDO
+
+       DO  ib = 1, nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_number(ib)%conc(:,nyn+1,i) = aerosol_number(ib)%init
+             aerosol_number(ib)%conc_p(:,nyn+1,i) = aerosol_number(ib)%init
+          ENDDO
+       ENDDO
+
+       DO  ic = 1, ncomponents_mass*nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_mass(ic)%conc(:,nyn+1,i) = aerosol_mass(ic)%init
+             aerosol_mass(ic)%conc_p(:,nyn+1,i) = aerosol_mass(ic)%init
+          ENDDO
+       ENDDO
+    ENDIF
+
+    IF ( bc_dirichlet_aer_s )  THEN
+       DO  ig = 1, ngases_salsa
+          DO  i = nxlg, nxrg
+             salsa_gas(ig)%conc(:,nys-1,i) = salsa_gas(ig)%init
+             salsa_gas(ig)%conc_p(:,nys-1,i) = salsa_gas(ig)%init
+          ENDDO
+       ENDDO
+
+       DO  ib = 1, nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_number(ib)%conc(:,nys-1,i) = aerosol_number(ib)%init
+             aerosol_number(ib)%conc_p(:,nys-1,i) = aerosol_number(ib)%init
+          ENDDO
+       ENDDO
+
+       DO  ic = 1, ncomponents_mass*nbins_aerosol
+          DO  j = nysg, nyng
+             aerosol_mass(ic)%conc(:,nys-1,i) = aerosol_mass(ic)%init
+             aerosol_mass(ic)%conc_p(:,nys-1,i) = aerosol_mass(ic)%init
+          ENDDO
+       ENDDO
+    ENDIF
+
     IF ( debug_output )  CALL debug_message( 'salsa_init', 'end' )
 
  END SUBROUTINE salsa_init
@@ -3039,13 +3133,15 @@
 
     DO  ic = 1, nbins_aerosol * ncomponents_mass
        WRITE( counter, '(I3.3)')  ic
-       CALL rrd_mpi_io( 'aerosol_mass_' // counter, tmp_3d )
+       CALL rrd_mpi_io( 'aerosol_mass_' // counter, tmp_3d,                                        &
+                         alternative_communicator = communicator_salsa )
        aerosol_mass(ic)%conc = tmp_3d
     ENDDO
 
     DO  ib = 1, nbins_aerosol
        WRITE( counter, '(I3.3)')  ib
-       CALL rrd_mpi_io( 'aerosol_number_' // counter, tmp_3d )
+       CALL rrd_mpi_io( 'aerosol_number_' // counter, tmp_3d,                                      &
+                         alternative_communicator = communicator_salsa )
        aerosol_number(ib)%conc = tmp_3d
     ENDDO
 
@@ -3057,7 +3153,8 @@
           ENDIF
           DO  ig = 1, ngases_salsa
              WRITE( counter, '(I3.3)')  ig
-             CALL rrd_mpi_io( 'salsa_gases_av_' // counter , tmp_3d )
+             CALL rrd_mpi_io( 'salsa_gases_av_' // counter , tmp_3d,                               &
+                              alternative_communicator = communicator_salsa )
              salsa_gases_av(:,:,:,ig) = tmp_3d
           ENDDO
        ENDIF
@@ -3066,7 +3163,7 @@
     CALL rd_mpi_io_check_array( 'ldsa_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( ldsa_av ) )  ALLOCATE( ldsa_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 'ldsa_av', ldsa_av )
+       CALL rrd_mpi_io( 'ldsa_av', ldsa_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 'mbins_av_001', found = array_found )
@@ -3076,7 +3173,8 @@
        ENDIF
        DO  ib = 1, nbins_aerosol
           WRITE( counter, '(I3.3)')  ib
-          CALL rrd_mpi_io( 'mbins_av_' // counter, tmp_3d )
+          CALL rrd_mpi_io( 'mbins_av_' // counter, tmp_3d,                                         &
+                           alternative_communicator = communicator_salsa )
           mbins_av(:,:,:,ib) = tmp_3d
        ENDDO
     ENDIF
@@ -3088,7 +3186,8 @@
        ENDIF
        DO  ib = 1, nbins_aerosol
           WRITE( counter, '(I3.3)')  ib
-          CALL rrd_mpi_io( 'nbins_av_' // counter, tmp_3d )
+          CALL rrd_mpi_io( 'nbins_av_' // counter, tmp_3d,                                         &
+                           alternative_communicator = communicator_salsa )
           nbins_av(:,:,:,ib) = tmp_3d
        ENDDO
     ENDIF
@@ -3096,37 +3195,37 @@
     CALL rd_mpi_io_check_array( 'ntot_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( ntot_av ) )  ALLOCATE( ntot_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 'ntot_av', ntot_av )
+       CALL rrd_mpi_io( 'ntot_av', ntot_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 'nufp_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( nufp_av ) )  ALLOCATE( nufp_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 'nufp_av', nufp_av )
+       CALL rrd_mpi_io( 'nufp_av', nufp_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 'pm01_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( pm01_av ) )  ALLOCATE( pm01_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 'pm01_av', pm01_av )
+       CALL rrd_mpi_io( 'pm01_av', pm01_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 'pm25_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( pm25_av ) )  ALLOCATE( pm25_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 'pm25_av', pm25_av )
+       CALL rrd_mpi_io( 'pm25_av', pm25_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 'pm10_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( pm10_av ) )  ALLOCATE( pm10_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 'pm10_av', pm10_av )
+       CALL rrd_mpi_io( 'pm10_av', pm10_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 's_h20_av', found = array_found )
     IF ( array_found )  THEN
        IF ( .NOT. ALLOCATED( s_h2o_av ) )  ALLOCATE( s_h2o_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
-       CALL rrd_mpi_io( 's_h2o_av', s_h2o_av )
+       CALL rrd_mpi_io( 's_h2o_av', s_h2o_av, alternative_communicator = communicator_salsa )
     ENDIF
 
     CALL rd_mpi_io_check_array( 's_mass_av_001', found = array_found )
@@ -3136,7 +3235,8 @@
        ENDIF
        DO  ic = 1, ncomponents_mass
           WRITE( counter, '(I3.3)')  ib
-          CALL rrd_mpi_io( 's_mass_av_' // counter, tmp_3d )
+          CALL rrd_mpi_io( 's_mass_av_' // counter, tmp_3d,                                        &
+                           alternative_communicator = communicator_salsa )
           s_mass_av(:,:,:,ic) = tmp_3d
        ENDDO
     ENDIF
@@ -3144,7 +3244,8 @@
     IF ( .NOT. salsa_gases_from_chem )  THEN
        DO  ig = 1, ngases_salsa
           WRITE( counter, '(I3.3)')  ig
-          CALL rrd_mpi_io( 'salsa_gas_' // counter, tmp_3d )
+          CALL rrd_mpi_io( 'salsa_gas_' // counter, tmp_3d,                                        &
+                           alternative_communicator = communicator_salsa )
           salsa_gas(ig)%conc = tmp_3d
        ENDDO
     ENDIF

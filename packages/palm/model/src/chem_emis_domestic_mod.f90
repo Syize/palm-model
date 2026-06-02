@@ -430,9 +430,6 @@
     USE chem_emis_generic_mod,                                                                     &
         ONLY:  chem_emis_species_match
 
-    USE chem_gasphase_mod,                                                                         &
-        ONLY:  spc_names
-
     USE chem_modules,                                                                              &
         ONLY:  emis_domestic_base_temperature,                                                     &
                emis_domestic_compact_factors,                                                      &
@@ -451,11 +448,6 @@
 
 !
 !-- Constants.
-    INTEGER(iwp), PARAMETER :: prefix_pm_len = 2  !< position of PM prefix
-
-    CHARACTER(LEN=prefix_pm_len), PARAMETER ::  prefix_pm = 'PM'  !<
-
-    REAL(wp), PARAMETER ::  molkg2umolmg = 1.0E+06_wp  !< mol/kg --> umol/mg
     REAL(wp), PARAMETER ::  j2tj         = 1.0E-12_wp  !< J --> TJ
 
 !
@@ -502,9 +494,6 @@
         k_mech = emis_species(k)%mech_index
         k_user = emis_species(k)%user_index
         conv_factor = j2tj
-        IF ( .NOT. ( spc_names(k_mech)(1:prefix_pm_len) == prefix_pm ) )  THEN
-           conv_factor = conv_factor * molkg2umolmg
-        ENDIF
         species_emission_factors(k) = conv_factor * MAX( 0.0_wp,                                   &
                                                     emis_domestic_species_emission_factors(k_user) )
     ENDDO

@@ -294,12 +294,6 @@
     ENDDO
 
 !
-!-- If necessary, set horizontal boundary conditions to non-cyclic
-    IF ( bc_lr /= 'cyclic' )  cyclic(1) = .FALSE.
-    IF ( bc_ns /= 'cyclic' )  cyclic(2) = .FALSE.
-
-
-!
 !-- Set the main communicator (virtual pe grid) for this run
     IF ( bc_lr == 'cyclic'  .AND.  bc_ns == 'cyclic' )  i = 1
     IF ( bc_lr == 'cyclic'  .AND.  bc_ns /= 'cyclic' )  i = 2

@@ -1013,7 +1013,7 @@
 !
 !--          Check for convergence.
 !--          This check does not modify ol, therefore this is done first.
-             IF ( ABS( ( ol(m) - ol_m_vec ) /  ol(m) ) < ol_min )  THEN
+             IF ( ABS( ( ol(m) - ol_m_vec ) /  ol(m) ) < ol_tol )  THEN
                 convergence_reached(m) = .TRUE.
              ENDIF
 !

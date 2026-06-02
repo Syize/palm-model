@@ -69,14 +69,14 @@ All `_p3d` options on domestic heating emissions carry the prefix `emis_domestic
 
 The following table summarizes the recommended values for emission factors.  Speciation are required for NO<sub>x</sub> and VOC emissions for appropriation into active mechanism species:
 
-| Heating type | CO (mol/TJ) | NO<sub>2</sub> (mol/TJ) | PM<sub>10</sub> (kg/TJ) | NO<sub>x</sub> (kg/TJ) | VOC (kg/TJ) |
-|--------------------------|-------|------|-------|----|-----|
-| Centralized oil          |  0.1  | 2.1  | 0.34  | 45 | 0.5 |
-| Centralized gas          |  0.14 | 0.78 | 0.006 | 17 | 0.7 |
-| Centralized wood pellets |  1.7  | 3.4  | 18    | 73 | 3.2 |
-| Centralized woodchips    |  1.6  | 4.2  | 27    | 91 | 1.8 |
-| Centralized logs         |  8.3  | 3.9  | 40    | 84 | 22  |
-| Wood stoves / fireplaces | 28    | 3.9  | 48    | 84 | 29  |
+| Heating type | CO (mol/TJ) | NO<sub>2</sub> (mol/TJ) | NO (mol/TJ) | PM<sub>10</sub> (kg/TJ) | NO<sub>x</sub> (kg/TJ) | VOC (kg/TJ) |
+|--------------------------|---------|------|-------| ------|----|-----|
+| Centralized oil          |   121.4 | 29.3 | 948.9 | 0.34  | 45 | 0.5 |
+| Centralized gas          |   178.6 | 11.1 | 358.5 | 0.006 | 17 | 0.7 |
+| Centralized wood pellets |  2214.3 | 47.6 |1539.3 | 18    | 73 | 3.2 |
+| Centralized woodchips    |  2035.7 | 59.3 |1918.9 | 27    | 91 | 1.8 |
+| Centralized logs         | 10607.1 | 54.8 |1771.3 | 40    | 84 | 22  |
+| Wood stoves / fireplaces | 35892.9 | 54.8 |1771.3 | 48    | 84 | 29  |
 
 ## Specifications under LOD 2
 

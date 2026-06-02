@@ -1132,9 +1132,9 @@ class PALMTest:
                 h = dict()
                 h['Content-Type'] = 'application/json'
                 h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-                h['Authorization'] = f'basic cGFsbXRlc3RfdjI1LjEwOlJ5ZzhJaGdzR0RrWkxnSjZYbGgz'
+                h['Authorization'] = f'basic cGFsbXRlc3RfdjI1LjEwLjE6TTFGWVBqNDJDeVU0TEdWM0dVVkpGbEk9'
                 q = '''query palmtest($current: String!) { check_version(input: {current: $current}) { show message } }'''
-                v = {'current': 'v25.10'}
+                v = {'current': 'v25.10.1'}
                 c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
                 c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
                 r = c.getresponse()

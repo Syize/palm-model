@@ -1054,7 +1054,6 @@
     IF ( bc_cs_l == 'neumann'    .AND.  nxl ==  0 )  bc_radiation_cs_l = .TRUE.
     IF ( bc_cs_r == 'dirichlet'  .AND.  nxr == nx )  bc_dirichlet_cs_r = .TRUE.
     IF ( bc_cs_r == 'neumann'    .AND.  nxr == nx )  bc_radiation_cs_r = .TRUE.
-
 !
 !-- Set the communicator to be used for ghost layer data exchange
 !-- 1: cyclic, 2: cyclic along x, 3: cyclic along y, 4: non-cyclic
@@ -1071,7 +1070,6 @@
           communicator_chem = 4
        ENDIF
     ENDIF
-
 !
 !-- chem_check_parameters is called before the array chem_species is allocated!
 !-- temporary switch of this part of the check
@@ -1118,7 +1116,6 @@
 !
 !-- Determine the number of chemistry profiles and append them to the standard data output.
     i = 1
-
     DO  WHILE ( data_output_pr(i)  /= ' '  .AND.  i <= SIZE( data_output_pr ) )
        IF ( TRIM( data_output_pr(i)(1:3) ) == 'kc_' )  THEN
           max_pr_cs = max_pr_cs + 1
@@ -1374,10 +1371,6 @@
     LOGICAL ::  found
 
     REAL(wp), DIMENSION(mask_size_l(mid,1),mask_size_l(mid,2),mask_size_l(mid,3)) ::  local_pf   !<
-
-
-!
-!-- Local variables.
 
     spec_name = TRIM( variable(4:) )
     found = .FALSE.
@@ -1802,6 +1795,39 @@
        ENDDO
     ENDIF
 !
+!-- Set Dirichlet conditions explicitly.
+    IF ( bc_dirichlet_cs_l )  THEN
+       DO  n = 1, nspec
+          DO  j = nysg, nyng
+             chem_species(n)%conc(:,j,nxl-1) = chem_species(n)%conc_pr_init(:)
+          ENDDO
+       ENDDO
+    ENDIF
+
+    IF ( bc_dirichlet_cs_r )  THEN
+       DO  n = 1, nspec
+          DO  j = nysg, nyng
+             chem_species(n)%conc(:,j,nxr+1) = chem_species(n)%conc_pr_init(:)
+          ENDDO
+       ENDDO
+    ENDIF
+
+    IF ( bc_dirichlet_cs_n )  THEN
+       DO  n = 1, nspec
+          DO  i = nxlg, nxrg
+             chem_species(n)%conc(:,nyn+1,i) = chem_species(n)%conc_pr_init(:)
+          ENDDO
+       ENDDO
+    ENDIF
+
+    IF ( bc_dirichlet_cs_s )  THEN
+       DO  n = 1, nspec
+          DO  i = nxlg, nxrg
+             chem_species(n)%conc(:,nys-1,i) = chem_species(n)%conc_pr_init(:)
+          ENDDO
+       ENDDO
+    ENDIF
+!
 !-- Initialize also the new time level. This is especially required in restart runs to properly
 !-- maintain the lateral boundary conditions.
     DO  n = 1, nspec
@@ -1877,19 +1903,19 @@
     DO  lsp = 1, nspec
        chem_species(lsp)%name    = spc_names(lsp)
 
-       chem_species(lsp)%conc   (nzb:nzt+1,nysg:nyng,nxlg:nxrg)       => spec_conc_1 (:,:,:,lsp)
-       chem_species(lsp)%conc_p (nzb:nzt+1,nysg:nyng,nxlg:nxrg)       => spec_conc_2 (:,:,:,lsp)
-       chem_species(lsp)%tconc_m(nzb:nzt+1,nysg:nyng,nxlg:nxrg)       => spec_conc_3 (:,:,:,lsp)
+       chem_species(lsp)%conc(nzb:nzt+1,nysg:nyng,nxlg:nxrg)    => spec_conc_1(:,:,:,lsp)
+       chem_species(lsp)%conc_p(nzb:nzt+1,nysg:nyng,nxlg:nxrg)  => spec_conc_2(:,:,:,lsp)
+       chem_species(lsp)%tconc_m(nzb:nzt+1,nysg:nyng,nxlg:nxrg) => spec_conc_3(:,:,:,lsp)
 
        ALLOCATE (chem_species(lsp)%cssws_av(nysg:nyng,nxlg:nxrg))
-       chem_species(lsp)%cssws_av    = 0.0_wp
+       chem_species(lsp)%cssws_av = 0.0_wp
 !
 !--    The following block can be useful when emission module is not applied. &
 !--    If emission module is applied the following block will be overwritten.
-       ALLOCATE (chem_species(lsp)%flux_s_cs(nzb+1:nzt,0:threads_per_task-1))
-       ALLOCATE (chem_species(lsp)%diss_s_cs(nzb+1:nzt,0:threads_per_task-1))
-       ALLOCATE (chem_species(lsp)%flux_l_cs(nzb+1:nzt,nys:nyn,0:threads_per_task-1))
-       ALLOCATE (chem_species(lsp)%diss_l_cs(nzb+1:nzt,nys:nyn,0:threads_per_task-1))
+       ALLOCATE( chem_species(lsp)%flux_s_cs(nzb+1:nzt,0:threads_per_task-1) )
+       ALLOCATE( chem_species(lsp)%diss_s_cs(nzb+1:nzt,0:threads_per_task-1) )
+       ALLOCATE( chem_species(lsp)%flux_l_cs(nzb+1:nzt,nys:nyn,0:threads_per_task-1) )
+       ALLOCATE( chem_species(lsp)%diss_l_cs(nzb+1:nzt,nys:nyn,0:threads_per_task-1) )
        chem_species(lsp)%flux_s_cs = 0.0_wp
        chem_species(lsp)%flux_l_cs = 0.0_wp
        chem_species(lsp)%diss_s_cs = 0.0_wp
@@ -1900,7 +1926,7 @@
 !--                conc_pr_init is used there.
 !--                We have to find another solution since chem_init should eventually be called from
 !--                init_3d_model!!)
-       ALLOCATE ( chem_species(lsp)%conc_pr_init(0:nz+1) )
+       ALLOCATE ( chem_species(lsp)%conc_pr_init(0:nzt+1) )
        chem_species(lsp)%conc_pr_init(:) = 0.0_wp
 
     ENDDO
@@ -1927,8 +1953,8 @@
        cs_advc_flags_s = 0
        cs_advc_flags_s = MERGE( IBSET( cs_advc_flags_s, 31 ), 0, BTEST( topo_flags, 31 ) )
 
-       IF ( bc_dirichlet_cs_n .OR. bc_dirichlet_cs_s )  THEN
-          IF ( nys == 0  )  THEN
+       IF ( bc_dirichlet_cs_n  .OR.  bc_dirichlet_cs_s )  THEN
+          IF ( nys == 0 )  THEN
              DO  i = 1, nbgp
                 cs_advc_flags_s(:,nys-i,:) = cs_advc_flags_s(:,nys,:)
              ENDDO
@@ -1939,8 +1965,8 @@
              ENDDO
           ENDIF
        ENDIF
-       IF ( bc_dirichlet_cs_l .OR. bc_dirichlet_cs_r )  THEN
-          IF ( nxl == 0  )  THEN
+       IF ( bc_dirichlet_cs_l  .OR.  bc_dirichlet_cs_r )  THEN
+          IF ( nxl == 0 )  THEN
              DO  i = 1, nbgp
                 cs_advc_flags_s(:,:,nxl-i) = cs_advc_flags_s(:,:,nxl)
              ENDDO
@@ -1991,43 +2017,36 @@
     ENDIF
 !
 !-- Initialize model variables.
-    IF ( TRIM( initializing_actions ) /= 'read_restart_data'  .AND.                                &
-         .NOT. cyclic_fill_initialization )                                                        &
-    THEN
+!-- Initial profiles of the variables must be computed.
+    IF ( INDEX( initializing_actions, 'set_1d-model_profiles' ) /= 0 )  THEN
 !
-!--    First model run of a possible job queue.
-!--    Initial profiles of the variables must be computed.
-       IF ( INDEX( initializing_actions, 'set_1d-model_profiles' ) /= 0 )  THEN
-!
-!--       Transfer initial profiles to the arrays of the 3D model
-!--       Concentrations within buildings are set to zero.
-          DO  lsp = 1, nspec
-             DO  i = nxlg, nxrg
-                DO  j = nysg, nyng
-                   DO  k = 1, nzt+1
-                      flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
-                      chem_species(lsp)%conc(k,j,i) = chem_species(lsp)%conc_pr_init(k) * flag
-                   ENDDO
+!--    Transfer initial profiles to the arrays of the 3D model
+!--    Concentrations within buildings are set to zero.
+       DO  lsp = 1, nspec
+          DO  i = nxlg, nxrg
+             DO  j = nysg, nyng
+                DO  k = 1, nzt+1
+                   flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
+                   chem_species(lsp)%conc(k,j,i) = chem_species(lsp)%conc_pr_init(k) * flag
                 ENDDO
              ENDDO
           ENDDO
+       ENDDO
 
-       ELSEIF ( INDEX( initializing_actions, 'set_constant_profiles' ) /= 0  .OR.                  &
-                INDEX( initializing_actions, 'interpolate_from_parent' ) /= 0 )  THEN
+    ELSEIF ( INDEX( initializing_actions, 'set_constant_profiles' ) /= 0  .OR.                     &
+             INDEX( initializing_actions, 'interpolate_from_parent' ) /= 0 )  THEN
 
-          DO  lsp = 1, nspec
-             DO  i = nxlg, nxrg
-                DO  j = nysg, nyng
-                   DO  k = nzb, nzt+1
-                      flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
-                      chem_species(lsp)%conc(k,j,i) = chem_species(lsp)%conc_pr_init(k) * flag
-                   ENDDO
+       DO  lsp = 1, nspec
+          DO  i = nxlg, nxrg
+             DO  j = nysg, nyng
+                DO  k = nzb, nzt+1
+                   flag = MERGE( 1.0_wp, 0.0_wp, BTEST( topo_flags(k,j,i), 0 ) )
+                   chem_species(lsp)%conc(k,j,i) = chem_species(lsp)%conc_pr_init(k) * flag
                 ENDDO
              ENDDO
           ENDDO
+       ENDDO
 
-       ENDIF
-!
     ENDIF
 !
 !-- Initial old and new time levels. Note, this has to be done also in restart runs
@@ -2073,9 +2092,8 @@
 !-- Parameter "cs_profile" and "cs_heights" are used to prescribe user defined initial profiles
 !-- and heights. If parameter "cs_profile" is not prescribed then initial surface values
 !-- "cs_surface" are used as constant initial profiles for each species. If "cs_profile" and
-!-- "cs_heights" are prescribed, their values will!override the constant profile given by
+!-- "cs_heights" are prescribed, their values will override the constant profile given by
 !-- "cs_surface".
-!     IF ( TRIM( initializing_actions ) /= 'read_restart_data' )  THEN
     lsp_usr = 1
     DO  WHILE ( TRIM( cs_name( lsp_usr ) ) /= 'novalue' )   !'novalue' is the default
        DO  lsp = 1, nspec                                !
@@ -2098,7 +2116,6 @@
                 use_prescribed_profile_data = .TRUE.
 
                 npr_lev = 1
-!                chem_species(lsp)%conc_pr_init(0) = 0.0_wp
                 DO  k = 1, nzt+1
                    IF ( npr_lev < 100 )  THEN
                       DO  WHILE ( cs_heights(lsp_usr, npr_lev+1) <= zu(k) )
@@ -2120,17 +2137,12 @@
                    ENDIF
                 ENDDO
              ENDIF
-!
-!--       If a profile is prescribed explicity using cs_profiles and cs_heights, then
-!--       chem_species(lsp)%conc_pr_init is populated with the specific "lsp" based on the
-!--       cs_profiles(lsp_usr,:)  and cs_heights(lsp_usr,:).
           ENDIF
 
        ENDDO
 
        lsp_usr = lsp_usr + 1
     ENDDO
-!     ENDIF
 
  END SUBROUTINE chem_init_profiles
 
@@ -3113,7 +3125,7 @@
              !following directive is required to vectorize on Intel19
              !DIR$ IVDEP
              DO  k = nzb+1, nzt
-                chem_species(ilsp)%conc_p(k,j,i) =   chem_species(ilsp)%conc(k,j,i)                &
+                chem_species(ilsp)%conc_p(k,j,i) = chem_species(ilsp)%conc(k,j,i)                  &
                      + ( dt_3d  *                                                                  &
                      (   tsc(2) * tend(k,j,i)                                                      &
                      + tsc(3) * chem_species(ilsp)%tconc_m(k,j,i)                                  &
@@ -3287,8 +3299,7 @@
 
     LOGICAL, INTENT(OUT) :: found
 
-    REAL(wp), DIMENSION(nzb:nzt+1,nys_on_file-nbgp:nyn_on_file+nbgp,nxl_on_file-nbgp:nxr_on_file+nbgp) &
-                 :: tmp_3d   !< 3D array to temp store data
+    REAL(wp), DIMENSION(nzb:nzt+1,nys_on_file-nbgp:nyn_on_file+nbgp,nxl_on_file-nbgp:nxr_on_file+nbgp) ::  tmp_3d   !< 3D array to temp store data
 
 
     found = .FALSE.
@@ -3305,7 +3316,7 @@
                                                    tmp_3d(:,nysf-nbgp:nynf+nbgp,nxlf-nbgp:nxrf+nbgp)
              found = .TRUE.
 
-          ELSEIF (restart_string(1:length) == TRIM( chem_species(lsp)%name ) // '_av' )  THEN
+          ELSEIF ( restart_string(1:length) == TRIM( chem_species(lsp)%name ) // '_av' )  THEN
 
              IF ( .NOT. ALLOCATED( chem_species(lsp)%conc_av ) )  THEN
                 ALLOCATE( chem_species(lsp)%conc_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg ) )
@@ -3344,14 +3355,16 @@
 
        DO  lsp = 1, nspec
 
-          CALL rrd_mpi_io( TRIM( chem_species(lsp)%name ), chem_species(lsp)%conc )
+          CALL rrd_mpi_io( TRIM( chem_species(lsp)%name ), chem_species(lsp)%conc,                 &
+                           alternative_communicator = communicator_chem )
 
           CALL rd_mpi_io_check_array( TRIM( chem_species(lsp)%name )//'_av' , found = array_found )
           IF ( array_found )  THEN
              IF ( .NOT. ALLOCATED( chem_species(lsp)%conc_av ) )  THEN
                 ALLOCATE( chem_species(lsp)%conc_av(nzb:nzt+1,nysg:nyng,nxlg:nxrg) )
              ENDIF
-             CALL rrd_mpi_io( TRIM( chem_species(lsp)%name )//'_av', chem_species(lsp)%conc_av )
+             CALL rrd_mpi_io( TRIM( chem_species(lsp)%name )//'_av', chem_species(lsp)%conc_av,   &
+                              alternative_communicator = communicator_chem )
           ENDIF
 
        ENDDO
@@ -3388,7 +3401,8 @@
     INTEGER(iwp) ::  surf_s              !< start surface index
     INTEGER(iwp) ::  tn                  !< thread number
 
-    REAL(wp)                                            ::  flag     !< topography masking flag
+    REAL(wp) ::  flag     !< topography masking flag
+
     REAL(wp), DIMENSION(nzb:nzt+1,0:threads_per_task-1) ::  sums_tmp !< temporary array used to sum-up profiles
 
     IF ( mode == 'profiles' )  THEN
@@ -3440,7 +3454,7 @@
                 surf_s = surf_def%start_index(j,i)
                 surf_e = surf_def%end_index(j,i)
                 DO  m = surf_s, surf_e
-                   k   = surf_def%k(m) + surf_def%koff(m)
+                   k = surf_def%k(m) + surf_def%koff(m)
                    sums_tmp(k,tn) = sums_tmp(k,tn) +                                               &
                                     MERGE( surf_def%cssws(cs_pr_index_fl_sgs(lpr),m), 0.0_wp,      &
                                            surf_def%upward(m) )
@@ -3448,7 +3462,7 @@
                 surf_s = surf_lsm%start_index(j,i)
                 surf_e = surf_lsm%end_index(j,i)
                 DO  m = surf_s, surf_e
-                   k   = surf_lsm%k(m) + surf_lsm%koff(m)
+                   k = surf_lsm%k(m) + surf_lsm%koff(m)
                    sums_tmp(k,tn) = sums_tmp(k,tn) +                                               &
                                     MERGE( surf_lsm%cssws(cs_pr_index_fl_sgs(lpr),m), 0.0_wp,      &
                                            surf_lsm%upward(m) )
@@ -3456,7 +3470,7 @@
                 surf_s = surf_usm%start_index(j,i)
                 surf_e = surf_usm%end_index(j,i)
                 DO  m = surf_s, surf_e
-                   k   = surf_usm%k(m) + surf_usm%koff(m)
+                   k = surf_usm%k(m) + surf_usm%koff(m)
                    sums_tmp(k,tn) = sums_tmp(k,tn) +                                               &
                                     MERGE( surf_usm%cssws(cs_pr_index_fl_sgs(lpr),m), 0.0_wp,      &
                                            surf_usm%upward(m) )
@@ -3493,8 +3507,6 @@
 !> Subroutine for swapping of timelevels for chemical species called out from subroutine
 !> swap_timelevel
 !--------------------------------------------------------------------------------------------------!
-
-
  SUBROUTINE chem_swap_timelevel( level )
 
 

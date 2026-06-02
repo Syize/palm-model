@@ -9258,6 +9258,8 @@ SUBROUTINE slurb_canyon_model
           CALL rrd_local_2d( surf%us_urb )
        CASE ( 'surf_slurb%shf_urb' )
           CALL rrd_local_2d( surf%shf_urb )
+       CASE ( 'surf_slurb%qsws_urb' )
+          CALL rrd_local_2d( surf%qsws_urb )
        CASE ( 'surf_slurb%t_can' )
           CALL rrd_local_2d( surf%t_can )
        CASE ( 'surf_slurb%m_liq_roof' )
@@ -9737,6 +9739,7 @@ SUBROUTINE slurb_canyon_model
     CALL rrd_local_2d( 'surf_slurb%t_can', surf%t_can )
 
     IF ( moist_physics )  THEN
+       CALL rrd_local_2d( 'surf_slurb%qsws_urb', surf%qsws_urb )
        CALL rrd_local_2d( 'surf_slurb%m_liq_roof', surf%m_liq_roof )
        CALL rrd_local_2d( 'surf_slurb%m_liq_road', surf%m_liq_road )
        CALL rrd_local_2d( 'surf_slurb%qsws_road', surf%qsws_road )
@@ -10088,6 +10091,7 @@ SUBROUTINE slurb_canyon_model
     CALL wrd_local_2d( 'surf_slurb%t_can', surf%t_can )
 
     IF ( moist_physics )  THEN
+       CALL wrd_local_2d( 'surf_slurb%qsws_urb', surf%qsws_urb )
        CALL wrd_local_2d( 'surf_slurb%m_liq_roof', surf%m_liq_roof )
        CALL wrd_local_2d( 'surf_slurb%m_liq_road', surf%m_liq_road )
        CALL wrd_local_2d( 'surf_slurb%qsws_road', surf%qsws_road )

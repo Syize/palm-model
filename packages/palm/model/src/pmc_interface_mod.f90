@@ -4523,15 +4523,18 @@
        ENDIF
     ENDIF
 !
-!-- The parameter humidity must be set the same in all models.
-    IF ( root_model )  humidity_root = humidity
-    CALL MPI_BCAST( humidity_root, 1, MPI_LOGICAL, 0, comm_world_nesting, ierr )
+!-- The parameter humidity must be set the same in all models, but not in atmosphere-ocean coupled
+!-- runs, where humidity is required in the atmosphere, but not allowed for the ocean.
+    IF ( .NOT. atmosphere_ocean_coupled_run )  THEN
+       IF ( root_model )  humidity_root = humidity
+       CALL MPI_BCAST( humidity_root, 1, MPI_LOGICAL, 0, comm_world_nesting, ierr )
 
-    IF ( .NOT. root_model )  THEN
-       IF ( humidity .NEQV. humidity_root )  THEN
-          message_string = 'mismatch between root model and child settings: & ' //                 &
-                           'humidity must be set the same for all models.'
-          CALL message( 'pmci_check_setting_mismatches', 'PMC0043', 1, 2, 0, 6, 0 )
+       IF ( .NOT. root_model )  THEN
+          IF ( humidity .NEQV. humidity_root )  THEN
+             message_string = 'mismatch between root model and child settings: & ' //              &
+                              'humidity must be set the same for all models.'
+             CALL message( 'pmci_check_setting_mismatches', 'PMC0043', 1, 2, 0, 6, 0 )
+          ENDIF
        ENDIF
     ENDIF
 !

@@ -39,9 +39,9 @@ try:
     h = dict()
     h['Content-Type'] = 'application/json'
     h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-    h['Authorization'] = f'basic cGFsbWRvY3NfdjI1LjEwOk5pSUVKRDRsQ0VBM0QwUmtZMUpT'
+    h['Authorization'] = f'basic cGFsbWRvY3NfdjI1LjEwLjE6UnpraFZURWNMUjhQSkFGelpRaGZSbE09'
     q = '''query palmdocs($current: String!) { check_version(input: {current: $current}) { show message } }'''
-    v = {'current': 'v25.10'}
+    v = {'current': 'v25.10.1'}
     c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
     c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
     r = c.getresponse()

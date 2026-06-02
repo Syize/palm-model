@@ -2148,6 +2148,12 @@
         ONLY:  ibc_p_b,                                                                            &
                ibc_p_t,                                                                            &
                masking_method
+#if defined( __parallel )
+    USE control_parameters,                                                                        &
+        ONLY:  bc_lr,                                                                              &
+               bc_ns,                                                                              &
+               y_shift
+#endif
 
     USE grid_variables,                                                                            &
         ONLY:  dx,                                                                                 &
@@ -2171,7 +2177,12 @@
 
 #if defined( __parallel )
     INTEGER(iwp) ::  bufsize         !< size of buffer for sending/receiving contiguous data
+    INTEGER(iwp) ::  communicator    !< communicator that is used as argument in some MPI calls
+    INTEGER(iwp) ::  left_pe         !< id of left pe that is used as argument in some MPI calls
+    INTEGER(iwp) ::  north_pe        !< id of north pe that is used as argument in some MPI calls
     INTEGER(iwp) ::  nzb_l           !< lower index bound along z-direction on subdomain and different multigrid level
+    INTEGER(iwp) ::  right_pe        !< id of right pe that is used as argument in some MPI calls
+    INTEGER(iwp) ::  south_pe        !< id of south pe that is used as argument in some MPI calls
     INTEGER(iwp) ::  stored_value    !< temporary variable
 #endif
     INTEGER(iwp) ::  color           !< grid point color, either red (1) or black (2)
@@ -3531,24 +3542,49 @@
 
     !$ACC ENTER DATA COPYIN(ileft, jsouth, kbottom) IF(enable_openacc)
 
+#if defined( __parallel )
 !
 !-- Exchange the send indices with the respective neighbours, where they are the receive indices.
-#if defined( __parallel )
+!-- If the y_shift parameter has been set, the active communicator comm2d, which considers the
+!-- shift, must not be used here, because if it would be used the transferred indices would not
+!-- fit the array bounds on the respective receiving core.
+!-- Instead, the non modified communicator that does not consider the shift has to be used.
+    IF ( y_shift /= 0 )  THEN
+!
+!--    Set the main communicator (virtual pe grid) for this run
+       IF ( bc_lr == 'cyclic'  .AND.  bc_ns == 'cyclic' )  i = 1
+       IF ( bc_lr == 'cyclic'  .AND.  bc_ns /= 'cyclic' )  i = 2
+       IF ( bc_lr /= 'cyclic'  .AND.  bc_ns == 'cyclic' )  i = 3
+       IF ( bc_lr /= 'cyclic'  .AND.  bc_ns /= 'cyclic' )  i = 4
+
+       communicator = communicator_configurations(i)%mpi_communicator
+       left_pe  = communicator_configurations(i)%pleft
+       right_pe = communicator_configurations(i)%pright
+       south_pe = communicator_configurations(i)%psouth
+       north_pe = communicator_configurations(i)%pnorth
+    ELSE
+       communicator = comm2d
+       left_pe  = pleft
+       right_pe = pright
+       south_pe = psouth
+       north_pe = pnorth
+    ENDIF
+
     bufsize = 2 * 2 * maximum_grid_level
 !
 !-- Send left boundary, receive right one (asynchronous), only red or black points
     req(1:4)  = 0
     req_count = 0
-    CALL MPI_ISEND( jsouth_for_nxl_send(1,1,1), bufsize, MPI_INTEGER, pleft, req_count, comm2d,    &
-                    req(req_count+1), ierr )
-    CALL MPI_IRECV( jsouth_for_nxr_recv(1,1,1), bufsize, MPI_INTEGER, pright, req_count, comm2d,   &
-                    req(req_count+2), ierr )
+    CALL MPI_ISEND( jsouth_for_nxl_send(1,1,1), bufsize, MPI_INTEGER, left_pe,  req_count,         &
+                    communicator, req(req_count+1), ierr )
+    CALL MPI_IRECV( jsouth_for_nxr_recv(1,1,1), bufsize, MPI_INTEGER, right_pe, req_count,         &
+                    communicator, req(req_count+2), ierr )
 !
 !-- Send right boundary, receive left one (asynchronous)
-    CALL MPI_ISEND( jsouth_for_nxr_send(1,1,1), bufsize, MPI_INTEGER, pright, req_count+1, comm2d, &
-                    req(req_count+3), ierr )
-    CALL MPI_IRECV( jsouth_for_nxl_recv(1,1,1), bufsize, MPI_INTEGER, pleft, req_count+1, comm2d,  &
-                    req(req_count+4), ierr )
+    CALL MPI_ISEND( jsouth_for_nxr_send(1,1,1), bufsize, MPI_INTEGER, right_pe, req_count+1,       &
+                    communicator, req(req_count+3), ierr )
+    CALL MPI_IRECV( jsouth_for_nxl_recv(1,1,1), bufsize, MPI_INTEGER, left_pe,  req_count+1,       &
+                    communicator, req(req_count+4), ierr )
 
     CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
@@ -3556,16 +3592,16 @@
 !-- Send south boundary, receive north one (asynchronous)
     req(1:4)  = 0
     req_count = 0
-    CALL MPI_ISEND( ileft_for_nys_send(1,1,1), bufsize, MPI_INTEGER, psouth, req_count, comm2d,    &
-                    req(req_count+1), ierr )
-    CALL MPI_IRECV( ileft_for_nyn_recv(1,1,1), bufsize, MPI_INTEGER, pnorth, req_count, comm2d,    &
-                    req(req_count+2), ierr )
+    CALL MPI_ISEND( ileft_for_nys_send(1,1,1), bufsize, MPI_INTEGER, south_pe, req_count,          &
+                    communicator, req(req_count+1), ierr )
+    CALL MPI_IRECV( ileft_for_nyn_recv(1,1,1), bufsize, MPI_INTEGER, north_pe, req_count,          &
+                    communicator, req(req_count+2), ierr )
 !
 !-- Send north boundary, receive south one (asynchronous)
-    CALL MPI_ISEND( ileft_for_nyn_send(1,1,1), bufsize, MPI_INTEGER, pnorth, req_count+1, comm2d,  &
-                    req(req_count+3), ierr )
-    CALL MPI_IRECV( ileft_for_nys_recv(1,1,1), bufsize, MPI_INTEGER, psouth, req_count+1, comm2d,  &
-                    req(req_count+4), ierr )
+    CALL MPI_ISEND( ileft_for_nyn_send(1,1,1), bufsize, MPI_INTEGER, north_pe, req_count+1,        &
+                    communicator, req(req_count+3), ierr )
+    CALL MPI_IRECV( ileft_for_nys_recv(1,1,1), bufsize, MPI_INTEGER, south_pe, req_count+1,        &
+                    communicator, req(req_count+4), ierr )
 
     CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
@@ -3573,16 +3609,16 @@
 !-- Send left boundary, receive right one (asynchronous), only red or black points
     req(1:4)  = 0
     req_count = 0
-    CALL MPI_ISEND( kbottom_for_nxl_send(1,1,1), bufsize, MPI_INTEGER, pleft, req_count, comm2d,   &
-                    req(req_count+1), ierr )
-    CALL MPI_IRECV( kbottom_for_nxr_recv(1,1,1), bufsize, MPI_INTEGER, pright, req_count, comm2d,  &
-                    req(req_count+2), ierr )
+    CALL MPI_ISEND( kbottom_for_nxl_send(1,1,1), bufsize, MPI_INTEGER, left_pe,  req_count,        &
+                    communicator, req(req_count+1), ierr )
+    CALL MPI_IRECV( kbottom_for_nxr_recv(1,1,1), bufsize, MPI_INTEGER, right_pe, req_count,        &
+                    communicator, req(req_count+2), ierr )
 !
 !-- Send right boundary, receive left one (asynchronous)
-    CALL MPI_ISEND( kbottom_for_nxr_send(1,1,1), bufsize, MPI_INTEGER, pright, req_count+1,        &
-                    comm2d, req(req_count+3), ierr )
-    CALL MPI_IRECV( kbottom_for_nxl_recv(1,1,1), bufsize, MPI_INTEGER, pleft, req_count+1,         &
-                    comm2d, req(req_count+4), ierr )
+    CALL MPI_ISEND( kbottom_for_nxr_send(1,1,1), bufsize, MPI_INTEGER, right_pe, req_count+1,      &
+                    communicator, req(req_count+3), ierr )
+    CALL MPI_IRECV( kbottom_for_nxl_recv(1,1,1), bufsize, MPI_INTEGER, left_pe,  req_count+1,      &
+                    communicator, req(req_count+4), ierr )
 
     CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
@@ -3590,16 +3626,16 @@
 !-- Send south boundary, receive north one (asynchronous)
     req(1:4)  = 0
     req_count = 0
-    CALL MPI_ISEND( kbottom_for_nys_send(1,1,1), bufsize, MPI_INTEGER, psouth, req_count, comm2d,  &
-                    req(req_count+1), ierr )
-    CALL MPI_IRECV( kbottom_for_nyn_recv(1,1,1), bufsize, MPI_INTEGER, pnorth, req_count, comm2d,  &
-                    req(req_count+2), ierr )
+    CALL MPI_ISEND( kbottom_for_nys_send(1,1,1), bufsize, MPI_INTEGER, south_pe, req_count,        &
+                    communicator, req(req_count+1), ierr )
+    CALL MPI_IRECV( kbottom_for_nyn_recv(1,1,1), bufsize, MPI_INTEGER, north_pe, req_count,        &
+                    communicator, req(req_count+2), ierr )
 !
 !-- Send north boundary, receive south one (asynchronous)
-    CALL MPI_ISEND( kbottom_for_nyn_send(1,1,1), bufsize, MPI_INTEGER, pnorth, req_count+1,        &
-                    comm2d, req(req_count+3), ierr )
-    CALL MPI_IRECV( kbottom_for_nys_recv(1,1,1), bufsize, MPI_INTEGER, psouth, req_count+1,        &
-                    comm2d, req(req_count+4), ierr )
+    CALL MPI_ISEND( kbottom_for_nyn_send(1,1,1), bufsize, MPI_INTEGER, north_pe, req_count+1,      &
+                    communicator, req(req_count+3), ierr )
+    CALL MPI_IRECV( kbottom_for_nys_recv(1,1,1), bufsize, MPI_INTEGER, south_pe, req_count+1,      &
+                    communicator, req(req_count+4), ierr )
 
     CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
@@ -3607,16 +3643,16 @@
 !-- Send left boundary, receive right one (asynchronous), only red or black points
     req(1:4)  = 0
     req_count = 0
-    CALL MPI_ISEND( ktop_for_nxl_send(1,1,1), bufsize, MPI_INTEGER, pleft, req_count, comm2d,      &
-                    req(req_count+1), ierr )
-    CALL MPI_IRECV( ktop_for_nxr_recv(1,1,1), bufsize, MPI_INTEGER, pright, req_count, comm2d,     &
-                    req(req_count+2), ierr )
+    CALL MPI_ISEND( ktop_for_nxl_send(1,1,1), bufsize, MPI_INTEGER, left_pe,  req_count,           &
+                    communicator, req(req_count+1), ierr )
+    CALL MPI_IRECV( ktop_for_nxr_recv(1,1,1), bufsize, MPI_INTEGER, right_pe, req_count,           &
+                    communicator, req(req_count+2), ierr )
 !
 !-- Send right boundary, receive left one (asynchronous)
-    CALL MPI_ISEND( ktop_for_nxr_send(1,1,1), bufsize, MPI_INTEGER, pright, req_count+1, comm2d,   &
-                    req(req_count+3), ierr )
-    CALL MPI_IRECV( ktop_for_nxl_recv(1,1,1), bufsize, MPI_INTEGER, pleft, req_count+1, comm2d,    &
-                    req(req_count+4), ierr )
+    CALL MPI_ISEND( ktop_for_nxr_send(1,1,1), bufsize, MPI_INTEGER, right_pe, req_count+1,         &
+                    communicator, req(req_count+3), ierr )
+    CALL MPI_IRECV( ktop_for_nxl_recv(1,1,1), bufsize, MPI_INTEGER, left_pe,  req_count+1,         &
+                    communicator, req(req_count+4), ierr )
 
     CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 
@@ -3624,16 +3660,16 @@
 !-- Send south boundary, receive north one (asynchronous)
     req(1:4)  = 0
     req_count = 0
-    CALL MPI_ISEND( ktop_for_nys_send(1,1,1), bufsize, MPI_INTEGER, psouth, req_count, comm2d,     &
-                    req(req_count+1), ierr )
-    CALL MPI_IRECV( ktop_for_nyn_recv(1,1,1), bufsize, MPI_INTEGER, pnorth, req_count, comm2d,     &
-                    req(req_count+2), ierr )
+    CALL MPI_ISEND( ktop_for_nys_send(1,1,1), bufsize, MPI_INTEGER, south_pe, req_count,           &
+                    communicator, req(req_count+1), ierr )
+    CALL MPI_IRECV( ktop_for_nyn_recv(1,1,1), bufsize, MPI_INTEGER, north_pe, req_count,           &
+                    communicator, req(req_count+2), ierr )
 !
 !-- Send north boundary, receive south one (asynchronous)
-    CALL MPI_ISEND( ktop_for_nyn_send(1,1,1), bufsize, MPI_INTEGER, pnorth, req_count+1, comm2d,   &
-                    req(req_count+3), ierr )
-    CALL MPI_IRECV( ktop_for_nys_recv(1,1,1), bufsize, MPI_INTEGER, psouth, req_count+1, comm2d,   &
-                    req(req_count+4), ierr )
+    CALL MPI_ISEND( ktop_for_nyn_send(1,1,1), bufsize, MPI_INTEGER, north_pe, req_count+1,         &
+                    communicator, req(req_count+3), ierr )
+    CALL MPI_IRECV( ktop_for_nys_recv(1,1,1), bufsize, MPI_INTEGER, south_pe, req_count+1,         &
+                    communicator, req(req_count+4), ierr )
 
     CALL MPI_WAITALL( 4, req, wait_stat, ierr )
 #endif

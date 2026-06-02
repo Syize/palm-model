@@ -1842,13 +1842,14 @@ END SUBROUTINE rrd_mpi_io_int4_3d_special
 ! ------------
 !> Read 2d-REAL array with MPI-IO
 !--------------------------------------------------------------------------------------------------!
- SUBROUTINE rrd_mpi_io_real_3d( name, data )
+ SUBROUTINE rrd_mpi_io_real_3d( name, data, alternative_communicator )
 
     IMPLICIT NONE
 
     CHARACTER(LEN=*), INTENT(IN)       ::  name    !<
 
-    INTEGER(iwp)                       ::  i       !<
+    INTEGER(iwp), OPTIONAL, INTENT(IN) ::  alternative_communicator  !< alternative MPI communicator to be used
+    INTEGER(iwp)                       ::  i                         !< loop index
 
 #if defined( __parallel )
     INTEGER, DIMENSION(rd_status_size) ::  status  !<
@@ -1904,7 +1905,11 @@ END SUBROUTINE rrd_mpi_io_int4_3d_special
              ENDDO
           ENDIF
 
-          CALL exchange_horiz( data, nbgp )
+          IF ( PRESENT( alternative_communicator ) )  THEN
+             CALL exchange_horiz( data, nbgp, alternative_communicator = alternative_communicator )
+          ELSE
+             CALL exchange_horiz( data, nbgp )
+          ENDIF
 
        ENDIF
 

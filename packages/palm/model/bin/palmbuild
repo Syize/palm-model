@@ -48,7 +48,7 @@
  makefile=""
  make_options=""
  module_commands=""
- palm_version_string="PALM 25.10"  # AUTOMATICALLY SET FOR RELEASE (DO NOT CHANGE THIS LINE)
+ palm_version_string="PALM 25.10.1"  # AUTOMATICALLY SET FOR RELEASE (DO NOT CHANGE THIS LINE)
  program_name=palm
  remote_ip=""
  silent=false
@@ -113,9 +113,9 @@ try:
     h = dict()
     h['Content-Type'] = 'application/json'
     h['User-Agent'] = f'{platform.platform()} {platform.version()} with Python {platform.python_version()}'
-    h['Authorization'] = f'basic cGFsbWJ1aWxkX3YyNS4xMDpPZ1lLS1FWRE16NHFLaHhlUmtzQ0F3PT0='
+    h['Authorization'] = f'basic cGFsbWJ1aWxkX3YyNS4xMC4xOlFBcFVYU2RBUFQwT1BRSnFSRzlWZFZ0Nw=='
     q = '''query palmbuild($current: String!) { check_version(input: {current: $current}) { show message } }'''
-    v = {'current': 'v25.10'}
+    v = {'current': 'v25.10.1'}
     c = http.client.HTTPConnection('api.palm-model.com', 80, timeout=1)
     c.request('POST', '/v1', body=json.dumps({'query': q, 'variables': v}), headers=h)
     r = c.getresponse()
